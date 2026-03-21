@@ -8,6 +8,8 @@
 - 决定采用“文档优先 + 本地 Web 原型 + 规则研究分层”的极简工作方式
 - 明确后续协作需支持多 agent 并行和文档渐进式披露
 - 决定将 `幻界2.0` 设为独立 git 仓库，并采用 `git worktree` 作为并行开发默认机制
+- 初始化独立 git 仓库并完成基线提交
+- 创建首个示范 worktree：`../幻界2.0-worktrees/frontend-shell` 对应分支 `wt/frontend-shell`
 
 ## 当前共识
 

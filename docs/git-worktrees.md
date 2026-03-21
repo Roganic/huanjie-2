@@ -23,6 +23,11 @@
   rules-research/
 ```
 
+当前已创建的示范 worktree：
+
+- `../幻界2.0-worktrees/frontend-shell`
+- 分支：`wt/frontend-shell`
+
 ## 任务适配建议
 
 适合独立 worktree 的任务：

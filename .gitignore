@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+
+# Node / frontend
+node_modules/
+.next/
+dist/
+build/
+coverage/
+
+# Python
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+
+# Env files
+.env
+.env.*
+
+# Logs
+*.log
+
+# Local editor / temp
+.idea/
+.vscode/
+tmp/
+temp/
+
+# Obsidian local clutter if ever created here
+.obsidian/workspace*.json
+

@@ -54,8 +54,8 @@
 
 ## Dispatch Outcome
 
-- 本轮最新 `ready` 任务：`frontend-backend-wireup`
-- `gm-loop-prototype-fix` 已完成并通过审查
+- 本轮最新 `ready` 任务：`backend-state-bootstrap`
+- `frontend-backend-wireup` 已完成并通过审查
 - 从本轮起，共享总纲文档默认仅由 `codex_integrator` 回写
 
 ### rules-core-integration-v1
@@ -78,6 +78,20 @@
   - `ability` 输入已限制为 `str/dex/con/int/wis/cha`
   - 已补 4 个回归测试覆盖 `open` / `talk` / `say` 误判与非法 `ability`
   - 由于 worktree 分支带有过时的 `coordination/*` 差异，integrator 只吸收了 `app/backend/**` 与 session 文件
+
+### frontend-backend-wireup
+
+- status: `merge`
+- merged_commit: `75fd35b`
+- result: 前后端最小联调已成立，可合并
+- verification:
+  - `npm run build` passed
+  - `npm run lint` passed
+  - `python3 -m compileall src` passed
+- notes:
+  - 前端已接通 `/health` 与 `/action`
+  - 结构化裁定结果在前端有最小可读展示
+  - 后端只新增本地开发所需的 CORS 配置，没有改动 `/action` 协议形状
 
 ## Follow-up Rules
 

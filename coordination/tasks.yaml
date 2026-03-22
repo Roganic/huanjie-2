@@ -181,9 +181,9 @@ tasks:
   - id: frontend-backend-wireup
     title: Connect frontend shell to backend health and first action API
     role: claude_worker
-    status: ready
-    branch: ""
-    worktree: ""
+    status: merged
+    branch: wt/frontend-backend-wireup
+    worktree: ../幻界2.0-worktrees/frontend-backend-wireup
     path_scope:
       - app/frontend/**
       - app/backend/**
@@ -194,5 +194,30 @@ tasks:
       - gm-loop-prototype-fix
     outputs:
       - app/frontend/src
+      - docs/sessions/2026-03-22-frontend-backend-wireup.md
     notes:
       - Worker should not edit shared summary docs directly.
+    review:
+      decision: merge
+      merged_commit: 75fd35b
+      notes:
+        - Frontend now consumes `/health` and `/action` without duplicating rules logic.
+        - Only minimal backend CORS configuration was added for local development.
+
+  - id: backend-state-bootstrap
+    title: Serve minimal character and scene bootstrap state
+    role: claude_worker
+    status: ready
+    branch: ""
+    worktree: ""
+    path_scope:
+      - app/backend/**
+      - docs/sessions/**
+    depends_on:
+      - gm-loop-prototype-fix
+      - frontend-backend-wireup
+    outputs:
+      - app/backend/src
+    notes:
+      - Add a minimal read-only state/bootstrap endpoint for the current fixed actor and scene.
+      - Do not touch shared docs; keep this as a backend-only task.

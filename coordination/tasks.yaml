@@ -1,0 +1,168 @@
+tasks:
+  - id: frontend-shell
+    title: Minimal local web frontend shell
+    role: claude_worker
+    status: merged
+    branch: wt/frontend-shell
+    worktree: ../幻界2.0-worktrees/frontend-shell
+    path_scope:
+      - app/frontend/**
+      - app/README.md
+      - docs/sessions/2026-03-21-frontend-shell.md
+      - docs/tech-choices.md
+    depends_on: []
+    outputs:
+      - app/frontend
+      - docs/sessions/2026-03-21-frontend-shell.md
+    review:
+      decision: merge
+      verified:
+        - npm run build
+        - npm run lint
+      notes:
+        - Frontend shell is runnable and within scope.
+        - Shared tech summary changes should be integrated by integrator, not future workers.
+      merged_commit: d9c20cb
+
+  - id: backend-core
+    title: Minimal backend skeleton
+    role: claude_worker
+    status: merged
+    branch: wt/backend-core
+    worktree: ../幻界2.0-worktrees/backend-core
+    path_scope:
+      - app/backend/**
+      - app/README.md
+      - docs/sessions/2026-03-21-backend-core.md
+      - docs/ai-architecture.md
+      - docs/tech-choices.md
+    depends_on: []
+    outputs:
+      - app/backend
+      - docs/sessions/2026-03-21-backend-core.md
+    review:
+      decision: merge
+      verified:
+        - python3 -m compileall src
+      notes:
+        - Source layout is clear and minimal.
+        - Runtime health check was not executed locally because FastAPI is not installed in the integrator environment.
+        - Shared architecture and tech summary changes should be integrated by integrator, not future workers.
+      merged_commit: 80e3766
+
+  - id: dnd-rules-analysis
+    title: Extract MVP-suitable concepts from DND SRD
+    role: codex_worker
+    status: merged
+    branch: wt/dnd-rules-analysis
+    worktree: ../幻界2.0-worktrees/dnd-rules-analysis
+    path_scope:
+      - research/notes/**
+      - research/extracts/**
+      - docs/dnd5e-mvp-extract.md
+      - docs/sessions/2026-03-21-dnd-rules-analysis.md
+      - docs/sessions/2026-03-22-dnd5e-mvp-extract.md
+    depends_on: []
+    outputs:
+      - research/notes/dnd-srd-mvp-analysis.md
+      - research/extracts/dnd-srd-mvp-extract.yaml
+      - docs/dnd5e-mvp-extract.md
+    review:
+      decision: merge
+      notes:
+        - Deliverables are inside scope and directly usable for rules-core integration.
+      merged_commit: ef951d3
+
+  - id: ose-rules-analysis
+    title: Extract MVP-suitable concepts from OSE
+    role: codex_worker
+    status: merged
+    branch: wt/ose-rules-analysis
+    worktree: ../幻界2.0-worktrees/ose-rules-analysis
+    path_scope:
+      - research/notes/**
+      - research/extracts/**
+      - docs/ose-rules-analysis.md
+      - docs/sessions/2026-03-21-ose-rules-analysis.md
+      - docs/sessions/2026-03-22-ose-rules-analysis.md
+    depends_on: []
+    outputs:
+      - research/notes/2026-03-22-ose-ai-stability-analysis.md
+      - research/extracts/ose-mvp-rules-extract.md
+      - docs/ose-rules-analysis.md
+    review:
+      decision: partial
+      accepted_outputs:
+        - research/notes/2026-03-22-ose-ai-stability-analysis.md
+        - research/extracts/ose-mvp-rules-extract.md
+        - docs/ose-rules-analysis.md
+      rejected_changes:
+        - docs/rules-core.md
+      notes:
+        - Research result is useful.
+        - Shared rules core remains integrator-only and must be rewritten in the integration task.
+        - Approved outputs were absorbed into main manually; the branch itself was not merged.
+    notes:
+      - Previous worker also edited docs/rules-core.md outside allowed scope. Review before merge.
+
+  - id: rules-core-integration-v1
+    title: Integrate DND and OSE results into shared rules core
+    role: codex_integrator
+    status: merged
+    branch: ""
+    worktree: /Users/roganic/Documents/ObsidianVault/20-Projects/Incubating/幻界2.0
+    path_scope:
+      - docs/rules-core.md
+      - coordination/reviews.md
+      - coordination/board.md
+      - CHECKPOINTS.md
+    depends_on:
+      - dnd-rules-analysis
+      - ose-rules-analysis
+    outputs:
+      - docs/rules-core.md
+    notes:
+      - Consume merged DND outputs and accepted OSE materials only.
+      - Shared rules core is integrator-only.
+    review:
+      decision: merge
+      notes:
+        - Shared rules core was rewritten as a single V1 summary.
+        - Only accepted OSE research outputs were absorbed.
+
+  - id: gm-loop-prototype
+    title: Backend GM action to narration loop
+    role: claude_worker
+    status: ready
+    branch: ""
+    worktree: ""
+    path_scope:
+      - app/backend/**
+      - docs/sessions/**
+    depends_on:
+      - backend-core
+      - rules-core-integration-v1
+    outputs:
+      - app/backend/src
+    notes:
+      - Worker may write code and session docs, but shared architecture docs are integrator-only.
+      - Dependencies are satisfied, but dispatch is currently on hold by coordinator request.
+
+  - id: frontend-backend-wireup
+    title: Connect frontend shell to backend health and first action API
+    role: claude_worker
+    status: todo
+    branch: ""
+    worktree: ""
+    path_scope:
+      - app/frontend/**
+      - app/backend/**
+      - docs/sessions/**
+    depends_on:
+      - frontend-shell
+      - backend-core
+      - gm-loop-prototype
+    outputs:
+      - app/frontend/src
+    notes:
+      - Worker should not edit shared summary docs directly.

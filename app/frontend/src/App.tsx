@@ -1,31 +1,60 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface Message {
   id: number;
-  role: "gm" | "player";
+  role: "gm" | "player" | "system";
   text: string;
+  resolution?: ActionResponse;
 }
 
-const MOCK_MESSAGES: Message[] = [
-  {
-    id: 1,
-    role: "gm",
-    text: "你推开沉重的橡木门，一阵潮湿的霉味扑面而来。\n火把的光芒在石壁上跳动，前方的走廊向左右两侧分岔。\n远处隐约传来金属碰撞的声响。",
-  },
-  { id: 2, role: "player", text: "我先停下来仔细听，判断声音从哪个方向传来。" },
-  {
-    id: 3,
-    role: "gm",
-    text: "请进行一次感知检定。\n（难度：普通 DC 12）",
-  },
-  { id: 4, role: "player", text: "我掷骰子——感知检定。" },
-  {
-    id: 5,
-    role: "gm",
-    text: "🎲 感知检定：14（骰子 11 + 感知修正 3）—— 成功！\n你辨别出声响来自左侧通道，听起来像是有人在敲打铁器。\n右侧通道则安静得不正常。",
-  },
-];
+type HealthStatus = "loading" | "ok" | "error";
+
+interface CheckDetail {
+  ability: string;
+  modifier: number;
+  proficiency_bonus: number;
+  advantage: boolean | null;
+  roll: number;
+  total: number;
+  dc: number;
+}
+
+interface Effect {
+  target: string;
+  field: string;
+  delta: number | string;
+  description: string;
+}
+
+interface ActionResponse {
+  action_summary: string;
+  resolution_type: "auto_success" | "check";
+  check: CheckDetail | null;
+  outcome: "success" | "failure";
+  effects: Effect[];
+  narration: string;
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const FIXED_SCENE_ID = "dungeon-01";
+const FIXED_ACTOR = "Aira";
+
+const ABILITY_LABELS: Record<string, string> = {
+  str: "力量",
+  dex: "敏捷",
+  con: "体质",
+  int: "智力",
+  wis: "感知",
+  cha: "魅力",
+};
 
 const MOCK_CHARACTER = {
   name: "艾拉·暮光",
@@ -43,35 +72,180 @@ const MOCK_CHARACTER = {
   ],
 };
 
-const MOCK_LOG = [
-  "进入地下城第一层",
-  "触发入口叙事",
-  "感知检定 DC12 → 14 成功",
-];
+// ---------------------------------------------------------------------------
+// Components
+// ---------------------------------------------------------------------------
+
+function ResolutionCard({ res }: { res: ActionResponse }) {
+  const isCheck = res.resolution_type === "check";
+  const outcomeClass =
+    res.outcome === "success" ? "outcome-success" : "outcome-failure";
+  const outcomeLabel = res.outcome === "success" ? "成功" : "失败";
+
+  return (
+    <div className="resolution-card">
+      <div className={`outcome-badge ${outcomeClass}`}>
+        {isCheck ? "检定" : "自动成功"} — {outcomeLabel}
+      </div>
+
+      {isCheck && res.check && (
+        <div className="check-details">
+          <span className="check-ability">
+            {ABILITY_LABELS[res.check.ability] ?? res.check.ability}
+          </span>
+          <span className="check-roll">
+            d20={res.check.roll}
+            {res.check.modifier >= 0 ? "+" : ""}
+            {res.check.modifier}
+            {res.check.proficiency_bonus > 0 &&
+              `+${res.check.proficiency_bonus}`}
+            {" = "}
+            <strong>{res.check.total}</strong>
+          </span>
+          <span className="check-dc">DC {res.check.dc}</span>
+          {res.check.advantage !== null && (
+            <span className="check-adv">
+              {res.check.advantage ? "优势" : "劣势"}
+            </span>
+          )}
+        </div>
+      )}
+
+      {res.effects.length > 0 && (
+        <div className="effects-list">
+          {res.effects.map((e, i) => (
+            <div key={i} className="effect-item">
+              {e.description}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="narration">{res.narration}</div>
+    </div>
+  );
+}
+
+function HealthDot({ status }: { status: HealthStatus }) {
+  const label =
+    status === "loading"
+      ? "连接中…"
+      : status === "ok"
+        ? "后端已连接"
+        : "后端离线";
+  return (
+    <span className={`health-dot ${status}`} title={label}>
+      <span className="dot" />
+      {label}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// App
+// ---------------------------------------------------------------------------
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [health, setHealth] = useState<HealthStatus>("loading");
+  const [sending, setSending] = useState(false);
+  const [log, setLog] = useState<string[]>([]);
+  const messagesEnd = useRef<HTMLDivElement>(null);
 
-  const send = () => {
+  useEffect(() => {
+    messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Health check on mount + periodic refresh
+  useEffect(() => {
+    let cancelled = false;
+
+    const check = async () => {
+      try {
+        const res = await fetch("/api/health");
+        if (!cancelled) setHealth(res.ok ? "ok" : "error");
+      } catch {
+        if (!cancelled) setHealth("error");
+      }
+    };
+
+    check();
+    const id = setInterval(check, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  const send = async () => {
     const text = input.trim();
-    if (!text) return;
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now(), role: "player", text },
-    ]);
+    if (!text || sending) return;
+
+    const playerMsg: Message = { id: Date.now(), role: "player", text };
+    setMessages((prev) => [...prev, playerMsg]);
     setInput("");
-    // Mock GM reply
-    setTimeout(() => {
+    setSending(true);
+
+    try {
+      const res = await fetch("/api/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scene_id: FIXED_SCENE_ID,
+          actor: FIXED_ACTOR,
+          intent: text,
+          approach: text,
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            role: "system",
+            text: `请求失败 (${res.status}): ${errText}`,
+          },
+        ]);
+        return;
+      }
+
+      const data: ActionResponse = await res.json();
+
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now(),
           role: "gm",
-          text: "（GM 思考中……后端尚未接入）",
+          text: data.narration,
+          resolution: data,
         },
       ]);
-    }, 600);
+
+      if (data.resolution_type === "check" && data.check) {
+        const c = data.check;
+        const abilityName = ABILITY_LABELS[c.ability] ?? c.ability;
+        setLog((prev) => [
+          ...prev,
+          `${abilityName}检定 DC${c.dc} → ${c.total} ${data.outcome === "success" ? "成功" : "失败"}`,
+        ]);
+      } else {
+        setLog((prev) => [...prev, `自动成功: ${text.slice(0, 20)}`]);
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          role: "system",
+          text: `网络错误: ${err instanceof Error ? err.message : String(err)}`,
+        },
+      ]);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -79,7 +253,10 @@ function App() {
       {/* Header */}
       <header className="header">
         <h1>幻界</h1>
-        <span>AI 跑团原型 · 前端壳子</span>
+        <div className="header-right">
+          <HealthDot status={health} />
+          <span className="subtitle">AI 跑团原型</span>
+        </div>
       </header>
 
       {/* Sidebar */}
@@ -105,21 +282,34 @@ function App() {
       {/* Chat */}
       <main className="chat">
         <div className="messages">
+          {messages.length === 0 && (
+            <div className="empty-hint">输入一个行动开始冒险…</div>
+          )}
           {messages.map((m) => (
             <div key={m.id} className={`message ${m.role}`}>
-              <div className="role">{m.role === "gm" ? "GM" : "玩家"}</div>
-              {m.text}
+              <div className="role">
+                {m.role === "gm"
+                  ? "GM"
+                  : m.role === "player"
+                    ? "玩家"
+                    : "系统"}
+              </div>
+              {m.resolution ? <ResolutionCard res={m.resolution} /> : m.text}
             </div>
           ))}
+          <div ref={messagesEnd} />
         </div>
         <div className="input-bar">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="输入你的行动…"
+            placeholder={sending ? "裁定中…" : "输入你的行动…"}
+            disabled={sending}
           />
-          <button onClick={send}>发送</button>
+          <button onClick={send} disabled={sending}>
+            {sending ? "…" : "发送"}
+          </button>
         </div>
       </main>
 
@@ -159,7 +349,8 @@ function App() {
 
         <section>
           <h2>事件日志</h2>
-          {MOCK_LOG.map((entry, i) => (
+          {log.length === 0 && <div className="log-entry">暂无事件</div>}
+          {log.map((entry, i) => (
             <div key={i} className="log-entry">
               {entry}
             </div>

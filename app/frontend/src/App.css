@@ -23,9 +23,50 @@
   letter-spacing: 0.5px;
 }
 
-.header span {
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header .subtitle {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+/* ---- Health Indicator ---- */
+
+.health-dot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.health-dot .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.health-dot.loading .dot {
+  background: #f0ad4e;
+  animation: pulse 1.2s infinite;
+}
+
+.health-dot.ok .dot {
+  background: #5cb85c;
+}
+
+.health-dot.error .dot {
+  background: #d9534f;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 /* ---- Sidebar ---- */
@@ -106,6 +147,22 @@
   align-self: flex-end;
   background: var(--msg-player);
   border: 1px solid var(--border);
+}
+
+.message.system {
+  align-self: center;
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  max-width: 90%;
+}
+
+.empty-hint {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 48px 16px;
+  font-size: 14px;
 }
 
 .message .role {
@@ -193,4 +250,87 @@
   color: var(--text-muted);
   padding: 2px 0;
   border-bottom: 1px solid var(--border);
+}
+
+/* ---- Resolution Card ---- */
+
+.resolution-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.outcome-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.outcome-badge.outcome-success {
+  background: rgba(92, 184, 92, 0.2);
+  color: #5cb85c;
+}
+
+.outcome-badge.outcome-failure {
+  background: rgba(217, 83, 79, 0.2);
+  color: #d9534f;
+}
+
+.check-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.check-ability {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.check-roll {
+  font-family: monospace;
+}
+
+.check-dc {
+  color: var(--text-muted);
+}
+
+.check-adv {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(240, 173, 78, 0.2);
+  color: #f0ad4e;
+}
+
+.effects-list {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.effect-item {
+  padding: 2px 0;
+}
+
+.narration {
+  line-height: 1.6;
+}
+
+/* ---- Disabled state ---- */
+
+.input-bar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-bar input:disabled {
+  opacity: 0.6;
 }

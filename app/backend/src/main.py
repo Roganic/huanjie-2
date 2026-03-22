@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import action, health
+from .routers import action, health, state
 
 app = FastAPI(title="幻界 2.0", version="0.1.0")
 
@@ -16,6 +16,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(action.router)
+app.include_router(state.router)
 
 
 @app.get("/")

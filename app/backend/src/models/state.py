@@ -39,6 +39,7 @@ class Actor(BaseModel):
     proficiency_bonus: int = 2
     hp: int
     hp_max: int
+    conditions: list[str] = Field(default_factory=list)
     description: str = ""
 
 
@@ -47,6 +48,7 @@ class Scene(BaseModel):
     name: str
     description: str
     actors: list[str] = Field(default_factory=list, description="Actor IDs present")
+    time: int = Field(default=0, description="Abstract time ticks elapsed")
 
 
 class BootstrapState(BaseModel):

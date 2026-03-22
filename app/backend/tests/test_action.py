@@ -4,6 +4,12 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from src.main import app
+from src.state import reset_state
+
+
+@pytest.fixture(autouse=True)
+def _fresh_state():
+    reset_state()
 
 
 @pytest.fixture

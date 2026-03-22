@@ -6,7 +6,7 @@
 
 - `frontend/`：本地 Web 前端
 - `backend/`：API、规则引擎、agent 编排
-- `scripts/`：实验脚本、评测脚本、数据处理工具
+- ForgeFlow 的控制脚本已迁移到平级目录 `ForgeFlow/scripts/`
 
 ## 约束
 

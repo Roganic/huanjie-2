@@ -7,6 +7,7 @@ node_modules/
 dist/
 build/
 coverage/
+admin/run/
 
 # Python
 .venv/
@@ -20,6 +21,7 @@ __pycache__/
 
 # Logs
 *.log
+*.pid
 
 # Local editor / temp
 .idea/
@@ -29,4 +31,3 @@ temp/
 
 # Obsidian local clutter if ever created here
 .obsidian/workspace*.json
-

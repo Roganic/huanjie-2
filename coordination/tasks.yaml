@@ -133,7 +133,7 @@ tasks:
   - id: gm-loop-prototype
     title: Backend GM action to narration loop
     role: claude_worker
-    status: review
+    status: merged
     branch: wt/gm-loop-prototype
     worktree: ../幻界2.0-worktrees/gm-loop-prototype
     path_scope:
@@ -147,19 +147,20 @@ tasks:
     notes:
       - Worker may write code and session docs, but shared architecture docs are integrator-only.
     review:
-      decision: partial
-      reviewed_branch_head: eca17eb
+      decision: merge
+      reviewed_branch_head: 4807530
+      merged_commit: pending
       notes:
-        - Core shape is useful, but current auto-success heuristics are too broad and change behavior incorrectly.
-        - Request validation is too loose for frontend integration.
-        - Do not merge this branch directly until follow-up fixes land.
+        - Final backend loop was absorbed into main after the fix pass.
+        - Auto-success heuristics were tightened and request validation was constrained.
+        - Branch history included out-of-scope coordination file changes, so only allowed paths were absorbed.
 
   - id: gm-loop-prototype-fix
     title: Tighten GM loop auto-success and request validation
     role: claude_worker
-    status: ready
-    branch: ""
-    worktree: ""
+    status: merged
+    branch: wt/gm-loop-prototype
+    worktree: ../幻界2.0-worktrees/gm-loop-prototype
     path_scope:
       - app/backend/**
       - docs/sessions/**
@@ -167,15 +168,20 @@ tasks:
       - gm-loop-prototype
     outputs:
       - app/backend/src
+      - docs/sessions/2026-03-22-gm-loop-prototype-fix.md
     notes:
       - Fix false auto-success cases like locked/open or social persuasion actions.
       - Constrain request ability values and add regression tests.
       - Reuse the existing gm-loop-prototype worktree or a fresh follow-up worktree; do not touch shared docs.
+    review:
+      decision: merge
+      reviewed_branch_head: 4807530
+      merged_commit: pending
 
   - id: frontend-backend-wireup
     title: Connect frontend shell to backend health and first action API
     role: claude_worker
-    status: todo
+    status: ready
     branch: ""
     worktree: ""
     path_scope:

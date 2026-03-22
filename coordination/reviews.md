@@ -54,8 +54,8 @@
 
 ## Dispatch Outcome
 
-- 本轮最新 `ready` 任务：`gm-loop-prototype-fix`
-- 本轮新增 1 个返工 worker 任务：`gm-loop-prototype-fix`
+- 本轮最新 `ready` 任务：`frontend-backend-wireup`
+- `gm-loop-prototype-fix` 已完成并通过审查
 - 从本轮起，共享总纲文档默认仅由 `codex_integrator` 回写
 
 ### rules-core-integration-v1
@@ -70,18 +70,14 @@
 
 ### gm-loop-prototype
 
-- status: `partial`
-- reviewed_branch_head: `eca17eb`
-- result: 形状可保留，但不能直接 merge
-- findings:
-  - `app/backend/src/engine/resolver.py` 中的 auto-success 关键词过宽，`open`、`talk`、`say` 会把本应检定的动作直接跳过
-  - `app/backend/src/models/action.py` 中 `ability` 只是自由字符串，非法值会静默落到 `0` 修正，而不是在 API 层报错
-  - `app/backend/tests/test_action.py` 没覆盖上述关键回归路径
-- follow_up:
-  - 新建 `gm-loop-prototype-fix`
-  - 修复 false auto-success
-  - 收紧 request 校验
-  - 补回归测试后再审查
+- status: `merge`
+- reviewed_branch_head: `4807530`
+- result: 返工后可合并，已按允许路径吸收到 main
+- notes:
+  - auto-success 已从宽泛关键词匹配收紧为平凡短语 + disqualifier 机制
+  - `ability` 输入已限制为 `str/dex/con/int/wis/cha`
+  - 已补 4 个回归测试覆盖 `open` / `talk` / `say` 误判与非法 `ability`
+  - 由于 worktree 分支带有过时的 `coordination/*` 差异，integrator 只吸收了 `app/backend/**` 与 session 文件
 
 ## Follow-up Rules
 

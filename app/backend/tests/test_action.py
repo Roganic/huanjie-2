@@ -109,3 +109,78 @@ async def test_advantage(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["check"]["advantage"] is True
+
+
+# ---------------------------------------------------------------------------
+# Regression: non-trivial "open" must NOT auto-succeed
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_open_locked_chest_requires_check(client):
+    async with client as c:
+        resp = await c.post("/action", json={
+            "scene_id": "dungeon-01",
+            "actor": "Aldric",
+            "intent": "open the locked chest",
+            "approach": "try to force it open",
+        })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["resolution_type"] == "check", (
+        "Opening a locked chest should require a check, not auto-succeed"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Regression: social "talk" / "say" with persuasion must NOT auto-succeed
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_talk_guard_requires_check(client):
+    async with client as c:
+        resp = await c.post("/action", json={
+            "scene_id": "gate-01",
+            "actor": "Bree",
+            "intent": "talk the guard into letting us pass",
+            "approach": "convince him we are merchants",
+        })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["resolution_type"] == "check", (
+        "Persuading a guard should require a check, not auto-succeed"
+    )
+
+
+@pytest.mark.asyncio
+async def test_say_convincing_lie_requires_check(client):
+    async with client as c:
+        resp = await c.post("/action", json={
+            "scene_id": "court-01",
+            "actor": "Cara",
+            "intent": "say a convincing lie to the magistrate",
+            "approach": "deceive him about our origins",
+        })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["resolution_type"] == "check", (
+        "Telling a convincing lie should require a check, not auto-succeed"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Regression: invalid ability must be rejected at API level
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_invalid_ability_rejected(client):
+    async with client as c:
+        resp = await c.post("/action", json={
+            "scene_id": "tavern-01",
+            "actor": "Aldric",
+            "intent": "arm wrestle the bartender",
+            "approach": "use brute strength",
+            "ability": "athletics",
+        })
+    assert resp.status_code == 422, (
+        "Invalid ability value should return 422 validation error"
+    )

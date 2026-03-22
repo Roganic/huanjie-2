@@ -41,10 +41,29 @@ DC_MEDIUM = 15
 DC_HARD = 20
 
 # ---------------------------------------------------------------------------
-# Keywords that hint at auto-success (trivial actions)
+# Auto-success: only truly trivial, zero-risk actions skip the roll.
+# Each phrase must be specific enough to avoid matching non-trivial variants
+# like "open the locked chest" or "talk the guard into letting us pass".
 # ---------------------------------------------------------------------------
 
-AUTO_SUCCESS_KEYWORDS = {"look", "walk", "talk", "open", "sit", "stand", "say"}
+AUTO_SUCCESS_PHRASES = [
+    "look around",
+    "look at",
+    "walk to",
+    "walk over",
+    "sit down",
+    "stand up",
+    "put down",
+    "pick up",        # picking up an uncontested item, not pick a lock
+]
+
+# If any of these words appear alongside a phrase match, the action is
+# probably non-trivial and should NOT auto-succeed.
+AUTO_SUCCESS_DISQUALIFIERS = [
+    "locked", "trapped", "guard", "convince", "persuade", "deceive",
+    "lie", "trick", "sneak", "steal", "force", "break", "dangerous",
+    "difficult", "careful", "secret", "hidden",
+]
 
 # ---------------------------------------------------------------------------
 # Simple ability inference from approach text
@@ -71,9 +90,17 @@ def _infer_ability(approach: str) -> str:
 
 
 def _is_auto_success(intent: str, approach: str) -> bool:
-    """Trivial check: if the intent is obviously easy, skip the roll."""
+    """Return True only for genuinely trivial, zero-risk actions.
+
+    Requires a known trivial phrase AND the absence of any disqualifier
+    that would indicate uncertainty or opposition.
+    """
     lower = f"{intent} {approach}".lower()
-    return any(kw in lower for kw in AUTO_SUCCESS_KEYWORDS)
+    has_trivial_phrase = any(phrase in lower for phrase in AUTO_SUCCESS_PHRASES)
+    if not has_trivial_phrase:
+        return False
+    has_disqualifier = any(dq in lower for dq in AUTO_SUCCESS_DISQUALIFIERS)
+    return not has_disqualifier
 
 
 def _pick_dc(intent: str) -> int:

@@ -11,10 +11,11 @@ Integration complete:
 - `rules-core-integration-v1` -> `merge`
 - `gm-loop-prototype` -> `merge`
 - `gm-loop-prototype-fix` -> `merge`
+- `frontend-backend-wireup` -> `merge`
 
 Ready next:
 
-- `frontend-backend-wireup`
+- `backend-state-bootstrap`
 
 Blocked by review / integration:
 - None
@@ -24,6 +25,7 @@ Follow-up opened in this round:
 - `ose-rules-analysis` 的可用结论将由 `rules-core-integration-v1` 手动吸收，不再派单要求 worker 清理共享总纲改动
 - `ose-rules-analysis` 分支不进入主线历史，只保留三份已批准吸收的研究产物
 - `gm-loop-prototype-fix` 已完成并吸收到主线
+- 下一步优先移除前端固定 mock 对角色 / 场景状态的依赖
 
 ## Role Routing
 
@@ -38,5 +40,5 @@ Follow-up opened in this round:
 
 ## Review Focus
 
-- `frontend-backend-wireup`：是否只接现有 `/health` 与 `/action`，不擅自改后端协议
-- `frontend-backend-wireup`：是否让前端展示结构化结果，而不是把逻辑重新写到前端
+- `backend-state-bootstrap`：是否以最小只读接口提供当前 actor / scene 状态
+- `backend-state-bootstrap`：是否避免提前引入数据库、持久化或复杂会话系统

@@ -54,9 +54,8 @@
 
 ## Dispatch Outcome
 
-- 本轮最新 `ready` 任务：`gm-loop-prototype`
-- 但按当前收口要求，`gm-loop-prototype` 暂不派发
-- 本轮未新增独立返工 worker 任务
+- 本轮最新 `ready` 任务：`gm-loop-prototype-fix`
+- 本轮新增 1 个返工 worker 任务：`gm-loop-prototype-fix`
 - 从本轮起，共享总纲文档默认仅由 `codex_integrator` 回写
 
 ### rules-core-integration-v1
@@ -68,6 +67,21 @@
   - 明确采用“5e 判定语法 + OSE 流程结构”
   - 只吸收了 OSE 允许范围内的研究结论，没有直接采用其越界草稿
   - 下一批 `ready` 任务切换为 `gm-loop-prototype`
+
+### gm-loop-prototype
+
+- status: `partial`
+- reviewed_branch_head: `eca17eb`
+- result: 形状可保留，但不能直接 merge
+- findings:
+  - `app/backend/src/engine/resolver.py` 中的 auto-success 关键词过宽，`open`、`talk`、`say` 会把本应检定的动作直接跳过
+  - `app/backend/src/models/action.py` 中 `ability` 只是自由字符串，非法值会静默落到 `0` 修正，而不是在 API 层报错
+  - `app/backend/tests/test_action.py` 没覆盖上述关键回归路径
+- follow_up:
+  - 新建 `gm-loop-prototype-fix`
+  - 修复 false auto-success
+  - 收紧 request 校验
+  - 补回归测试后再审查
 
 ## Follow-up Rules
 

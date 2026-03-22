@@ -111,6 +111,19 @@
   color: #fff;
 }
 
+.scene-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted, #999);
+  padding: 4px 8px;
+  line-height: 1.4;
+}
+
+.sidebar-loading {
+  padding: 8px;
+  color: var(--text-muted, #999);
+  font-size: 0.85rem;
+}
+
 /* ---- Chat ---- */
 
 .chat {

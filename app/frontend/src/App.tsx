@@ -40,12 +40,40 @@ interface ActionResponse {
   narration: string;
 }
 
+interface AbilityScores {
+  str: number;
+  dex: number;
+  con: number;
+  int: number;
+  wis: number;
+  cha: number;
+}
+
+interface Actor {
+  id: string;
+  name: string;
+  abilities: AbilityScores;
+  proficiency_bonus: number;
+  hp: number;
+  hp_max: number;
+  description: string;
+}
+
+interface Scene {
+  id: string;
+  name: string;
+  description: string;
+  actors: string[];
+}
+
+interface BootstrapState {
+  actor: Actor;
+  scene: Scene;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const FIXED_SCENE_ID = "dungeon-01";
-const FIXED_ACTOR = "Aira";
 
 const ABILITY_LABELS: Record<string, string> = {
   str: "力量",
@@ -56,21 +84,7 @@ const ABILITY_LABELS: Record<string, string> = {
   cha: "魅力",
 };
 
-const MOCK_CHARACTER = {
-  name: "艾拉·暮光",
-  class: "游荡者",
-  level: 3,
-  hp: "18 / 24",
-  ac: 15,
-  stats: [
-    { label: "力量", value: 10 },
-    { label: "敏捷", value: 16 },
-    { label: "体质", value: 12 },
-    { label: "智力", value: 14 },
-    { label: "感知", value: 13 },
-    { label: "魅力", value: 8 },
-  ],
-};
+const ABILITY_KEYS: (keyof AbilityScores)[] = ["str", "dex", "con", "int", "wis", "cha"];
 
 // ---------------------------------------------------------------------------
 // Components
@@ -151,6 +165,7 @@ function App() {
   const [health, setHealth] = useState<HealthStatus>("loading");
   const [sending, setSending] = useState(false);
   const [log, setLog] = useState<string[]>([]);
+  const [bootstrap, setBootstrap] = useState<BootstrapState | null>(null);
   const messagesEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -178,6 +193,22 @@ function App() {
     };
   }, []);
 
+  // Fetch bootstrap state on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/state/bootstrap");
+        if (!res.ok) return;
+        const data: BootstrapState = await res.json();
+        if (!cancelled) setBootstrap(data);
+      } catch {
+        // Bootstrap fetch failed; UI will show loading placeholder
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
@@ -192,8 +223,8 @@ function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scene_id: FIXED_SCENE_ID,
-          actor: FIXED_ACTOR,
+          scene_id: bootstrap?.scene.id ?? "tavern-01",
+          actor: bootstrap?.actor.name ?? "Aldric",
           intent: text,
           approach: text,
         }),
@@ -263,19 +294,26 @@ function App() {
       <aside className="sidebar">
         <section>
           <h2>场景</h2>
-          <ul>
-            <li className="active">地下城入口</li>
-            <li>营地休息</li>
-            <li>城镇集市</li>
-          </ul>
+          {bootstrap ? (
+            <>
+              <ul>
+                <li className="active">{bootstrap.scene.name}</li>
+              </ul>
+              <p className="scene-desc">{bootstrap.scene.description}</p>
+            </>
+          ) : (
+            <div className="sidebar-loading">加载中…</div>
+          )}
         </section>
         <section>
-          <h2>队伍</h2>
-          <ul>
-            <li>艾拉·暮光（玩家）</li>
-            <li>铁锤·矮人战士</li>
-            <li>薇安·精灵法师</li>
-          </ul>
+          <h2>角色</h2>
+          {bootstrap ? (
+            <ul>
+              <li className="active">{bootstrap.actor.name}</li>
+            </ul>
+          ) : (
+            <div className="sidebar-loading">加载中…</div>
+          )}
         </section>
       </aside>
 
@@ -315,37 +353,40 @@ function App() {
 
       {/* Status Panel */}
       <aside className="status-panel">
-        <section>
-          <h2>角色</h2>
-          <div className="stat-row">
-            <span className="label">姓名</span>
-            <span className="value">{MOCK_CHARACTER.name}</span>
-          </div>
-          <div className="stat-row">
-            <span className="label">职业</span>
-            <span className="value">
-              {MOCK_CHARACTER.class} Lv.{MOCK_CHARACTER.level}
-            </span>
-          </div>
-          <div className="stat-row">
-            <span className="label">HP</span>
-            <span className="value">{MOCK_CHARACTER.hp}</span>
-          </div>
-          <div className="stat-row">
-            <span className="label">AC</span>
-            <span className="value">{MOCK_CHARACTER.ac}</span>
-          </div>
-        </section>
+        {bootstrap ? (
+          <>
+            <section>
+              <h2>状态</h2>
+              <div className="stat-row">
+                <span className="label">姓名</span>
+                <span className="value">{bootstrap.actor.name}</span>
+              </div>
+              <div className="stat-row">
+                <span className="label">HP</span>
+                <span className="value">{bootstrap.actor.hp} / {bootstrap.actor.hp_max}</span>
+              </div>
+              <div className="stat-row">
+                <span className="label">熟练加值</span>
+                <span className="value">+{bootstrap.actor.proficiency_bonus}</span>
+              </div>
+            </section>
 
-        <section>
-          <h2>属性</h2>
-          {MOCK_CHARACTER.stats.map((s) => (
-            <div key={s.label} className="stat-row">
-              <span className="label">{s.label}</span>
-              <span className="value">{s.value}</span>
-            </div>
-          ))}
-        </section>
+            <section>
+              <h2>属性</h2>
+              {ABILITY_KEYS.map((key) => (
+                <div key={key} className="stat-row">
+                  <span className="label">{ABILITY_LABELS[key]}</span>
+                  <span className="value">{bootstrap.actor.abilities[key]}</span>
+                </div>
+              ))}
+            </section>
+          </>
+        ) : (
+          <section>
+            <h2>状态</h2>
+            <div className="sidebar-loading">加载中…</div>
+          </section>
+        )}
 
         <section>
           <h2>事件日志</h2>

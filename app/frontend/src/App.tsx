@@ -265,6 +265,18 @@ function App() {
       } else {
         setLog((prev) => [...prev, `自动成功: ${text.slice(0, 20)}`]);
       }
+
+      // Re-fetch authoritative state so the status panel reflects any
+      // mutations applied by the backend (HP, conditions, time, etc.)
+      try {
+        const stateRes = await fetch("/api/state/bootstrap");
+        if (stateRes.ok) {
+          const freshState: BootstrapState = await stateRes.json();
+          setBootstrap(freshState);
+        }
+      } catch {
+        // State refresh failed; status panel keeps previous values
+      }
     } catch (err) {
       setMessages((prev) => [
         ...prev,

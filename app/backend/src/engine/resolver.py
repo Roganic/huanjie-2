@@ -15,22 +15,8 @@ from ..models.action import (
     Outcome,
     ResolutionType,
 )
+from ..state import get_bootstrap_state
 from .dice import roll_d20
-
-# ---------------------------------------------------------------------------
-# Stub ability data — will be replaced by real character state later
-# ---------------------------------------------------------------------------
-
-DEFAULT_ABILITY_MODIFIERS: dict[str, int] = {
-    "str": 2,
-    "dex": 1,
-    "con": 1,
-    "int": 0,
-    "wis": 1,
-    "cha": -1,
-}
-
-DEFAULT_PROFICIENCY_BONUS = 2
 
 # ---------------------------------------------------------------------------
 # DC tiers (rules-core: "先压缩成少量稳定档位，例如 10 / 15 / 20")
@@ -146,9 +132,10 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
         )
 
     # --- check path ---
+    actor = get_bootstrap_state().actor
     ability = req.ability or _infer_ability(req.approach)
-    modifier = DEFAULT_ABILITY_MODIFIERS.get(ability, 0)
-    prof = DEFAULT_PROFICIENCY_BONUS
+    modifier = actor.abilities.modifier(ability)
+    prof = actor.proficiency_bonus
     dc = req.dc or _pick_dc(req.intent)
     advantage = req.advantage
 

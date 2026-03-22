@@ -15,7 +15,7 @@ from ..models.action import (
     Outcome,
     ResolutionType,
 )
-from ..state import get_bootstrap_state
+from ..state import get_actor, get_scene
 from .dice import roll_d20
 
 # ---------------------------------------------------------------------------
@@ -132,7 +132,8 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
         )
 
     # --- check path ---
-    actor = get_bootstrap_state().actor
+    actor = get_actor()
+    scene = get_scene()
     ability = req.ability or _infer_ability(req.approach)
     modifier = actor.abilities.modifier(ability)
     prof = actor.proficiency_bonus
@@ -153,16 +154,12 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
         dc=dc,
     )
 
-    effects: list[Effect] = []
-    if outcome == Outcome.FAILURE:
-        effects.append(
-            Effect(
-                target=req.actor,
-                field="narrative_state",
-                delta="setback",
-                description="The failed attempt may attract attention or waste time.",
-            )
-        )
+    effects: list[Effect] = _build_effects(
+        actor_id=actor.id,
+        scene_id=scene.id,
+        ability=ability,
+        outcome=outcome,
+    )
 
     return ActionResponse(
         action_summary=action_summary,
@@ -172,3 +169,53 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
         effects=effects,
         narration=_narration_stub(action_summary, outcome),
     )
+
+
+# ---------------------------------------------------------------------------
+# Effect generation
+# ---------------------------------------------------------------------------
+
+_PHYSICAL_ABILITIES = {"str", "dex", "con"}
+
+
+def _build_effects(
+    *,
+    actor_id: str,
+    scene_id: str,
+    ability: str,
+    outcome: Outcome,
+) -> list[Effect]:
+    """Build concrete, applyable effects for a resolved check."""
+    effects: list[Effect] = []
+
+    # Every check costs one abstract time tick.
+    effects.append(
+        Effect(
+            target=scene_id,
+            field="time",
+            delta=1,
+            description="Time passes.",
+        )
+    )
+
+    if outcome == Outcome.FAILURE:
+        if ability in _PHYSICAL_ABILITIES:
+            effects.append(
+                Effect(
+                    target=actor_id,
+                    field="hp",
+                    delta=-1,
+                    description="The failed physical effort causes minor harm.",
+                )
+            )
+        else:
+            effects.append(
+                Effect(
+                    target=actor_id,
+                    field="narrative_state",
+                    delta="setback",
+                    description="The failed attempt may attract attention or waste time.",
+                )
+            )
+
+    return effects

@@ -34,6 +34,7 @@
 - `AGENTS.md`：agent 协作规则和交接约定
 - `TASKS.md`：当前待办、进行中、阻塞项
 - `CHECKPOINTS.md`：关键决策和阶段状态
+- `coordination/`：半自动任务流水线、review 记录、角色模板
 - `docs/`：正式文档
 - `docs/sessions/`：过程记录
 - `research/`：规则资料研究
@@ -108,6 +109,7 @@ git worktree remove ../幻界2.0-worktrees/frontend-shell
 - 关键取舍和阶段完成情况写入 `CHECKPOINTS.md`
 - 如果发现原有计划失效，应直接更新，而不是保留一堆过期状态
 - 如需并行推进，可在任务条目后标记负责范围，例如 `frontend`、`rules-core`、`research-dnd5e`
+- 当任务开始具备依赖关系或进入多轮协作时，以 `coordination/tasks.yaml` 为准
 
 ## 规则研究约定
 
@@ -149,3 +151,9 @@ git worktree remove ../幻界2.0-worktrees/frontend-shell
 如果代码行为改变，必须同步更新相关文档，不要让文档滞后于实现。
 
 交接时应保证下一位 agent 不需要重新通读全部材料，只需从入口文件逐层下钻即可继续工作。
+
+## 半自动协作补充
+
+- Worker 之间不要求直接对话，通过仓库中的 session、review、task 记录交接
+- Coordinator 负责派发和跟踪，Integrator 负责审查和共享文档回写
+- 新 worker 不依赖旧聊天上下文，只依赖项目工件和任务说明

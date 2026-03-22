@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 
 # ---------------------------------------------------------------------------
@@ -23,6 +23,16 @@ class ActionRequest(BaseModel):
         None,
         description="Ability score used for the check (str/dex/con/int/wis/cha)",
     )
+
+    @validator("ability")
+    @classmethod
+    def ability_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
+        valid = {"str", "dex", "con", "int", "wis", "cha"}
+        if v is not None and v not in valid:
+            raise ValueError(
+                f"ability must be one of {sorted(valid)}, got '{v}'"
+            )
+        return v
     dc: Optional[int] = Field(
         None,
         description="Override difficulty class; auto-assigned if omitted",

@@ -34,7 +34,7 @@
 - `AGENTS.md`：agent 协作规则和交接约定
 - `TASKS.md`：当前待办、进行中、阻塞项
 - `CHECKPOINTS.md`：关键决策和阶段状态
-- `coordination/`：半自动任务流水线、review 记录、角色模板
+- `.forgeflow/project.yaml`：本项目接入 ForgeFlow 的静态配置
 - `docs/`：正式文档
 - `docs/sessions/`：过程记录
 - `research/`：规则资料研究
@@ -109,7 +109,7 @@ git worktree remove ../幻界2.0-worktrees/frontend-shell
 - 关键取舍和阶段完成情况写入 `CHECKPOINTS.md`
 - 如果发现原有计划失效，应直接更新，而不是保留一堆过期状态
 - 如需并行推进，可在任务条目后标记负责范围，例如 `frontend`、`rules-core`、`research-dnd5e`
-- 当任务开始具备依赖关系或进入多轮协作时，以 `coordination/tasks.yaml` 为准
+- 当任务开始具备依赖关系或进入多轮协作时，以 ForgeFlow runtime `tasks.yaml` 为准
 
 ## 规则研究约定
 
@@ -122,7 +122,7 @@ git worktree remove ../幻界2.0-worktrees/frontend-shell
 
 - `app/frontend/`：本地 Web 前端
 - `app/backend/`：API、规则引擎、agent 编排
-- `app/scripts/`：实验脚本、数据处理、评测、小工具
+- ForgeFlow 控制脚本位于平级目录 `ForgeFlow/scripts/`
 
 实现时优先保证：
 
@@ -135,7 +135,7 @@ git worktree remove ../幻界2.0-worktrees/frontend-shell
 
 - `app/frontend/`：一个 agent
 - `app/backend/`：一个 agent
-- `app/scripts/`：一个 agent
+- ForgeFlow 脚本与 dashboard 由 ForgeFlow 自己管理，不再在本仓库内并行修改
 
 如果需要同时改同一子目录，优先继续细分文件范围或拆成先后两步，而不是硬并行。
 

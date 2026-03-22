@@ -1,0 +1,6 @@
+slug: huanjie-2
+name: 幻界 2.0
+forgeflow_root: /Users/roganic/Documents/ObsidianVault/20-Projects/Incubating/ForgeFlow
+notes:
+  - ForgeFlow 作为外部控制平面管理本仓库。
+  - 运行态 tasks、board、reviews、dispatch、plans、runs 不再写入本仓库。

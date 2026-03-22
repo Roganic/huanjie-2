@@ -1,0 +1,124 @@
+source:
+  system: "DND SRD"
+  primary_version: "5.2.1"
+  cross_check_version: "5.1"
+  scope: "适合 AI 跑团 MVP 且对玩家友好的规则机制提炼"
+
+answers:
+  character_creation_complexity:
+    level: "medium_high"
+    verdict: "创建流程本身可理解，但自由度和例外较多，完整照搬不适合 MVP。"
+    drivers:
+      - "职业选择带来不同复杂度层级"
+      - "背景同时提供属性调整、熟练和专长"
+      - "种族提供速度、体型和额外特性"
+      - "施法职业需要额外管理法术、法术位和准备列表"
+    mvp_takeaway:
+      - "用模板角色替代完整自由建角"
+      - "属性生成只保留标准数组"
+      - "首版不开放多职业"
+
+  core_resolution_mechanic:
+    formula: "1d20 + ability_modifier + proficiency_bonus_if_applicable + situational_modifiers"
+    compare_to: ["DC", "AC"]
+    covers:
+      - "ability_checks"
+      - "saving_throws"
+      - "attack_rolls"
+    keep:
+      - "six_abilities"
+      - "ability_modifiers"
+      - "proficiency_bonus"
+      - "advantage_disadvantage"
+
+  combat_state_complexity:
+    level: "medium_high"
+    verdict: "基础回合结构不难，但状态、专注、反应、位置和例外规则让持续管理明显变难。"
+    simple_layer:
+      - "initiative_order"
+      - "movement"
+      - "action"
+      - "attack_vs_ac"
+      - "hp_and_damage"
+    hard_layer:
+      - "conditions"
+      - "concentration"
+      - "bonus_action_and_reaction_timing"
+      - "cover_and_positioning"
+      - "resistance_vulnerability_immunity"
+      - "temporary_hit_points"
+      - "death_saves_and_stabilization"
+      - "grapple_shove_opportunity_attack"
+
+  ai_error_prone_parts:
+    highest_risk:
+      - "concentration_tracking"
+      - "action_bonus_action_reaction_windows"
+      - "condition_interactions"
+      - "exception_overrides_general_rules"
+      - "grapple_shove_opportunity_attack_logic"
+      - "spell_preparation_and_slot_usage"
+      - "damage_resolution_order"
+    why:
+      - "需要跨回合记忆和精确状态同步"
+      - "规则术语相似但含义不同"
+      - "大量例外覆盖通用规则"
+
+  keep_for_mvp:
+    core_language:
+      - "d20_tests"
+      - "dc_and_ac_targets"
+      - "advantage_disadvantage"
+      - "proficiency"
+    character_layer:
+      - "six_abilities"
+      - "simple_background_templates"
+      - "fixed_or_small_choice_templates"
+    combat_layer:
+      - "initiative"
+      - "movement"
+      - "single_action_per_turn"
+      - "optional_bonus_action_only_when_tagged"
+      - "ac_hp_damage"
+      - "small_condition_set"
+    content_layer:
+      - "simplified_weapons"
+      - "simplified_armor"
+      - "small_curated_spell_list_if_needed"
+
+  cut_or_delay:
+    - "freeform_full_character_creation"
+    - "multiclassing"
+    - "full_feat_system"
+    - "full_spell_catalog"
+    - "complex_reaction_ecosystem"
+    - "full_condition_list"
+    - "full_grapple_shove_opportunity_attack_rules"
+    - "high_level_progression"
+    - "exception_heavy_class_features"
+    - "complex_rest_and_resource_cycles"
+
+recommendation:
+  mvp_shape: "借用 5e 的判定语法和玩家认知，不借用其完整复杂度。"
+  implementation_priority:
+    - "先做统一判定模型"
+    - "再做最小战斗闭环"
+    - "把持续状态和资源交给结构化系统而非纯自然语言"
+  target_level_band: "1-5"
+
+minimal_data_model:
+  - "ability_scores"
+  - "ability_modifiers"
+  - "proficiency_bonus"
+  - "skill_proficiencies"
+  - "advantage_state"
+  - "dc"
+  - "ac"
+  - "hp"
+  - "temporary_hp"
+  - "initiative"
+  - "movement"
+  - "action_budget"
+  - "conditions"
+  - "concentration_effect"
+  - "resources"

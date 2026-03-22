@@ -17,6 +17,7 @@ AI 跑团项目工作区。这个目录同时承载产品设计、规则研究�
 ├─ AGENTS.md
 ├─ CHECKPOINTS.md
 ├─ TASKS.md
+├─ coordination/
 ├─ docs/
 │  ├─ product.md
 │  ├─ rules-core.md
@@ -58,8 +59,10 @@ AI 跑团项目工作区。这个目录同时承载产品设计、规则研究�
 2. `AGENTS.md`
 3. `TASKS.md`
 4. `CHECKPOINTS.md`
-5. 相关的 `docs/` 正式文档
-6. 对应主题的 `docs/sessions/` 记录
+5. `coordination/README.md`
+6. 相关的 `coordination/` 文件
+7. 相关的 `docs/` 正式文档
+8. 对应主题的 `docs/sessions/` 记录
 
 ## Git 与 Worktree
 

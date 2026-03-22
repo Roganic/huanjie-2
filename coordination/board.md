@@ -9,21 +9,21 @@ Integration complete:
 - `dnd-rules-analysis` -> `merge`
 - `ose-rules-analysis` -> `partial`
 - `rules-core-integration-v1` -> `merge`
-- `gm-loop-prototype` -> `partial`
+- `gm-loop-prototype` -> `merge`
+- `gm-loop-prototype-fix` -> `merge`
 
 Ready next:
 
-- `gm-loop-prototype-fix`
+- `frontend-backend-wireup`
 
 Blocked by review / integration:
-
-- `frontend-backend-wireup`
+- None
 
 Follow-up opened in this round:
 
 - `ose-rules-analysis` 的可用结论将由 `rules-core-integration-v1` 手动吸收，不再派单要求 worker 清理共享总纲改动
 - `ose-rules-analysis` 分支不进入主线历史，只保留三份已批准吸收的研究产物
-- `gm-loop-prototype-fix`：收紧 auto-success 规则，补 request 校验和回归测试
+- `gm-loop-prototype-fix` 已完成并吸收到主线
 
 ## Role Routing
 
@@ -38,6 +38,5 @@ Follow-up opened in this round:
 
 ## Review Focus
 
-- `gm-loop-prototype-fix`：是否修复 false auto-success 行为
-- `gm-loop-prototype-fix`：是否对 `ability` 输入做明确约束并补回归测试
-- `frontend-backend-wireup`：继续等待 GM loop 原型完成
+- `frontend-backend-wireup`：是否只接现有 `/health` 与 `/action`，不擅自改后端协议
+- `frontend-backend-wireup`：是否让前端展示结构化结果，而不是把逻辑重新写到前端

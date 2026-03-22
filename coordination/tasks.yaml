@@ -149,7 +149,7 @@ tasks:
     review:
       decision: merge
       reviewed_branch_head: 4807530
-      merged_commit: pending
+      merged_commit: 47ad30a
       notes:
         - Final backend loop was absorbed into main after the fix pass.
         - Auto-success heuristics were tightened and request validation was constrained.
@@ -176,7 +176,7 @@ tasks:
     review:
       decision: merge
       reviewed_branch_head: 4807530
-      merged_commit: pending
+      merged_commit: 47ad30a
 
   - id: frontend-backend-wireup
     title: Connect frontend shell to backend health and first action API

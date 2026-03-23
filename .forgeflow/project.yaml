@@ -2,5 +2,58 @@ slug: huanjie-2
 name: 幻界 2.0
 forgeflow_root: /Users/roganic/Documents/ObsidianVault/20-Projects/Incubating/ForgeFlow
 notes:
-  - ForgeFlow 作为外部控制平面管理本仓库。
-  - 运行态 tasks、board、reviews、dispatch、plans、runs 不再写入本仓库。
+- ForgeFlow 作为外部控制平面管理本仓库。
+- 运行态 tasks、board、reviews、dispatch、plans、runs 不再写入本仓库。
+goal_management:
+  goal:
+    title: 做成一个真正可玩的 AI 跑团产品原型
+    description: 不只验证接口链路，而是让玩家能在本地 Web 中直接体验角色、场景、行动裁定与状态变化。
+  current_milestone_id: playable-prototype
+  current_phase_id: prototype-polish
+  milestones:
+  - id: foundation
+    title: 打通规则与服务骨架
+    description: 完成规则内核、GM 裁定链路、前后端基本框架。
+    status: merged
+  - id: playable-prototype
+    title: 做成可演示的 Web 原型
+    description: 让状态真实流动、界面可读、玩家能看懂行动后的变化。
+    status: active
+  phases:
+  - id: rules-and-gm-loop
+    milestone_id: foundation
+    title: 规则与 GM 主链路
+    description: 打通规则总纲、GM action loop、基础 API 和研究结论。
+    status: merged
+    task_ids:
+    - dnd-rules-analysis
+    - ose-rules-analysis
+    - rules-core-integration-v1
+    - backend-core
+    - gm-loop-prototype
+    - gm-loop-prototype-fix
+  - id: stateful-ui-loop
+    milestone_id: playable-prototype
+    title: 状态闭环与前后端接线
+    description: 前端改用真实后端状态，行动后状态刷新，形成真实闭环。
+    status: merged
+    task_ids:
+    - frontend-shell
+    - frontend-backend-wireup
+    - backend-state-bootstrap
+    - frontend-bootstrap-consumption
+    - backend-state-mutation-loop
+    - frontend-state-refresh-after-action
+  - id: prototype-polish
+    milestone_id: playable-prototype
+    title: 原型可演示化
+    description: 增加状态重置、面板增强和更清楚的状态呈现，让原型更像产品。
+    status: active
+    task_ids:
+    - backend-state-reset-endpoint
+    - frontend-state-panel-polish
+    - frontend-state-reset-control
+  success_criteria:
+  - 前端不再依赖主要静态 mock
+  - 后端状态能在多次 action 后演化
+  - 玩家能看懂当前角色、场景、变更结果

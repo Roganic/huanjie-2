@@ -252,3 +252,105 @@ async def test_bootstrap_endpoint_shows_live_state(client):
     data = resp.json()
     assert data["actor"]["hp"] == 11
     assert data["scene"]["time"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Integration: /state/reset endpoint
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_reset_endpoint_restores_initial_state(client):
+    """POST /state/reset should restore actor and scene to initial values."""
+    async with client as c:
+        # Mutate state: damage HP, add condition, advance time
+        await c.post("/action", json={
+            "scene_id": "tavern-01",
+            "actor": "Aldric",
+            "intent": "lift the immovable boulder",
+            "approach": "push with all strength",
+            "ability": "str",
+            "dc": 99,
+        })
+        apply_effects([
+            Effect(target="aldric-01", field="conditions_add", delta="exhausted",
+                   description="test"),
+        ])
+        # Verify state is mutated
+        assert get_actor().hp == 11
+        assert "exhausted" in get_actor().conditions
+        assert get_scene().time == 1
+
+        # Call reset endpoint
+        resp = await c.post("/state/reset")
+
+        # Verify response status
+        assert resp.status_code == 200
+
+        # Verify state is restored
+        assert get_actor().hp == 12
+        assert get_actor().conditions == []
+        assert get_scene().time == 0
+
+
+@pytest.mark.asyncio
+async def test_reset_endpoint_returns_fresh_bootstrap(client):
+    """POST /state/reset should return the reset bootstrap state."""
+    async with client as c:
+        # Mutate state
+        apply_effects([
+            Effect(target="aldric-01", field="hp", delta=-7, description="dmg"),
+            Effect(target="tavern-01", field="time", delta=5, description="tick"),
+        ])
+
+        # Call reset and check response
+        resp = await c.post("/state/reset")
+        data = resp.json()
+
+        # Response should contain fresh initial state
+        assert data["actor"]["hp"] == 12
+        assert data["actor"]["hp_max"] == 12
+        assert data["actor"]["conditions"] == []
+        assert data["scene"]["time"] == 0
+        assert data["scene"]["id"] == "tavern-01"
+
+
+@pytest.mark.asyncio
+async def test_reset_clears_accumulated_mutations(client):
+    """Multiple mutations followed by reset should all be cleared."""
+    async with client as c:
+        # Apply multiple mutations
+        await c.post("/action", json={
+            "scene_id": "tavern-01",
+            "actor": "Aldric",
+            "intent": "arm wrestle",
+            "approach": "use brute force",
+            "ability": "str",
+            "dc": 10,
+        })
+        await c.post("/action", json={
+            "scene_id": "tavern-01",
+            "actor": "Aldric",
+            "intent": "another action",
+            "approach": "try hard",
+            "ability": "dex",
+            "dc": 99,
+        })
+        apply_effects([
+            Effect(target="aldric-01", field="conditions_add", delta="stunned",
+                   description="test"),
+            Effect(target="aldric-01", field="conditions_add", delta="poisoned",
+                   description="test"),
+        ])
+
+        # Verify multiple mutations applied
+        assert get_actor().hp < 12  # Some damage from failed check
+        assert len(get_actor().conditions) == 2
+        assert get_scene().time >= 2
+
+        # Reset
+        await c.post("/state/reset")
+
+        # All cleared
+        assert get_actor().hp == 12
+        assert get_actor().conditions == []
+        assert get_scene().time == 0

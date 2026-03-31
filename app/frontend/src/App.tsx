@@ -209,6 +209,69 @@ function App() {
     return () => { cancelled = true; };
   }, []);
 
+  const reset = async () => {
+    if (sending) return;
+    setSending(true);
+
+    try {
+      const res = await fetch("/api/state/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            role: "system",
+            text: `重置失败 (${res.status}): ${errText}`,
+          },
+        ]);
+        return;
+      }
+
+      const data = await res.json();
+
+      // Clear local state to avoid stale turns
+      setMessages([]);
+      setLog([]);
+
+      // Refresh bootstrap state from reset response
+      if (data.bootstrap) {
+        setBootstrap(data.bootstrap);
+      } else {
+        // Fallback: fetch fresh state
+        const stateRes = await fetch("/api/state/bootstrap");
+        if (stateRes.ok) {
+          const freshState: BootstrapState = await stateRes.json();
+          setBootstrap(freshState);
+        }
+      }
+
+      // Add system message confirming reset
+      setMessages([
+        {
+          id: Date.now(),
+          role: "system",
+          text: "游戏状态已重置。",
+        },
+      ]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          role: "system",
+          text: `重置错误: ${err instanceof Error ? err.message : String(err)}`,
+        },
+      ]);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
@@ -299,6 +362,14 @@ function App() {
         <div className="header-right">
           <HealthDot status={health} />
           <span className="subtitle">AI 跑团原型</span>
+          <button
+            className="reset-btn"
+            onClick={reset}
+            disabled={sending}
+            title="重置游戏状态"
+          >
+            重置
+          </button>
         </div>
       </header>
 

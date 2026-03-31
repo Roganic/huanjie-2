@@ -7,16 +7,22 @@ Implements the V1 core loop step 2-3:
 
 from __future__ import annotations
 
+from typing import Optional
+
 from ..models.action import (
     ActionRequest,
     ActionResponse,
+    ActionType,
+    AttackDetail,
     CheckDetail,
+    DamageDetail,
     Effect,
     Outcome,
     ResolutionType,
 )
-from ..state import get_actor, get_scene
-from .dice import roll_d20
+from ..models.state import Actor
+from ..state import get_actor, get_actor_by_id_or_name, get_scene
+from .dice import get_weapon_damage, roll_d20, roll_damage
 
 # ---------------------------------------------------------------------------
 # DC tiers (rules-core: "先压缩成少量稳定档位，例如 10 / 15 / 20")
@@ -64,6 +70,10 @@ ABILITY_HINTS: dict[str, list[str]] = {
     "cha": ["persuade", "deceive", "intimidate", "perform", "charm", "bluff"],
 }
 
+# Weapon ability mapping (finesse weapons can use DEX, others use STR)
+FINESSE_WEAPONS = {"dagger", "rapier", "scimitar", "shortsword"}
+RANGED_WEAPONS = {"shortbow", "longbow", "light_crossbow", "heavy_crossbow"}
+
 
 def _infer_ability(approach: str) -> str:
     """Guess the most relevant ability from approach text."""
@@ -72,6 +82,17 @@ def _infer_ability(approach: str) -> str:
         for kw in keywords:
             if kw in lower:
                 return ability
+    return "str"
+
+
+def _infer_attack_ability(weapon: str) -> str:
+    """Determine ability modifier for attack based on weapon type."""
+    weapon_lower = weapon.lower()
+    if weapon_lower in FINESSE_WEAPONS:
+        # Finesse: use STR or DEX, assume DEX for simplicity
+        return "dex"
+    if weapon_lower in RANGED_WEAPONS:
+        return "dex"
     return "str"
 
 
@@ -106,6 +127,38 @@ def _narration_stub(action_summary: str, outcome: Outcome) -> str:
     return f"{action_summary} — but it doesn't go as planned."
 
 
+def _build_attack_narration(
+    actor_name: str,
+    target_name: str,
+    weapon: str,
+    outcome: Outcome,
+    hit_roll: int,
+    total_attack: int,
+    target_ac: int,
+    damage: Optional[int] = None,
+    damage_rolls: Optional[list[int]] = None,
+) -> str:
+    """Generate narrative description of an attack result."""
+    if outcome == Outcome.SUCCESS:
+        # Hit
+        if damage is not None and damage_rolls:
+            return (
+                f"{actor_name} attacks {target_name} with their {weapon}. "
+                f"The attack hits (rolled {hit_roll}, total {total_attack} vs AC {target_ac}) "
+                f"dealing {damage} damage ({damage_rolls} = {sum(damage_rolls)})."
+            )
+        return (
+            f"{actor_name} attacks {target_name} with their {weapon}. "
+            f"The attack hits (rolled {hit_roll}, total {total_attack} vs AC {target_ac})."
+        )
+    else:
+        # Miss
+        return (
+            f"{actor_name} attacks {target_name} with their {weapon}, "
+            f"but misses (rolled {hit_roll}, total {total_attack} vs AC {target_ac})."
+        )
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -118,6 +171,10 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
       2. If check: roll d20 + modifier + proficiency vs DC
       3. Build structured response with narration stub
     """
+    # Route attack actions to combat resolver
+    if req.action_type == ActionType.ATTACK or req.weapon is not None:
+        return _resolve_attack(req)
+
     action_summary = f"{req.actor} attempts to {req.intent} by {req.approach}"
 
     # --- auto-success path ---
@@ -126,6 +183,7 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
             action_summary=action_summary,
             resolution_type=ResolutionType.AUTO_SUCCESS,
             check=None,
+            attack=None,
             outcome=Outcome.SUCCESS,
             effects=[],
             narration=_narration_stub(action_summary, Outcome.SUCCESS),
@@ -165,9 +223,130 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
         action_summary=action_summary,
         resolution_type=ResolutionType.CHECK,
         check=check,
+        attack=None,
         outcome=outcome,
         effects=effects,
         narration=_narration_stub(action_summary, outcome),
+    )
+
+
+def _resolve_attack(req: ActionRequest) -> ActionResponse:
+    """Resolve an attack action (attack roll vs AC, then damage on hit)."""
+    actor = get_actor()
+    scene = get_scene()
+
+    # Get target (default to enemy if not specified)
+    target_id = req.target or "goblin-01"
+    target = get_actor_by_id_or_name(target_id)
+
+    # If target not found, treat as generic check
+    if target is None:
+        action_summary = f"{req.actor} attacks {target_id} with {req.weapon or 'weapon'}"
+        return ActionResponse(
+            action_summary=action_summary,
+            resolution_type=ResolutionType.CHECK,
+            check=None,
+            attack=None,
+            outcome=Outcome.FAILURE,
+            effects=[],
+            narration=f"{action_summary} — but the target cannot be found.",
+        )
+
+    # Determine weapon and damage dice
+    weapon = req.weapon or "longsword"
+    damage_dice = req.damage_dice or get_weapon_damage(weapon)
+
+    # Determine attack ability (STR for melee, DEX for finesse/ranged)
+    ability = req.ability or _infer_attack_ability(weapon)
+    modifier = actor.abilities.modifier(ability)
+    prof = actor.proficiency_bonus
+    advantage = req.advantage
+
+    # Attack roll: d20 + ability modifier + proficiency bonus
+    hit_roll = roll_d20(advantage)
+    total_attack = hit_roll + modifier + prof
+    target_ac = target.ac
+
+    outcome = Outcome.SUCCESS if total_attack >= target_ac else Outcome.FAILURE
+
+    # Build attack detail
+    attack_detail = AttackDetail(
+        target=target.id,
+        weapon=weapon,
+        hit_roll=hit_roll,
+        total_attack=total_attack,
+        target_ac=target_ac,
+        damage=None,
+    )
+
+    effects: list[Effect] = []
+    damage_detail: Optional[DamageDetail] = None
+    damage_total: Optional[int] = None
+    damage_rolls: Optional[list[int]] = None
+
+    if outcome == Outcome.SUCCESS:
+        # Hit! Roll damage
+        damage_total, damage_rolls = roll_damage(damage_dice)
+        damage_detail = DamageDetail(
+            dice_expression=damage_dice,
+            rolls=damage_rolls,
+            total=damage_total,
+        )
+        attack_detail.damage = damage_detail
+
+        # Apply damage effect to target
+        effects.append(
+            Effect(
+                target=target.id,
+                field="hp",
+                delta=-damage_total,
+                description=f"{actor.name} hits {target.name} with {weapon} for {damage_total} damage.",
+            )
+        )
+
+        # Check if target is defeated
+        new_hp = max(0, target.hp - damage_total)
+        if new_hp == 0:
+            effects.append(
+                Effect(
+                    target=target.id,
+                    field="conditions_add",
+                    delta="defeated",
+                    description=f"{target.name} has been defeated!",
+                )
+            )
+
+    # Always advance time
+    effects.append(
+        Effect(
+            target=scene.id,
+            field="time",
+            delta=1,
+            description="Combat time passes.",
+        )
+    )
+
+    action_summary = f"{actor.name} attacks {target.name} with {weapon}"
+    narration = _build_attack_narration(
+        actor_name=actor.name,
+        target_name=target.name,
+        weapon=weapon,
+        outcome=outcome,
+        hit_roll=hit_roll,
+        total_attack=total_attack,
+        target_ac=target_ac,
+        damage=damage_total,
+        damage_rolls=damage_rolls,
+    )
+
+    return ActionResponse(
+        action_summary=action_summary,
+        resolution_type=ResolutionType.CHECK,
+        check=None,
+        attack=attack_detail,
+        outcome=outcome,
+        effects=effects,
+        narration=narration,
     )
 
 

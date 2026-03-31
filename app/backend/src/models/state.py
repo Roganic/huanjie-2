@@ -39,6 +39,7 @@ class Actor(BaseModel):
     proficiency_bonus: int = 2
     hp: int
     hp_max: int
+    ac: int = 10  # Armor Class, default 10 + DEX modifier
     conditions: list[str] = Field(default_factory=list)
     description: str = ""
 

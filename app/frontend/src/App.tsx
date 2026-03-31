@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import "./App.css";
 
 // ---------------------------------------------------------------------------
@@ -10,6 +10,7 @@ interface Message {
   role: "gm" | "player" | "system";
   text: string;
   resolution?: ActionResponse;
+  timestamp: number;
 }
 
 type HealthStatus = "loading" | "ok" | "error";
@@ -56,7 +57,9 @@ interface Actor {
   proficiency_bonus: number;
   hp: number;
   hp_max: number;
+  ac?: number;
   description: string;
+  conditions?: string[];
 }
 
 interface Scene {
@@ -64,11 +67,22 @@ interface Scene {
   name: string;
   description: string;
   actors: string[];
+  environment?: string[];
 }
 
 interface BootstrapState {
   actor: Actor;
   scene: Scene;
+}
+
+interface TimelineEntry {
+  id: number;
+  type: "action" | "check" | "system";
+  title: string;
+  outcome?: "success" | "failure";
+  details?: string;
+  timestamp: number;
+  expanded?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,14 +100,56 @@ const ABILITY_LABELS: Record<string, string> = {
 
 const ABILITY_KEYS: (keyof AbilityScores)[] = ["str", "dex", "con", "int", "wis", "cha"];
 
+const ABILITY_ICONS: Record<string, string> = {
+  str: "💪",
+  dex: "🏃",
+  con: "❤️",
+  int: "🧠",
+  wis: "👁️",
+  cha: "🎭",
+};
+
+const STATUS_ICONS: Record<string, string> = {
+  健康: "✅",
+  受伤: "⚠️",
+  中毒: "☠️",
+  眩晕: "😵",
+  恐惧: "😨",
+  激励: "⭐",
+  掩护: "🛡️",
+};
+
+// ---------------------------------------------------------------------------
+// Utility Functions
+// ---------------------------------------------------------------------------
+
+function getModifier(score: number): number {
+  return Math.floor((score - 10) / 2);
+}
+
+function formatModifier(mod: number): string {
+  return mod >= 0 ? `+${mod}` : `${mod}`;
+}
+
+function getHpStatus(hp: number, max: number): "high" | "medium" | "low" {
+  const ratio = hp / max;
+  if (ratio > 0.6) return "high";
+  if (ratio > 0.3) return "medium";
+  return "low";
+}
+
+function formatTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
 // ---------------------------------------------------------------------------
 // Components
 // ---------------------------------------------------------------------------
 
 function ResolutionCard({ res }: { res: ActionResponse }) {
   const isCheck = res.resolution_type === "check";
-  const outcomeClass =
-    res.outcome === "success" ? "outcome-success" : "outcome-failure";
+  const outcomeClass = res.outcome === "success" ? "outcome-success" : "outcome-failure";
   const outcomeLabel = res.outcome === "success" ? "成功" : "失败";
 
   return (
@@ -111,8 +167,7 @@ function ResolutionCard({ res }: { res: ActionResponse }) {
             d20={res.check.roll}
             {res.check.modifier >= 0 ? "+" : ""}
             {res.check.modifier}
-            {res.check.proficiency_bonus > 0 &&
-              `+${res.check.proficiency_bonus}`}
+            {res.check.proficiency_bonus > 0 && `+${res.check.proficiency_bonus}`}
             {" = "}
             <strong>{res.check.total}</strong>
           </span>
@@ -128,7 +183,10 @@ function ResolutionCard({ res }: { res: ActionResponse }) {
       {res.effects.length > 0 && (
         <div className="effects-list">
           {res.effects.map((e, i) => (
-            <div key={i} className="effect-item">
+            <div 
+              key={i} 
+              className={`effect-item ${typeof e.delta === 'number' && e.delta > 0 ? 'positive' : typeof e.delta === 'number' && e.delta < 0 ? 'negative' : ''}`}
+            >
               {e.description}
             </div>
           ))}
@@ -155,8 +213,205 @@ function HealthDot({ status }: { status: HealthStatus }) {
   );
 }
 
+function HpBar({ hp, max, previousHp }: { hp: number; max: number; previousHp?: number }) {
+  const percentage = Math.max(0, Math.min(100, (hp / max) * 100));
+  const status = getHpStatus(hp, max);
+  const changed = previousHp !== undefined && previousHp !== hp;
+  const isDamaged = changed && hp < (previousHp ?? hp);
+
+  return (
+    <div className="hp-section">
+      <div className="hp-header">
+        <span className="hp-label">生命值</span>
+        <span className="hp-values">
+          <span className={`hp-current ${changed ? 'changed' : ''} ${hp > (previousHp ?? hp) ? 'flash-positive' : isDamaged ? 'flash-negative' : ''}`}>
+            {hp}
+          </span>
+          <span className="hp-separator">/</span>
+          <span className="hp-max">{max}</span>
+        </span>
+      </div>
+      <div className="hp-bar-container">
+        <div 
+          className={`hp-bar ${status} ${isDamaged ? 'damaged' : ''}`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function AbilityScore({ 
+  ability, 
+  score, 
+  changed 
+}: { 
+  ability: string; 
+  score: number; 
+  changed?: boolean;
+}) {
+  const modifier = getModifier(score);
+  return (
+    <div className={`stat-box ${changed ? 'changed' : ''}`}>
+      <div className="stat-name">{ABILITY_LABELS[ability]} {ABILITY_ICONS[ability]}</div>
+      <div className="stat-value">{score}</div>
+      <div className="stat-modifier">{formatModifier(modifier)}</div>
+    </div>
+  );
+}
+
+function StatusEffect({ name }: { name: string }) {
+  const icon = STATUS_ICONS[name] || "🔹";
+  let type = "neutral";
+  if (["受伤", "中毒", "眩晕", "恐惧"].includes(name)) type = "debuff";
+  if (["健康", "激励", "掩护"].includes(name)) type = "buff";
+  
+  return (
+    <span className={`status-effect ${type}`}>
+      {icon} {name}
+    </span>
+  );
+}
+
+function CharacterCard({ 
+  actor, 
+  previousActor 
+}: { 
+  actor: Actor; 
+  previousActor?: Actor | null;
+}) {
+  return (
+    <div className="character-card">
+      <div className="character-header">
+        <div className="character-avatar">🧙</div>
+        <div className="character-info">
+          <div className="character-name">{actor.name}</div>
+          <div className="character-level">熟练加值 +{actor.proficiency_bonus}</div>
+        </div>
+        {actor.ac !== undefined && (
+          <div className="ac-display" title="护甲等级">
+            <span className="ac-label">AC</span>
+            <span className="ac-value">{actor.ac}</span>
+          </div>
+        )}
+      </div>
+      
+      <HpBar 
+        hp={actor.hp} 
+        max={actor.hp_max} 
+        previousHp={previousActor?.hp}
+      />
+      
+      {actor.conditions && actor.conditions.length > 0 && (
+        <div className="status-effects">
+          {actor.conditions.map((condition, i) => (
+            <StatusEffect key={i} name={condition} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SceneCard({ scene }: { scene: Scene }) {
+  const isPlayer = (name: string) => name === "玩家" || name.includes("Aldric");
+  
+  return (
+    <div className="scene-card">
+      <div className="scene-name">{scene.name}</div>
+      <p className="scene-desc">{scene.description}</p>
+      
+      {scene.environment && scene.environment.length > 0 && (
+        <div className="scene-actors">
+          <div className="scene-actors-label">环境要素</div>
+          <div className="actor-tags">
+            {scene.environment.map((env, i) => (
+              <span key={i} className="actor-tag">{env}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {scene.actors.length > 0 && (
+        <div className="scene-actors">
+          <div className="scene-actors-label">在场角色</div>
+          <div className="actor-tags">
+            {scene.actors.map((actor, i) => (
+              <span key={i} className={`actor-tag ${isPlayer(actor) ? 'player' : ''}`}>
+                {actor}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TimelineItem({ 
+  entry, 
+  onToggle 
+}: { 
+  entry: TimelineEntry; 
+  onToggle: (id: number) => void;
+}) {
+  const outcomeClass = entry.outcome === "success" 
+    ? "success" 
+    : entry.outcome === "failure" 
+      ? "failure" 
+      : "info";
+  
+  return (
+    <div className={`timeline-item ${outcomeClass} ${entry.expanded ? 'expanded' : ''}`}>
+      <div className="timeline-dot" />
+      <div className="timeline-content">
+        <div className="timeline-header" onClick={() => onToggle(entry.id)}>
+          <span className="timeline-title">
+            {entry.outcome === "success" && "✓ "}
+            {entry.outcome === "failure" && "✗ "}
+            {entry.title}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="timeline-time">{formatTime(entry.timestamp)}</span>
+            {entry.details && (
+              <span className="timeline-expand">▼</span>
+            )}
+          </div>
+        </div>
+        {entry.expanded && entry.details && (
+          <div className="timeline-details">{entry.details}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Timeline({ 
+  entries, 
+  onToggle 
+}: { 
+  entries: TimelineEntry[]; 
+  onToggle: (id: number) => void;
+}) {
+  if (entries.length === 0) {
+    return <div className="timeline-empty">暂无行动记录</div>;
+  }
+  
+  return (
+    <div className="timeline">
+      {entries.map((entry) => (
+        <TimelineItem 
+          key={entry.id} 
+          entry={entry} 
+          onToggle={onToggle}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
-// App
+// Main App
 // ---------------------------------------------------------------------------
 
 function App() {
@@ -164,8 +419,9 @@ function App() {
   const [input, setInput] = useState("");
   const [health, setHealth] = useState<HealthStatus>("loading");
   const [sending, setSending] = useState(false);
-  const [log, setLog] = useState<string[]>([]);
   const [bootstrap, setBootstrap] = useState<BootstrapState | null>(null);
+  const [previousBootstrap, setPreviousBootstrap] = useState<BootstrapState | null>(null);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const messagesEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -209,14 +465,45 @@ function App() {
     return () => { cancelled = true; };
   }, []);
 
+  const addToTimeline = useCallback((entry: Omit<TimelineEntry, "id" | "timestamp">) => {
+    setTimeline((prev) => [
+      {
+        ...entry,
+        id: Date.now(),
+        timestamp: Date.now(),
+      },
+      ...prev.slice(0, 49), // Keep last 50 entries
+    ]);
+  }, []);
+
+  const toggleTimelineEntry = useCallback((id: number) => {
+    setTimeline((prev) =>
+      prev.map((entry) =>
+        entry.id === id ? { ...entry, expanded: !entry.expanded } : entry
+      )
+    );
+  }, []);
+
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
 
-    const playerMsg: Message = { id: Date.now(), role: "player", text };
+    const playerMsg: Message = { 
+      id: Date.now(), 
+      role: "player", 
+      text,
+      timestamp: Date.now(),
+    };
     setMessages((prev) => [...prev, playerMsg]);
     setInput("");
     setSending(true);
+
+    // Add to timeline
+    addToTimeline({
+      type: "action",
+      title: `行动: ${text.slice(0, 30)}${text.length > 30 ? "..." : ""}`,
+      details: text,
+    });
 
     try {
       const res = await fetch("/api/action", {
@@ -238,8 +525,15 @@ function App() {
             id: Date.now(),
             role: "system",
             text: `请求失败 (${res.status}): ${errText}`,
+            timestamp: Date.now(),
           },
         ]);
+        addToTimeline({
+          type: "system",
+          title: `请求失败 (${res.status})`,
+          outcome: "failure",
+          details: errText,
+        });
         return;
       }
 
@@ -252,19 +546,30 @@ function App() {
           role: "gm",
           text: data.narration,
           resolution: data,
+          timestamp: Date.now(),
         },
       ]);
 
+      // Add resolution to timeline
       if (data.resolution_type === "check" && data.check) {
         const c = data.check;
         const abilityName = ABILITY_LABELS[c.ability] ?? c.ability;
-        setLog((prev) => [
-          ...prev,
-          `${abilityName}检定 DC${c.dc} → ${c.total} ${data.outcome === "success" ? "成功" : "失败"}`,
-        ]);
+        addToTimeline({
+          type: "check",
+          title: `${abilityName}检定 DC${c.dc}`,
+          outcome: data.outcome,
+          details: `掷骰: d20=${c.roll} 调整值:${c.modifier >= 0 ? '+' : ''}${c.modifier}${c.proficiency_bonus > 0 ? `+${c.proficiency_bonus}` : ''} = ${c.total}`,
+        });
       } else {
-        setLog((prev) => [...prev, `自动成功: ${text.slice(0, 20)}`]);
+        addToTimeline({
+          type: "action",
+          title: "自动成功",
+          outcome: "success",
+        });
       }
+
+      // Store previous state for animation
+      setPreviousBootstrap(bootstrap);
 
       // Re-fetch authoritative state so the status panel reflects any
       // mutations applied by the backend (HP, conditions, time, etc.)
@@ -278,14 +583,22 @@ function App() {
         // State refresh failed; status panel keeps previous values
       }
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now(),
           role: "system",
-          text: `网络错误: ${err instanceof Error ? err.message : String(err)}`,
+          text: `网络错误: ${errorMsg}`,
+          timestamp: Date.now(),
         },
       ]);
+      addToTimeline({
+        type: "system",
+        title: "网络错误",
+        outcome: "failure",
+        details: errorMsg,
+      });
     } finally {
       setSending(false);
     }
@@ -302,17 +615,12 @@ function App() {
         </div>
       </header>
 
-      {/* Sidebar */}
+      {/* Sidebar - Scene Panel */}
       <aside className="sidebar">
         <section>
-          <h2>场景</h2>
+          <h2>当前场景</h2>
           {bootstrap ? (
-            <>
-              <ul>
-                <li className="active">{bootstrap.scene.name}</li>
-              </ul>
-              <p className="scene-desc">{bootstrap.scene.description}</p>
-            </>
+            <SceneCard scene={bootstrap.scene} />
           ) : (
             <div className="sidebar-loading">加载中…</div>
           )}
@@ -368,30 +676,37 @@ function App() {
         {bootstrap ? (
           <>
             <section>
-              <h2>状态</h2>
-              <div className="stat-row">
-                <span className="label">姓名</span>
-                <span className="value">{bootstrap.actor.name}</span>
-              </div>
-              <div className="stat-row">
-                <span className="label">HP</span>
-                <span className="value">{bootstrap.actor.hp} / {bootstrap.actor.hp_max}</span>
-              </div>
-              <div className="stat-row">
-                <span className="label">熟练加值</span>
-                <span className="value">+{bootstrap.actor.proficiency_bonus}</span>
-              </div>
+              <h2>角色状态</h2>
+              <CharacterCard 
+                actor={bootstrap.actor} 
+                previousActor={previousBootstrap?.actor ?? null}
+              />
             </section>
 
             <section>
-              <h2>属性</h2>
-              {ABILITY_KEYS.map((key) => (
-                <div key={key} className="stat-row">
-                  <span className="label">{ABILITY_LABELS[key]}</span>
-                  <span className="value">{bootstrap.actor.abilities[key]}</span>
-                </div>
-              ))}
+              <h2>属性值</h2>
+              <div className="stats-grid">
+                {ABILITY_KEYS.map((key) => (
+                  <AbilityScore 
+                    key={key} 
+                    ability={key} 
+                    score={bootstrap.actor.abilities[key]}
+                    changed={previousBootstrap?.actor.abilities[key] !== bootstrap.actor.abilities[key]}
+                  />
+                ))}
+              </div>
             </section>
+
+            {bootstrap.actor.conditions && bootstrap.actor.conditions.length > 0 && (
+              <section>
+                <h2>状态效果</h2>
+                <div className="status-effects">
+                  {bootstrap.actor.conditions.map((condition, i) => (
+                    <StatusEffect key={i} name={condition} />
+                  ))}
+                </div>
+              </section>
+            )}
           </>
         ) : (
           <section>
@@ -401,13 +716,8 @@ function App() {
         )}
 
         <section>
-          <h2>事件日志</h2>
-          {log.length === 0 && <div className="log-entry">暂无事件</div>}
-          {log.map((entry, i) => (
-            <div key={i} className="log-entry">
-              {entry}
-            </div>
-          ))}
+          <h2>行动历史</h2>
+          <Timeline entries={timeline} onToggle={toggleTimelineEntry} />
         </section>
       </aside>
     </div>

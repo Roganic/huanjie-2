@@ -45,8 +45,8 @@ _ACTION_TYPE_KEYWORDS: dict[ActionType, list[str]] = {
     ],
     ActionType.ATTACK: [
         "attack", "strike", "hit", "shoot", "stab", "slash", "punch",
-        "kick", "shoot", "fire", "throw", "cast", "spell", "harm",
-        "fight", "charge", "ambush", "backstab", "sneak attack",
+        "kick", "shoot", "fire", "throw", "cast spell", "cast a spell",
+        "harm", "fight", "charge", "ambush", "backstab", "sneak attack",
     ],
     ActionType.SOCIAL: [
         "persuade", "convince", "deceive", "lie", "bluff", "intimidate",
@@ -147,13 +147,14 @@ _DEFAULT_ABILITY_BY_TYPE: dict[ActionType, str] = {
 def classify_action_type(intent: str, approach: str) -> ActionType:
     """Classify the action type from intent and approach text.
     
-    Priority: ATTACK > SOCIAL > EXPLORE > INTERACT > MOVE
-    (More specific types are checked first)
+    Priority: SOCIAL > ATTACK > EXPLORE > INTERACT > MOVE
+    SOCIAL is checked first because words like "charm" can appear in both
+    social and spell contexts, but social use is more common.
     """
     text = f"{intent} {approach}".lower()
     
-    # Check in order of specificity (attacks and social are most distinct)
-    for action_type in [ActionType.ATTACK, ActionType.SOCIAL, ActionType.EXPLORE, 
+    # Check in order of specificity (social first due to overlap with spell attacks)
+    for action_type in [ActionType.SOCIAL, ActionType.ATTACK, ActionType.EXPLORE, 
                         ActionType.INTERACT, ActionType.MOVE]:
         keywords = _ACTION_TYPE_KEYWORDS.get(action_type, [])
         if any(kw in text for kw in keywords):

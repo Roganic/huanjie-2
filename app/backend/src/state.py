@@ -30,7 +30,27 @@ _ACTOR_INIT = dict(
     proficiency_bonus=2,
     hp=12,
     hp_max=12,
+    ac=14,  # Chain shirt + DEX
     description="A sturdy human sellsword with a practical outlook.",
+)
+
+# A simple enemy for combat testing
+_ENEMY_INIT = dict(
+    id="goblin-01",
+    name="Goblin Scout",
+    abilities=AbilityScores(**{
+        "str": 8,
+        "dex": 14,
+        "con": 10,
+        "int": 10,
+        "wis": 8,
+        "cha": 8,
+    }),
+    proficiency_bonus=2,
+    hp=7,
+    hp_max=7,
+    ac=12,  # Leather armor + DEX
+    description="A small, wiry goblin with a rusty dagger.",
 )
 
 _SCENE_INIT = dict(
@@ -43,11 +63,20 @@ _SCENE_INIT = dict(
     actors=["aldric-01"],
 )
 
+# Combat scene with enemy
+_COMBAT_SCENE_INIT = dict(
+    id="combat-01",
+    name="Forest Ambush",
+    description="A narrow forest path. A goblin emerges from the underbrush.",
+    actors=["aldric-01", "goblin-01"],
+)
+
 # ---------------------------------------------------------------------------
 # Mutable singletons
 # ---------------------------------------------------------------------------
 
 _actor: Actor = Actor(**_ACTOR_INIT)
+_enemy: Actor = Actor(**_ENEMY_INIT)
 _scene: Scene = Scene(**_SCENE_INIT)
 
 
@@ -60,8 +89,28 @@ def get_actor() -> Actor:
     return _actor
 
 
+def get_enemy() -> Actor:
+    """Get the enemy actor (for combat testing)."""
+    return _enemy
+
+
+def get_actor_by_id_or_name(target: str) -> Optional[Actor]:
+    """Find an actor by ID or name (case-insensitive)."""
+    target_lower = target.lower()
+    for actor in [_actor, _enemy]:
+        if actor.id.lower() == target_lower or actor.name.lower() == target_lower:
+            return actor
+    return None
+
+
 def get_scene() -> Scene:
     return _scene
+
+
+def set_combat_scene() -> None:
+    """Switch to combat scene with enemy present."""
+    global _scene
+    _scene = Scene(**_COMBAT_SCENE_INIT)
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +129,7 @@ def apply_effects(effects: list[Effect]) -> None:
 
 
 def _apply_one(eff: Effect) -> None:
-    global _actor, _scene
+    global _actor, _enemy, _scene
 
     # --- actor-targeted effects ---
     if eff.target in (_actor.id, _actor.name):
@@ -101,6 +150,25 @@ def _apply_one(eff: Effect) -> None:
             )
         # unrecognised actor field — silently skip
 
+    # --- enemy-targeted effects ---
+    elif eff.target in (_enemy.id, _enemy.name):
+        if eff.field == "hp" and isinstance(eff.delta, int):
+            _enemy = _enemy.model_copy(
+                update={"hp": max(0, min(_enemy.hp_max, _enemy.hp + eff.delta))}
+            )
+        elif eff.field == "conditions_add" and isinstance(eff.delta, str):
+            if eff.delta not in _enemy.conditions:
+                _enemy = _enemy.model_copy(
+                    update={"conditions": [*_enemy.conditions, eff.delta]}
+                )
+        elif eff.field == "conditions_remove" and isinstance(eff.delta, str):
+            _enemy = _enemy.model_copy(
+                update={
+                    "conditions": [c for c in _enemy.conditions if c != eff.delta],
+                }
+            )
+        # unrecognised enemy field — silently skip
+
     # --- scene-targeted effects ---
     elif eff.target == _scene.id:
         if eff.field == "time" and isinstance(eff.delta, int):
@@ -115,6 +183,7 @@ def _apply_one(eff: Effect) -> None:
 
 def reset_state() -> None:
     """Restore mutable state to its initial values."""
-    global _actor, _scene
+    global _actor, _enemy, _scene
     _actor = Actor(**_ACTOR_INIT)
+    _enemy = Actor(**_ENEMY_INIT)
     _scene = Scene(**_SCENE_INIT)

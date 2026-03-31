@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import "./App.css";
 
 // ---------------------------------------------------------------------------
@@ -68,6 +68,7 @@ interface Scene {
   description: string;
   actors: string[];
   environment?: string[];
+  time?: number;
 }
 
 interface BootstrapState {
@@ -260,14 +261,14 @@ function AbilityScore({
   );
 }
 
-function StatusEffect({ name }: { name: string }) {
+function StatusEffect({ name, isNew }: { name: string; isNew?: boolean }) {
   const icon = STATUS_ICONS[name] || "🔹";
   let type = "neutral";
   if (["受伤", "中毒", "眩晕", "恐惧"].includes(name)) type = "debuff";
   if (["健康", "激励", "掩护"].includes(name)) type = "buff";
   
   return (
-    <span className={`status-effect ${type}`}>
+    <span className={`status-effect ${type} ${isNew ? 'new' : ''}`}>
       {icon} {name}
     </span>
   );
@@ -275,10 +276,12 @@ function StatusEffect({ name }: { name: string }) {
 
 function CharacterCard({ 
   actor, 
-  previousActor 
+  previousActor,
+  newConditions,
 }: { 
   actor: Actor; 
   previousActor?: Actor | null;
+  newConditions?: string[];
 }) {
   return (
     <div className="character-card">
@@ -305,7 +308,7 @@ function CharacterCard({
       {actor.conditions && actor.conditions.length > 0 && (
         <div className="status-effects">
           {actor.conditions.map((condition, i) => (
-            <StatusEffect key={i} name={condition} />
+            <StatusEffect key={i} name={condition} isNew={newConditions?.includes(condition)} />
           ))}
         </div>
       )}
@@ -313,13 +316,21 @@ function CharacterCard({
   );
 }
 
-function SceneCard({ scene }: { scene: Scene }) {
+function SceneCard({ scene, previousScene }: { scene: Scene; previousScene?: Scene | null }) {
   const isPlayer = (name: string) => name === "玩家" || name.includes("Aldric");
+  const timeChanged = previousScene !== undefined && previousScene !== null && previousScene.time !== scene.time;
   
   return (
     <div className="scene-card">
       <div className="scene-name">{scene.name}</div>
       <p className="scene-desc">{scene.description}</p>
+      
+      {scene.time !== undefined && (
+        <div className={`scene-time ${timeChanged ? 'changed' : ''}`}>
+          <span className="scene-time-label">⏱️ 场景时间</span>
+          <span className="scene-time-value">{scene.time}</span>
+        </div>
+      )}
       
       {scene.environment && scene.environment.length > 0 && (
         <div className="scene-actors">
@@ -344,6 +355,68 @@ function SceneCard({ scene }: { scene: Scene }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface StateDiff {
+  hpDelta?: number;
+  newConditions: string[];
+  removedConditions: string[];
+  timeDelta?: number;
+  hasChanges: boolean;
+}
+
+function computeStateDiff(current: BootstrapState | null, previous: BootstrapState | null): StateDiff {
+  if (!current || !previous) {
+    return { newConditions: [], removedConditions: [], hasChanges: false };
+  }
+
+  const currConds = current.actor.conditions ?? [];
+  const prevConds = previous.actor.conditions ?? [];
+  const newConditions = currConds.filter((c) => !prevConds.includes(c));
+  const removedConditions = prevConds.filter((c) => !currConds.includes(c));
+  const hpDelta = current.actor.hp - previous.actor.hp;
+  const timeDelta = (current.scene.time ?? 0) - (previous.scene.time ?? 0);
+  const hasChanges = hpDelta !== 0 || newConditions.length > 0 || removedConditions.length > 0 || timeDelta !== 0;
+
+  return {
+    hpDelta: hpDelta !== 0 ? hpDelta : undefined,
+    newConditions,
+    removedConditions,
+    timeDelta: timeDelta !== 0 ? timeDelta : undefined,
+    hasChanges,
+  };
+}
+
+function RecentChanges({ diff }: { diff: StateDiff }) {
+  if (!diff.hasChanges) return null;
+
+  return (
+    <div className="recent-changes">
+      <div className="recent-changes-title">最新变化</div>
+      <div className="recent-changes-list">
+        {diff.hpDelta !== undefined && (
+          <span className={`change-item ${diff.hpDelta > 0 ? 'positive' : 'negative'}`}>
+            {diff.hpDelta > 0 ? '+' : ''}{diff.hpDelta} HP
+          </span>
+        )}
+        {diff.timeDelta !== undefined && (
+          <span className="change-item time">
+            {diff.timeDelta > 0 ? '+' : ''}{diff.timeDelta} 时间
+          </span>
+        )}
+        {diff.newConditions.map((c, i) => (
+          <span key={`+${c}-${i}`} className="change-item positive">
+            + {c}
+          </span>
+        ))}
+        {diff.removedConditions.map((c, i) => (
+          <span key={`-${c}-${i}`} className="change-item removed">
+            - {c}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -484,6 +557,9 @@ function App() {
     );
   }, []);
 
+  const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
+  const newConditions = useMemo(() => stateDiff.newConditions, [stateDiff]);
+
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
@@ -620,7 +696,7 @@ function App() {
         <section>
           <h2>当前场景</h2>
           {bootstrap ? (
-            <SceneCard scene={bootstrap.scene} />
+            <SceneCard scene={bootstrap.scene} previousScene={previousBootstrap?.scene ?? null} />
           ) : (
             <div className="sidebar-loading">加载中…</div>
           )}
@@ -680,6 +756,7 @@ function App() {
               <CharacterCard 
                 actor={bootstrap.actor} 
                 previousActor={previousBootstrap?.actor ?? null}
+                newConditions={newConditions}
               />
             </section>
 
@@ -702,11 +779,21 @@ function App() {
                 <h2>状态效果</h2>
                 <div className="status-effects">
                   {bootstrap.actor.conditions.map((condition, i) => (
-                    <StatusEffect key={i} name={condition} />
+                    <StatusEffect key={i} name={condition} isNew={newConditions.includes(condition)} />
                   ))}
                 </div>
               </section>
             )}
+
+            <section>
+              <h2>场景时间</h2>
+              <div className={`scene-time-display ${stateDiff.timeDelta !== undefined ? 'changed' : ''}`}>
+                <span className="scene-time-display-value">{bootstrap.scene.time ?? 0}</span>
+                <span className="scene-time-display-unit">ticks</span>
+              </div>
+            </section>
+
+            <RecentChanges diff={stateDiff} />
           </>
         ) : (
           <section>

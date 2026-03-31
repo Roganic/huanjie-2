@@ -9,6 +9,28 @@ from pydantic import BaseModel, Field, validator
 
 
 # ---------------------------------------------------------------------------
+# Action Types
+# ---------------------------------------------------------------------------
+
+class ActionType(str, Enum):
+    """Category of player action.
+    
+    V1 supported action types:
+    - MOVE: Physical repositioning (walk, run, climb, jump)
+    - INTERACT: Manipulating objects or environment (open, pick up, use)
+    - ATTACK: Hostile actions against targets (melee, ranged, spell)
+    - SOCIAL: Communication and influence (persuade, deceive, intimidate)
+    - EXPLORE: Information gathering (search, investigate, perceive)
+    """
+    MOVE = "move"
+    INTERACT = "interact"
+    ATTACK = "attack"
+    SOCIAL = "social"
+    EXPLORE = "explore"
+    UNKNOWN = "unknown"
+
+
+# ---------------------------------------------------------------------------
 # Request
 # ---------------------------------------------------------------------------
 
@@ -19,6 +41,10 @@ class ActionRequest(BaseModel):
     actor: str = Field(..., description="Who is acting")
     intent: str = Field(..., description="What the actor wants to achieve")
     approach: str = Field(..., description="How they attempt it")
+    action_type: Optional[ActionType] = Field(
+        None,
+        description="Action category (auto-detected if omitted): move/interact/attack/social/explore",
+    )
     ability: Optional[str] = Field(
         None,
         description="Ability score used for the check (str/dex/con/int/wis/cha)",
@@ -76,6 +102,7 @@ class Effect(BaseModel):
 
 class ActionResponse(BaseModel):
     action_summary: str
+    action_type: ActionType
     resolution_type: ResolutionType
     check: Optional[CheckDetail] = None
     outcome: Outcome

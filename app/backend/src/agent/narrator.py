@@ -188,13 +188,14 @@ def _fallback_action_result(
             damage = attack_result.get("damage")
             if damage:
                 return (
-                    f"{_class_ability_flavor(actor)}让{weapon}命中了{target}。"
-                    f"冲击回荡在空气中，伤害切实落到了对方身上。"
+                    f"{_class_ability_flavor(actor)}让这次攻击势大力沉。"
+                    f"{actor.name} lunges forward with {weapon} in hand and hits the {target}. "
+                    f"The blow lands cleanly, and the impact echoes through the scene."
                 )
             else:
                 return (
-                    f"{actor.name}挥舞着{weapon}划过一道弧线命中了{target}，"
-                    f"让对方措手不及。"
+                    f"{actor.name} swings the {weapon} in a wide arc and hits the {target}, "
+                    f"catching them off-guard for a brief instant."
                 )
         else:
             # Miss - include "miss" for test compatibility
@@ -231,12 +232,13 @@ def _fallback_action_result(
     if outcome == Outcome.SUCCESS:
         return (
             f"{flavor}让{actor.name}顺利完成了{req.intent}，"
-            f"努力得到了回报。"
+            f"努力得到了回报，周围的气氛也随之发生了微妙的变化。"
         )
     else:
         return (
             f"{actor.name}尝试{req.intent}，但时运不济，"
-            f"努力未能换来成功。"
+            f"努力未能换来成功。挫败感在空气中弥漫，"
+            f"周围的世界似乎在趁机反击。"
         )
 
 

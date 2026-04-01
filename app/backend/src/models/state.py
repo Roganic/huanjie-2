@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -58,6 +59,17 @@ class NarrativeHistoryEntry(BaseModel):
     action_summary: str
     resolution_summary: dict[str, Any] = Field(default_factory=dict)
     narration_summary: str
+
+
+class CharacterArchetype(str, Enum):
+    FIGHTER = "fighter"
+    ROGUE = "rogue"
+    MAGE = "mage"
+
+
+class CharacterCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=24)
+    archetype: CharacterArchetype = CharacterArchetype.FIGHTER
 
 
 class BootstrapState(BaseModel):

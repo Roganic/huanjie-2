@@ -2,9 +2,11 @@
 name = "huanjie-backend"
 version = "0.1.0"
 description = "幻界 2.0 后端服务"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115",
+    "httpx>=0.28",
+    "pydantic>=2.11",
     "uvicorn[standard]>=0.34",
 ]
 

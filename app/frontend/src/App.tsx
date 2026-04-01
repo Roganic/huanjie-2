@@ -77,6 +77,8 @@ interface BootstrapState {
   scene: Scene;
 }
 
+type CharacterArchetype = "fighter" | "rogue" | "mage";
+
 interface ProviderOption {
   id: string;
   label: string;
@@ -132,6 +134,14 @@ const PROVIDERS: ProviderOption[] = [
   { id: "openai", label: "OpenAI" },
 ];
 
+const CHARACTER_ARCHETYPES: { id: CharacterArchetype; label: string }[] = [
+  { id: "fighter", label: "战士" },
+  { id: "rogue", label: "游荡者" },
+  { id: "mage", label: "法师" },
+];
+
+const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL?.trim().replace(/\/+$/, "")) || "/api";
+
 // ---------------------------------------------------------------------------
 // Utility Functions
 // ---------------------------------------------------------------------------
@@ -154,6 +164,10 @@ function getHpStatus(hp: number, max: number): "high" | "medium" | "low" {
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp);
   return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -557,6 +571,10 @@ function App() {
   const [previousBootstrap, setPreviousBootstrap] = useState<BootstrapState | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>(PROVIDERS[0].id);
+  const [characterName, setCharacterName] = useState("Aldric");
+  const [characterArchetype, setCharacterArchetype] = useState<CharacterArchetype>("fighter");
+  const [creatingCharacter, setCreatingCharacter] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const messagesEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -569,7 +587,7 @@ function App() {
 
     const check = async () => {
       try {
-        const res = await fetch("/api/health");
+        const res = await fetch(apiUrl("/health"));
         if (!cancelled) setHealth(res.ok ? "ok" : "error");
       } catch {
         if (!cancelled) setHealth("error");
@@ -589,10 +607,13 @@ function App() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/state/bootstrap");
+        const res = await fetch(apiUrl("/state/bootstrap"));
         if (!res.ok) return;
         const data: BootstrapState = await res.json();
-        if (!cancelled) setBootstrap(data);
+        if (!cancelled) {
+          setBootstrap(data);
+          setCharacterName(data.actor.name);
+        }
       } catch {
         // Bootstrap fetch failed; UI will show loading placeholder
       }
@@ -622,6 +643,88 @@ function App() {
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
   const newConditions = useMemo(() => stateDiff.newConditions, [stateDiff]);
 
+  const replaceSessionState = useCallback((nextBootstrap: BootstrapState, systemText: string) => {
+    setPreviousBootstrap(null);
+    setBootstrap(nextBootstrap);
+    setMessages([
+      {
+        id: Date.now(),
+        role: "system",
+        text: systemText,
+        timestamp: Date.now(),
+      },
+    ]);
+    setTimeline([]);
+  }, []);
+
+  const createCharacter = async () => {
+    const trimmedName = characterName.trim();
+    if (!trimmedName || creatingCharacter) return;
+
+    setCreatingCharacter(true);
+    try {
+      const res = await fetch(apiUrl("/state/character"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedName,
+          archetype: characterArchetype,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const data: BootstrapState = await res.json();
+      setCharacterName(data.actor.name);
+      replaceSessionState(data, `已创建角色 ${data.actor.name}，冒险重新开始。`);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          role: "system",
+          text: `创建角色失败: ${errorMsg}`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } finally {
+      setCreatingCharacter(false);
+    }
+  };
+
+  const resetGame = async () => {
+    if (resetting) return;
+
+    setResetting(true);
+    try {
+      const res = await fetch(apiUrl("/state/reset"), { method: "POST" });
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const data: BootstrapState = await res.json();
+      setCharacterName(data.actor.name);
+      setCharacterArchetype("fighter");
+      replaceSessionState(data, "游戏状态已重置。");
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          role: "system",
+          text: `重置失败: ${errorMsg}`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
@@ -644,7 +747,7 @@ function App() {
     });
 
     try {
-      const res = await fetch("/api/action", {
+      const res = await fetch(apiUrl("/action"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -719,7 +822,7 @@ function App() {
       // Re-fetch authoritative state so the status panel reflects any
       // mutations applied by the backend (HP, conditions, time, etc.)
       try {
-        const stateRes = await fetch("/api/state/bootstrap");
+        const stateRes = await fetch(apiUrl("/state/bootstrap"));
         if (stateRes.ok) {
           const freshState: BootstrapState = await stateRes.json();
           setBootstrap(freshState);
@@ -777,6 +880,53 @@ function App() {
 
       {/* Sidebar - Scene Panel */}
       <aside className="sidebar">
+        <section>
+          <h2>创建角色</h2>
+          <div className="setup-card">
+            <label className="setup-field">
+              <span>姓名</span>
+              <input
+                value={characterName}
+                onChange={(e) => setCharacterName(e.target.value)}
+                maxLength={24}
+                disabled={creatingCharacter || resetting || sending}
+                placeholder="输入角色名"
+              />
+            </label>
+            <label className="setup-field">
+              <span>模板</span>
+              <select
+                value={characterArchetype}
+                onChange={(e) => setCharacterArchetype(e.target.value as CharacterArchetype)}
+                disabled={creatingCharacter || resetting || sending}
+              >
+                {CHARACTER_ARCHETYPES.map((archetype) => (
+                  <option key={archetype.id} value={archetype.id}>
+                    {archetype.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="setup-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={createCharacter}
+                disabled={creatingCharacter || resetting || sending || !characterName.trim()}
+              >
+                {creatingCharacter ? "创建中…" : "开始冒险"}
+              </button>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={resetGame}
+                disabled={resetting || creatingCharacter || sending}
+              >
+                {resetting ? "重置中…" : "重置"}
+              </button>
+            </div>
+          </div>
+        </section>
         <section>
           <h2>当前场景</h2>
           {bootstrap ? (

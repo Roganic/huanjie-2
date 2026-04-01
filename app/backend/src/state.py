@@ -16,6 +16,7 @@ from .models.state import (
     AbilityScores,
     Actor,
     BootstrapState,
+    CharacterArchetype,
     NarrativeHistoryEntry,
     Scene,
 )
@@ -78,6 +79,54 @@ _COMBAT_SCENE_INIT = dict(
     description="A narrow forest path. A goblin emerges from the underbrush.",
     actors=["aldric-01", "goblin-01"],
 )
+
+_CHARACTER_TEMPLATES: dict[CharacterArchetype, dict] = {
+    CharacterArchetype.FIGHTER: dict(
+        abilities=AbilityScores(**{
+            "str": 16,
+            "dex": 12,
+            "con": 13,
+            "int": 10,
+            "wis": 12,
+            "cha": 8,
+        }),
+        proficiency_bonus=2,
+        hp=12,
+        hp_max=12,
+        ac=14,
+        description="A disciplined frontline adventurer who solves danger head-on.",
+    ),
+    CharacterArchetype.ROGUE: dict(
+        abilities=AbilityScores(**{
+            "str": 10,
+            "dex": 16,
+            "con": 12,
+            "int": 13,
+            "wis": 12,
+            "cha": 14,
+        }),
+        proficiency_bonus=2,
+        hp=10,
+        hp_max=10,
+        ac=15,
+        description="A quick-handed scout who thrives on stealth, wit, and timing.",
+    ),
+    CharacterArchetype.MAGE: dict(
+        abilities=AbilityScores(**{
+            "str": 8,
+            "dex": 12,
+            "con": 12,
+            "int": 16,
+            "wis": 14,
+            "cha": 10,
+        }),
+        proficiency_bonus=2,
+        hp=8,
+        hp_max=8,
+        ac=12,
+        description="A careful spellcaster who reads the room before striking.",
+    ),
+}
 
 # ---------------------------------------------------------------------------
 # Mutable singletons
@@ -159,6 +208,28 @@ def set_combat_scene() -> None:
     """Switch to combat scene with enemy present."""
     global _scene
     _scene = Scene(**_COMBAT_SCENE_INIT)
+
+
+def create_character(name: str, archetype: CharacterArchetype) -> BootstrapState:
+    """Create a new player character from a lightweight archetype template."""
+    global _actor, _scene, _narrative_history
+
+    template = _CHARACTER_TEMPLATES[archetype]
+    actor_name = name.strip()[:24] or "Aldric"
+
+    _actor = Actor(
+        id="player-01",
+        name=actor_name,
+        **template,
+    )
+    _scene = Scene(
+        **{
+            **_SCENE_INIT,
+            "actors": [actor_name],
+        }
+    )
+    _narrative_history = []
+    return get_bootstrap_state()
 
 
 # ---------------------------------------------------------------------------

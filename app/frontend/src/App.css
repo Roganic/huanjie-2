@@ -236,6 +236,73 @@
   border: 1px dashed var(--border);
 }
 
+.setup-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.setup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.setup-field input,
+.setup-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
+.setup-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.secondary-button,
+.ghost-button {
+  flex: 1;
+  min-height: 38px;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.secondary-button {
+  background: linear-gradient(135deg, var(--accent-dark), var(--accent));
+  color: #fff;
+}
+
+.ghost-button {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.secondary-button:hover,
+.ghost-button:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-light);
+}
+
+.secondary-button:disabled,
+.ghost-button:disabled,
+.setup-field input:disabled,
+.setup-field select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ---- Chat ---- */
 
 .chat {

@@ -64,11 +64,13 @@ interface Actor {
   character_class?: CharacterClass | null;
   abilities: AbilityScores;
   proficiency_bonus: number;
+  level?: number;
   hp: number;
   hp_max: number;
   ac?: number;
   description: string;
   conditions?: string[];
+  skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
 }
 
 interface Scene {
@@ -569,7 +571,7 @@ function CharacterCard({
         <div className="character-info">
           <div className="character-name">{actor.name}</div>
           <div className="character-level">
-            {actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"} · 熟练加值 +{actor.proficiency_bonus}
+            {actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"} Lv.{actor.level ?? 1} · 熟练加值 +{actor.proficiency_bonus}
           </div>
         </div>
         {actor.ac !== undefined && (
@@ -1209,9 +1211,10 @@ function App() {
     return state;
   };
 
-  const refreshState = async () => {
+  const refreshState = async (overrideSessionId?: string) => {
+    const sid = overrideSessionId ?? sessionId;
     const response = await fetch(apiUrl("/state"), {
-      headers: buildSessionHeaders(sessionId),
+      headers: buildSessionHeaders(sid),
     });
     if (!response.ok) {
       if (response.status === 404) {
@@ -1310,11 +1313,10 @@ function App() {
         throw new Error(await response.text());
       }
 
-      const state: BootstrapState = await response.json();
+      const newSessionId = response.headers.get("X-Session-Id") || sessionId;
+      // The create endpoint returns a CharacterCard; fetch fresh bootstrap state to enter adventure.
+      const state = await refreshState(newSessionId ?? undefined);
       setPreviousBootstrap(null);
-      setSessionId(state.session_id);
-      storeSessionId(state.session_id);
-      setBootstrap(state);
       setMessages([
         {
           id: Date.now(),
@@ -1385,7 +1387,19 @@ function App() {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || sending || !inAdventure || !bootstrap?.actor) return;
+    if (!text || sending) return;
+    if (!inAdventure || !bootstrap?.actor) {
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: Date.now(),
+          role: "system",
+          text: "请先创建角色后再提交行动。",
+          timestamp: Date.now(),
+        },
+      ]);
+      return;
+    }
 
     const playerMessage: Message = {
       id: Date.now(),

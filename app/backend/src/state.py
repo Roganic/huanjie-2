@@ -9,8 +9,16 @@ This module will eventually be replaced by proper session / persistence.
 
 from __future__ import annotations
 
+from typing import Optional
+
 from .models.action import Effect
-from .models.state import AbilityScores, Actor, BootstrapState, Scene
+from .models.state import (
+    AbilityScores,
+    Actor,
+    BootstrapState,
+    NarrativeHistoryEntry,
+    Scene,
+)
 
 # ---------------------------------------------------------------------------
 # Initial data (used to build the first mutable copies)
@@ -78,11 +86,21 @@ _COMBAT_SCENE_INIT = dict(
 _actor: Actor = Actor(**_ACTOR_INIT)
 _enemy: Actor = Actor(**_ENEMY_INIT)
 _scene: Scene = Scene(**_SCENE_INIT)
+_narrative_history: list[NarrativeHistoryEntry] = []
+
+
+MAX_STORED_NARRATIVE_HISTORY = 50
+DEFAULT_PROMPT_HISTORY_ENTRIES = 5
+DEFAULT_PROMPT_HISTORY_CHARS = 1800
 
 
 def get_bootstrap_state() -> BootstrapState:
     """Return the current (live) actor and scene."""
-    return BootstrapState(actor=_actor, scene=_scene)
+    return BootstrapState(
+        actor=_actor,
+        scene=_scene,
+        narrative_history=list(_narrative_history),
+    )
 
 
 def get_actor() -> Actor:
@@ -105,6 +123,36 @@ def get_actor_by_id_or_name(target: str) -> Optional[Actor]:
 
 def get_scene() -> Scene:
     return _scene
+
+
+def get_narrative_history() -> list[NarrativeHistoryEntry]:
+    """Return the full narrative history for the current in-memory session."""
+    return list(_narrative_history)
+
+
+def append_narrative_history(entry: NarrativeHistoryEntry) -> None:
+    """Append a narrative memory item and cap total in-memory growth."""
+    global _narrative_history
+    _narrative_history = [*_narrative_history, entry][-MAX_STORED_NARRATIVE_HISTORY:]
+
+
+def get_narrative_context(
+    max_entries: int = DEFAULT_PROMPT_HISTORY_ENTRIES,
+    max_chars: int = DEFAULT_PROMPT_HISTORY_CHARS,
+) -> list[NarrativeHistoryEntry]:
+    """Return recent narrative history bounded for prompt injection."""
+    selected: list[NarrativeHistoryEntry] = []
+    current_chars = 0
+
+    for entry in reversed(_narrative_history[-max_entries:]):
+        entry_chars = len(entry.model_dump_json())
+        if selected and current_chars + entry_chars > max_chars:
+            break
+        selected.append(entry)
+        current_chars += entry_chars
+
+    selected.reverse()
+    return selected
 
 
 def set_combat_scene() -> None:
@@ -183,7 +231,8 @@ def _apply_one(eff: Effect) -> None:
 
 def reset_state() -> None:
     """Restore mutable state to its initial values."""
-    global _actor, _enemy, _scene
+    global _actor, _enemy, _scene, _narrative_history
     _actor = Actor(**_ACTOR_INIT)
     _enemy = Actor(**_ENEMY_INIT)
     _scene = Scene(**_SCENE_INIT)
+    _narrative_history = []

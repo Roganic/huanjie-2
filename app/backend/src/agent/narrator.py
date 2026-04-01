@@ -24,7 +24,7 @@ from ..models.action import (
     Effect,
     Outcome,
 )
-from ..models.state import Actor, Scene
+from ..models.state import Actor, NarrativeHistoryEntry, Scene
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -173,6 +173,7 @@ def _build_narrative_prompt(
     attack_result: Optional[dict] = None,
     effects: Optional[list[Effect]] = None,
     target: Optional[Actor] = None,
+    narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
 ) -> str:
     """Build the user prompt for narrative generation with hard constraints.
     
@@ -220,6 +221,21 @@ def _build_narrative_prompt(
     lines.append(f"角色 / Character: {actor.name}")
     lines.append(f"角色描述 / Character Description: {actor.description}")
     lines.append(f"角色状态 / Character Status: HP {actor.hp}/{actor.hp_max}")
+    lines.append("")
+
+    lines.append("会话历史 / Session Narrative History:")
+    if narrative_history:
+        for idx, entry in enumerate(narrative_history, start=1):
+            resolution_json = json.dumps(
+                entry.resolution_summary,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            lines.append(f"{idx}. 行动: {entry.action_summary}")
+            lines.append(f"   裁定: {resolution_json}")
+            lines.append(f"   摘要: {entry.narration_summary}")
+    else:
+        lines.append("无。当前是本次会话中最早需要参考的动作。")
     lines.append("")
     
     # Action context
@@ -475,6 +491,7 @@ def generate_narration(
     attack_result: Optional[dict] = None,
     effects: Optional[list[Effect]] = None,
     target: Optional[Actor] = None,
+    narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
 ) -> NarrationBundle:
     """Generate structured narrative text for an action resolution.
     
@@ -507,6 +524,7 @@ def generate_narration(
         attack_result=attack_result,
         effects=effects,
         target=target,
+        narrative_history=narrative_history,
     )
     
     # Try to call Kimi API (only if key is configured)

@@ -5,7 +5,17 @@ from httpx import ASGITransport, AsyncClient
 
 from src.main import app
 from src.models.action import Effect
-from src.state import apply_effects, get_actor, get_bootstrap_state, get_scene, reset_state
+from src.models.state import NarrativeHistoryEntry
+from src.state import (
+    apply_effects,
+    append_narrative_history,
+    get_actor,
+    get_bootstrap_state,
+    get_narrative_context,
+    get_narrative_history,
+    get_scene,
+    reset_state,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -149,10 +159,16 @@ def test_reset_restores_state():
                description="add"),
         Effect(target="tavern-01", field="time", delta=3, description="tick"),
     ])
+    append_narrative_history(NarrativeHistoryEntry(
+        action_summary="Aldric forces a stuck chest",
+        resolution_summary={"outcome": "failure"},
+        narration_summary="The chest holds fast.",
+    ))
     reset_state()
     assert get_actor().hp == 12
     assert get_actor().conditions == []
     assert get_scene().time == 0
+    assert get_narrative_history() == []
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +198,21 @@ def test_bootstrap_reflects_time():
     ])
     state = get_bootstrap_state()
     assert state.scene.time == 2
+
+
+def test_narrative_context_applies_entry_and_char_limits():
+    for idx in range(6):
+        append_narrative_history(NarrativeHistoryEntry(
+            action_summary=f"Action {idx}",
+            resolution_summary={"outcome": "success", "index": idx},
+            narration_summary="x" * 120,
+        ))
+
+    context = get_narrative_context(max_entries=5, max_chars=450)
+
+    assert len(context) < 5
+    assert context[-1].action_summary == "Action 5"
+    assert sum(len(entry.model_dump_json()) for entry in context) <= 450
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +283,8 @@ async def test_bootstrap_endpoint_shows_live_state(client):
     data = resp.json()
     assert data["actor"]["hp"] == 11
     assert data["scene"]["time"] == 1
+    assert len(data["narrative_history"]) == 1
+    assert data["narrative_history"][0]["action_summary"].startswith("Aldric attempts")
 
 
 # ---------------------------------------------------------------------------
@@ -290,6 +323,7 @@ async def test_reset_endpoint_restores_initial_state(client):
         assert get_actor().hp == 12
         assert get_actor().conditions == []
         assert get_scene().time == 0
+        assert get_narrative_history() == []
 
 
 @pytest.mark.asyncio

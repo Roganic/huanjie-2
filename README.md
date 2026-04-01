@@ -111,6 +111,32 @@ ForgeFlow 目录：
 - admin dashboard
 - 项目 worktree 管理
 
+## 快速开始
+
+### 本地开发
+
+```bash
+# 后端
+cd app/backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+uvicorn src.main:app --reload
+
+# 前端 (新终端)
+cd app/frontend
+npm install
+npm run dev
+```
+
+### 部署
+
+支持前后端分离部署：
+- **前端**: GitHub Pages
+- **后端**: Railway / Render
+
+详见 [部署文档](docs/deployment.md)。
+
 ## 当前阶段建议
 
 第一阶段优先完成：

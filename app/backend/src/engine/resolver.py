@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from ..agent.narrator import generate_narration
 from ..models.action import (
     ActionRequest,
     ActionResponse,
@@ -120,43 +121,10 @@ def _pick_dc(intent: str) -> int:
     return DC_MEDIUM  # default to medium
 
 
-def _narration_stub(action_summary: str, outcome: Outcome) -> str:
-    """Generate a minimal narration placeholder."""
-    if outcome == Outcome.SUCCESS:
-        return f"{action_summary} — and it works."
-    return f"{action_summary} — but it doesn't go as planned."
 
 
-def _build_attack_narration(
-    actor_name: str,
-    target_name: str,
-    weapon: str,
-    outcome: Outcome,
-    hit_roll: int,
-    total_attack: int,
-    target_ac: int,
-    damage: Optional[int] = None,
-    damage_rolls: Optional[list[int]] = None,
-) -> str:
-    """Generate narrative description of an attack result."""
-    if outcome == Outcome.SUCCESS:
-        # Hit
-        if damage is not None and damage_rolls:
-            return (
-                f"{actor_name} attacks {target_name} with their {weapon}. "
-                f"The attack hits (rolled {hit_roll}, total {total_attack} vs AC {target_ac}) "
-                f"dealing {damage} damage ({damage_rolls} = {sum(damage_rolls)})."
-            )
-        return (
-            f"{actor_name} attacks {target_name} with their {weapon}. "
-            f"The attack hits (rolled {hit_roll}, total {total_attack} vs AC {target_ac})."
-        )
-    else:
-        # Miss
-        return (
-            f"{actor_name} attacks {target_name} with their {weapon}, "
-            f"but misses (rolled {hit_roll}, total {total_attack} vs AC {target_ac})."
-        )
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -176,9 +144,19 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
         return _resolve_attack(req)
 
     action_summary = f"{req.actor} attempts to {req.intent} by {req.approach}"
+    
+    # Get state early for narrative generation
+    actor = get_actor()
+    scene = get_scene()
 
     # --- auto-success path ---
     if _is_auto_success(req.intent, req.approach):
+        narration = generate_narration(
+            req=req,
+            actor=actor,
+            scene=scene,
+            outcome=Outcome.SUCCESS,
+        )
         return ActionResponse(
             action_summary=action_summary,
             resolution_type=ResolutionType.AUTO_SUCCESS,
@@ -186,12 +164,10 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
             attack=None,
             outcome=Outcome.SUCCESS,
             effects=[],
-            narration=_narration_stub(action_summary, Outcome.SUCCESS),
+            narration=narration,
         )
 
     # --- check path ---
-    actor = get_actor()
-    scene = get_scene()
     ability = req.ability or _infer_ability(req.approach)
     modifier = actor.abilities.modifier(ability)
     prof = actor.proficiency_bonus
@@ -219,6 +195,22 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
         outcome=outcome,
     )
 
+    # Generate AI narration with fallback
+    check_result = {
+        "ability": ability,
+        "modifier": modifier,
+        "dc": dc,
+        "roll": roll,
+        "total": total,
+    }
+    narration = generate_narration(
+        req=req,
+        actor=actor,
+        scene=scene,
+        outcome=outcome,
+        check_result=check_result,
+    )
+
     return ActionResponse(
         action_summary=action_summary,
         resolution_type=ResolutionType.CHECK,
@@ -226,7 +218,7 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
         attack=None,
         outcome=outcome,
         effects=effects,
-        narration=_narration_stub(action_summary, outcome),
+        narration=narration,
     )
 
 
@@ -327,16 +319,21 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
     )
 
     action_summary = f"{actor.name} attacks {target.name} with {weapon}"
-    narration = _build_attack_narration(
-        actor_name=actor.name,
-        target_name=target.name,
-        weapon=weapon,
+    
+    # Build attack result for narrative generation
+    attack_result = {
+        "weapon": weapon,
+        "target": target.name,
+        "damage": damage_detail.model_dump() if damage_detail else None,
+    }
+    
+    # Generate AI narration with fallback
+    narration = generate_narration(
+        req=req,
+        actor=actor,
+        scene=scene,
         outcome=outcome,
-        hit_roll=hit_roll,
-        total_attack=total_attack,
-        target_ac=target_ac,
-        damage=damage_total,
-        damage_rolls=damage_rolls,
+        attack_result=attack_result,
     )
 
     return ActionResponse(

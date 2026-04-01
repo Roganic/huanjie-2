@@ -6,6 +6,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from routes import combat
 from .routers import action, character, health, state
 
 
@@ -31,6 +32,7 @@ app.include_router(health.router)
 app.include_router(action.router)
 app.include_router(character.router)
 app.include_router(state.router)
+app.include_router(combat.router)
 
 
 @app.get("/")

@@ -922,6 +922,10 @@ function CharacterCreationScreen({
                 ))}
               </div>
             </div>
+            <div className="creation-preview-section">
+              <h3>职业技能</h3>
+              <SkillsList actor={actorPreview} compact />
+            </div>
           </>
         ) : (
           <div className="sidebar-loading">输入姓名并选择职业后查看预览。</div>
@@ -954,17 +958,33 @@ function createPreviewActor(draft: CharacterDraft): Actor | null {
     ac = 16;  // Warrior with heavy armor (no DEX bonus)
   }
 
+  // Calculate skills with proficiency bonus
+  const profBonus = 2;
+  const classProfSkills = CLASS_SKILLS[draft.characterClass];
+  const allSkills = [...SKILLS, ...EXTRA_SKILLS];
+  const skills = allSkills.map(skill => {
+    const abilityMod = getModifier(draft.abilities[skill.ability]);
+    const isProficient = classProfSkills.includes(skill.name);
+    return {
+      name: skill.name,
+      ability: skill.ability,
+      proficient: isProficient,
+      modifier: abilityMod + (isProficient ? profBonus : 0),
+    };
+  });
+
   return {
     id: `preview-${draft.characterClass}`,
     name: trimmedName,
     character_class: draft.characterClass,
     abilities: draft.abilities,
-    proficiency_bonus: 2,
+    proficiency_bonus: profBonus,
     hp,
     hp_max: hp,
     ac,
     description: CLASS_SUMMARIES[draft.characterClass],
     conditions: [],
+    skills,
   };
 }
 

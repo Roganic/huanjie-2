@@ -6,6 +6,7 @@ interface Message {
   role: "gm" | "player" | "system";
   text: string;
   resolution?: ActionResponse;
+  streamingPreview?: StreamingPreview;
   timestamp: number;
 }
 
@@ -38,6 +39,12 @@ interface ActionResponse {
   effects: Effect[];
   narration: string;
   scene_progression: string;
+}
+
+interface StreamingPreview {
+  narration: string;
+  scene_progression: string;
+  interrupted?: boolean;
 }
 
 interface AbilityScores {
@@ -208,6 +215,28 @@ function LoadingNarration() {
         <div className="skeleton-line short" />
         <div className="skeleton-line medium" />
       </div>
+    </div>
+  );
+}
+
+function StreamingNarrationCard({
+  preview,
+}: {
+  preview: StreamingPreview;
+}) {
+  const hasNarration = preview.narration.trim().length > 0;
+  const hasProgression = preview.scene_progression.trim().length > 0;
+
+  return (
+    <div className="resolution-card">
+      {!hasNarration && !hasProgression && <LoadingNarration />}
+      {hasNarration && <NarrationBlock text={preview.narration} variant="result" />}
+      {hasProgression && <NarrationBlock text={preview.scene_progression} variant="progression" />}
+      {preview.interrupted && (
+        <div className="effects-list">
+          <div className="effect-item negative">叙事流已中断，已保留收到的片段。可以重试本次行动。</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -662,6 +691,45 @@ function createPreviewActor(draft: CharacterDraft): Actor | null {
   return previews[draft.characterClass];
 }
 
+interface ParsedStreamEvent {
+  event: string;
+  data: unknown;
+}
+
+function parseStreamEvent(block: string): ParsedStreamEvent | null {
+  const lines = block
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return null;
+
+  let event = "message";
+  const dataLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      event = line.slice("event:".length).trim();
+      continue;
+    }
+
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trim());
+    }
+  }
+
+  if (dataLines.length === 0) return null;
+
+  try {
+    return {
+      event,
+      data: JSON.parse(dataLines.join("\n")),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -673,6 +741,7 @@ function App() {
   const [previousBootstrap, setPreviousBootstrap] = useState<BootstrapState | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>(PROVIDERS[0].id);
+  const [streamingPreview, setStreamingPreview] = useState<StreamingPreview | null>(null);
   const [creationDraft, setCreationDraft] = useState<CharacterDraft>({
     name: "",
     characterClass: "warrior",
@@ -687,7 +756,7 @@ function App() {
 
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending]);
+  }, [messages, sending, streamingPreview]);
 
   useEffect(() => {
     let cancelled = false;
@@ -846,6 +915,8 @@ function App() {
     setMessages((previous) => [...previous, playerMessage]);
     setInput("");
     setSending(true);
+    setStreamingPreview({ narration: "", scene_progression: "" });
+    let partialPreview: StreamingPreview = { narration: "", scene_progression: "" };
 
     addToTimeline({
       type: "action",
@@ -856,7 +927,10 @@ function App() {
     try {
       const response = await fetch("/api/action", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
         body: JSON.stringify({
           scene_id: bootstrap.scene.id,
           actor: bootstrap.actor.name,
@@ -868,6 +942,7 @@ function App() {
 
       if (!response.ok) {
         const errorText = await response.text();
+        setStreamingPreview(null);
         setMessages((previous) => [
           ...previous,
           {
@@ -886,7 +961,77 @@ function App() {
         return;
       }
 
-      const data: ActionResponse = await response.json();
+      if (!response.body) {
+        throw new Error("后端未返回可读流。");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let completedResponse: ActionResponse | null = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop() ?? "";
+
+        for (const block of blocks) {
+          const parsed = parseStreamEvent(block);
+          if (!parsed) continue;
+
+          if (parsed.event === "chunk") {
+            const payload = parsed.data as { field?: string; delta?: string };
+            if (!payload.field || payload.delta === undefined) continue;
+
+            if (payload.field === "narration") {
+              partialPreview = { ...partialPreview, narration: partialPreview.narration + payload.delta };
+            } else if (payload.field === "scene_progression") {
+              partialPreview = {
+                ...partialPreview,
+                scene_progression: partialPreview.scene_progression + payload.delta,
+              };
+            }
+
+            setStreamingPreview((previous) => {
+              const next = previous ?? { narration: "", scene_progression: "" };
+              if (payload.field === "narration") {
+                return { ...next, narration: next.narration + payload.delta };
+              }
+              if (payload.field === "scene_progression") {
+                return { ...next, scene_progression: next.scene_progression + payload.delta };
+              }
+              return next;
+            });
+            continue;
+          }
+
+          if (parsed.event === "error") {
+            const payload = parsed.data as { message?: string };
+            throw new Error(payload.message || "叙事流发生错误。");
+          }
+
+          if (parsed.event === "complete") {
+            completedResponse = parsed.data as ActionResponse;
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        const parsed = parseStreamEvent(buffer);
+        if (parsed?.event === "complete") {
+          completedResponse = parsed.data as ActionResponse;
+        }
+      }
+
+      if (!completedResponse) {
+        throw new Error("叙事流提前结束，未收到完成事件。");
+      }
+
+      const data = completedResponse;
+      setStreamingPreview(null);
       setMessages((previous) => [
         ...previous,
         {
@@ -927,15 +1072,26 @@ function App() {
       await refreshState();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: Date.now(),
+      setMessages((previous) => {
+        const nextMessages = [...previous];
+        if (partialPreview.narration || partialPreview.scene_progression) {
+          nextMessages.push({
+            id: Date.now(),
+            role: "gm",
+            text: `${partialPreview.narration}\n\n${partialPreview.scene_progression}`.trim(),
+            streamingPreview: { ...partialPreview, interrupted: true },
+            timestamp: Date.now(),
+          });
+        }
+        nextMessages.push({
+          id: Date.now() + 1,
           role: "system",
           text: `网络错误: ${message}`,
           timestamp: Date.now(),
-        },
-      ]);
+        });
+        return nextMessages;
+      });
+      setStreamingPreview(null);
       addToTimeline({
         type: "system",
         title: "网络错误",
@@ -1016,13 +1172,19 @@ function App() {
                   <div className="role">
                     {message.role === "gm" ? "GM" : message.role === "player" ? "玩家" : "系统"}
                   </div>
-                  {message.resolution ? <ResolutionCard res={message.resolution} /> : message.text}
+                  {message.resolution ? (
+                    <ResolutionCard res={message.resolution} />
+                  ) : message.streamingPreview ? (
+                    <StreamingNarrationCard preview={message.streamingPreview} />
+                  ) : (
+                    message.text
+                  )}
                 </div>
               ))}
-              {sending && (
+              {sending && streamingPreview && (
                 <div className="message gm loading">
                   <div className="role">GM</div>
-                  <LoadingNarration />
+                  <StreamingNarrationCard preview={streamingPreview} />
                 </div>
               )}
               <div ref={messagesEnd} />

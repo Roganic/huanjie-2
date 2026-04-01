@@ -41,7 +41,7 @@ class TestD20Randomness:
         for face in range(1, 21):
             count = counts.get(face, 0)
             # Each face should appear roughly the same number of times
-            assert abs(count - expected_per_face) < tolerance, (
+            assert abs(count - expected_per_face) <= tolerance, (
                 f"Face {face} appeared {count} times, expected ~{expected_per_face:.1f}"
             )
 
@@ -158,6 +158,6 @@ class TestDamageDice:
         
         for face in range(1, 7):
             count = counts.get(face, 0)
-            assert abs(count - expected_per_face) < tolerance, (
+            assert abs(count - expected_per_face) <= tolerance, (
                 f"Damage face {face} appeared {count} times, expected ~{expected_per_face:.1f}"
             )

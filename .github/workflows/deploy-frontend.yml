@@ -40,9 +40,16 @@ jobs:
           npm ci
 
       - name: Build
+        env:
+          VITE_BACKEND_URL: ${{ vars.BACKEND_URL }}
         run: |
           cd app/frontend
-          VITE_BACKEND_URL=${{ vars.BACKEND_URL }} npm run build:pages
+          if [ -n "${{ vars.APP_BASE }}" ]; then
+            export VITE_APP_BASE="${{ vars.APP_BASE }}"
+          else
+            export VITE_APP_BASE="/${{ github.event.repository.name }}/"
+          fi
+          npm run build:pages
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

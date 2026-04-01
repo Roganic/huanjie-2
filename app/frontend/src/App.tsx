@@ -39,6 +39,7 @@ interface ActionResponse {
   outcome: "success" | "failure";
   effects: Effect[];
   narration: string;
+  scene_progression: string;
 }
 
 interface AbilityScores {
@@ -83,7 +84,7 @@ interface ProviderOption {
 
 interface TimelineEntry {
   id: number;
-  type: "action" | "check" | "system";
+  type: "action" | "check" | "system" | "scene";
   title: string;
   outcome?: "success" | "failure";
   details?: string;
@@ -159,15 +160,23 @@ function formatTime(timestamp: number): string {
 // Components
 // ---------------------------------------------------------------------------
 
-function NarrationBlock({ text }: { text: string }) {
+function NarrationBlock({
+  text,
+  variant = "result",
+}: {
+  text: string;
+  variant?: "result" | "progression";
+}) {
   // Split by newlines and render each paragraph
   const paragraphs = text.split('\n').filter(p => p.trim() !== '');
+  const icon = variant === "progression" ? "🕯️" : "📖";
+  const label = variant === "progression" ? "场景推进" : "行动结果";
   
   return (
-    <div className="narration-block">
+    <div className={`narration-block ${variant === "progression" ? "progression" : "result"}`}>
       <div className="narration-header">
-        <span className="narration-icon">📖</span>
-        <span className="narration-label">GM 叙述</span>
+        <span className="narration-icon">{icon}</span>
+        <span className="narration-label">{label}</span>
       </div>
       <div className="narration-content">
         {paragraphs.map((paragraph, index) => (
@@ -244,7 +253,8 @@ function ResolutionCard({ res }: { res: ActionResponse }) {
       </div>
 
       {/* Narration Section - Prominent */}
-      <NarrationBlock text={res.narration} />
+      <NarrationBlock text={res.narration} variant="result" />
+      <NarrationBlock text={res.scene_progression} variant="progression" />
     </div>
   );
 }
@@ -483,9 +493,10 @@ function TimelineItem({
     : entry.outcome === "failure" 
       ? "failure" 
       : "info";
+  const typeClass = `type-${entry.type}`;
   
   return (
-    <div className={`timeline-item ${outcomeClass} ${entry.expanded ? 'expanded' : ''}`}>
+    <div className={`timeline-item ${outcomeClass} ${typeClass} ${entry.expanded ? 'expanded' : ''}`}>
       <div className="timeline-dot" />
       <div className="timeline-content">
         <div className="timeline-header" onClick={() => onToggle(entry.id)}>
@@ -672,7 +683,7 @@ function App() {
         {
           id: Date.now(),
           role: "gm",
-          text: data.narration,
+          text: `${data.narration}\n\n${data.scene_progression}`,
           resolution: data,
           timestamp: Date.now(),
         },
@@ -695,6 +706,12 @@ function App() {
           outcome: "success",
         });
       }
+
+      addToTimeline({
+        type: "scene",
+        title: "场景推进",
+        details: data.scene_progression,
+      });
 
       // Store previous state for animation
       setPreviousBootstrap(bootstrap);

@@ -88,6 +88,25 @@ npm run build
 ✅ proficiency_bonus(1): 2
 ```
 
+## 修复记录
+
+### random_4d6 模式下前后端属性不一致
+
+**问题**: 当用户选择 "4d6 取三" 生成方式时，前端会展示掷骰结果供用户预览，但提交时后端 `create_character` 会重新掷骰（`req.ability_generation == "random_4d6"` 时忽略前端传入的 `abilities`），导致实际创建的角色属性可能与预览不一致。
+
+**修复**: 修改 `app/frontend/src/App.tsx` 中的 `createCharacter` 函数，将 `random_4d6` 和 `standard_array` 一样以 `manual` 方式提交，确保后端使用用户确认的属性值。
+
+```typescript
+// Backend ignores abilities when ability_generation is standard_array or random_4d6.
+// To respect the player's chosen/rolled abilities, send as manual with the chosen abilities.
+if (creationDraft.abilityGeneration === "standard_array" || creationDraft.abilityGeneration === "random_4d6") {
+  body.ability_generation = "manual";
+}
+body.abilities = creationDraft.abilities;
+```
+
+**提交**: `d2503d4`
+
 ## 结论
 
 所有验收标准均已满足，角色创建前端流程实现完整：

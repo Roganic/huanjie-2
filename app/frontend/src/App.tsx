@@ -1781,7 +1781,7 @@ function App() {
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && send()}
-                placeholder={sending ? "裁定中…" : "输入你的行动…"}
+                placeholder={sending ? "裁定中…" : "输入你的行动（或先创建角色）…"}
                 disabled={sending}
               />
               <button onClick={send} disabled={sending}>

@@ -6,8 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY src ./src
+COPY scripts/start.sh ./
 COPY pyproject.toml ./
 
 RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir .
 
-CMD ["python", "-m", "src.main"]
+CMD ["./start.sh"]

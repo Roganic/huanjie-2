@@ -69,7 +69,7 @@ async def submit_action(req: ActionRequest, request: Request):
     token = set_current_session(session_id)
     try:
         if not has_character(session_id=session_id):
-            raise HTTPException(status_code=409, detail="Create a character before taking actions.")
+            raise HTTPException(status_code=400, detail="No character found. Please create a character before taking actions.")
 
         try:
             result = await asyncio.to_thread(resolve_action_with_agent, req)

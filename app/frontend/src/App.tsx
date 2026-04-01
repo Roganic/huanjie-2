@@ -172,6 +172,8 @@ const ABILITY_LABELS: Record<string, string> = {
 
 const ABILITY_KEYS: (keyof AbilityScores)[] = ["str", "dex", "con", "int", "wis", "cha"];
 
+const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
+
 const ABILITY_ICONS: Record<string, string> = {
   str: "💪",
   dex: "🏃",
@@ -840,6 +842,11 @@ function CharacterCreationScreen({
           <div className="creation-field">
             <div className="ability-inputs-header">
               <span>属性值</span>
+              {draft.abilityGeneration === "standard_array" && (
+                <span className="ability-array-hint">
+                  将 15 / 14 / 13 / 12 / 10 / 8 分配到六个属性
+                </span>
+              )}
               {draft.abilityGeneration === "random_4d6" && (
                 <button
                   type="button"
@@ -858,15 +865,35 @@ function CharacterCreationScreen({
                   <label className="ability-input-label">
                     {ABILITY_LABELS[key]} {ABILITY_ICONS[key]}
                   </label>
-                  <input
-                    type="number"
-                    min={3}
-                    max={18}
-                    value={draft.abilities[key]}
-                    onChange={(e) => onAbilityChange(key, parseInt(e.target.value) || 10)}
-                    disabled={pending || draft.abilityGeneration === "standard_array"}
-                    className="ability-input"
-                  />
+                  {draft.abilityGeneration === "standard_array" ? (
+                    <select
+                      value={draft.abilities[key]}
+                      onChange={(e) => onAbilityChange(key, parseInt(e.target.value))}
+                      disabled={pending}
+                      className="ability-input"
+                    >
+                      {STANDARD_ARRAY.map((val) => {
+                        const usedByAnother = ABILITY_KEYS.some(
+                          (otherKey) => otherKey !== key && draft.abilities[otherKey] === val
+                        );
+                        return (
+                          <option key={val} value={val} disabled={usedByAnother}>
+                            {val}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  ) : (
+                    <input
+                      type="number"
+                      min={3}
+                      max={18}
+                      value={draft.abilities[key]}
+                      onChange={(e) => onAbilityChange(key, parseInt(e.target.value) || 10)}
+                      disabled={pending}
+                      className="ability-input"
+                    />
+                  )}
                   <span className="ability-modifier">
                     {formatModifier(getModifier(draft.abilities[key]))}
                   </span>
@@ -1285,14 +1312,29 @@ function App() {
     setCreationError(null);
 
     try {
+      // Validate standard array composition before submission
+      if (creationDraft.abilityGeneration === "standard_array") {
+        const values = Object.values(creationDraft.abilities).sort((a, b) => a - b);
+        const expected = [8, 10, 12, 13, 14, 15];
+        if (JSON.stringify(values) !== JSON.stringify(expected)) {
+          setCreationError("标准数组模式下，六个属性必须恰好是 15、14、13、12、10、8 各一次。");
+          setCreatingCharacter(false);
+          return;
+        }
+      }
+
       const body: Record<string, unknown> = {
         name,
         character_class: creationDraft.characterClass,
         ability_generation: creationDraft.abilityGeneration,
       };
 
-      // Include custom abilities for manual or random generation
-      if (creationDraft.abilityGeneration !== "standard_array") {
+      // Backend ignores abilities when ability_generation is standard_array.
+      // To respect the player's allocation, send as manual with the chosen abilities.
+      if (creationDraft.abilityGeneration === "standard_array") {
+        body.ability_generation = "manual";
+        body.abilities = creationDraft.abilities;
+      } else {
         body.abilities = creationDraft.abilities;
       }
 

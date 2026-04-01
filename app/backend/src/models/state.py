@@ -90,7 +90,11 @@ class CharacterCreateRequest(BaseModel):
     character_class: CharacterClass
     ability_generation: str = Field(
         default="standard_array",
-        description="Current prototype supports only standard_array.",
+        description="Ability generation method: standard_array, random_4d6, or manual.",
+    )
+    abilities: AbilityScores | None = Field(
+        default=None,
+        description="Custom ability scores when ability_generation is 'manual'.",
     )
 
     @validator("name")
@@ -104,6 +108,7 @@ class CharacterCreateRequest(BaseModel):
     @validator("ability_generation")
     @classmethod
     def ability_generation_must_be_supported(cls, value: str) -> str:
-        if value != "standard_array":
-            raise ValueError("only standard_array is supported")
+        allowed = {"standard_array", "random_4d6", "manual"}
+        if value not in allowed:
+            raise ValueError(f"ability_generation must be one of {allowed}")
         return value

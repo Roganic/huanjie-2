@@ -17,6 +17,12 @@
   border-bottom: 1px solid var(--border);
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .header h1 {
   font-size: 16px;
   font-weight: 600;
@@ -27,6 +33,78 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* Mini Character Card (in header) */
+.mini-character-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.mini-char-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-char-avatar {
+  font-size: 18px;
+}
+
+.mini-char-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-char-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mini-char-class {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.mini-char-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+
+.mini-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mini-stat-icon {
+  font-size: 10px;
+}
+
+.mini-stat-value {
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.mini-stat-value.hp-high {
+  color: var(--hp-high);
+}
+
+.mini-stat-value.hp-medium {
+  color: var(--hp-medium);
+}
+
+.mini-stat-value.hp-low {
+  color: var(--hp-low);
 }
 
 .header .subtitle {
@@ -1439,6 +1517,221 @@
 .creation-summary-card p {
   color: var(--text-secondary);
   line-height: 1.6;
+}
+
+/* Ability Generation Options */
+.ability-generation-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.ability-gen-btn {
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(26, 26, 46, 0.92);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.ability-gen-btn:hover:not(:disabled) {
+  border-color: var(--border-light);
+  background: rgba(37, 37, 69, 0.92);
+}
+
+.ability-gen-btn.selected {
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px rgba(233, 69, 96, 0.15);
+  background: linear-gradient(180deg, rgba(233, 69, 96, 0.12), rgba(26, 26, 46, 0.98));
+}
+
+.ability-gen-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.ability-gen-desc {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+/* Ability Inputs */
+.ability-inputs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.roll-abilities-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.roll-abilities-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-light);
+}
+
+.ability-inputs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.ability-input-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  gap: 6px;
+}
+
+.ability-input-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ability-input {
+  width: 60px;
+  padding: 8px;
+  text-align: center;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(37, 37, 69, 0.7);
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.ability-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ability-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ability-modifier {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Creation Preview Section */
+.creation-preview-section {
+  margin-top: 16px;
+}
+
+.creation-preview-section h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+/* Skills List */
+.skills-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.skill-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.skill-item:hover {
+  background: var(--bg-input);
+}
+
+.skill-item.proficient {
+  background: rgba(233, 69, 96, 0.08);
+}
+
+.skill-dot {
+  font-size: 8px;
+  color: var(--text-muted);
+}
+
+.skill-item.proficient .skill-dot {
+  color: var(--accent);
+}
+
+.skill-name {
+  flex: 1;
+  color: var(--text);
+}
+
+.skill-ability {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.skill-bonus {
+  font-weight: 600;
+  font-family: monospace;
+  color: var(--accent-light);
+}
+
+/* Compact Skills List */
+.skills-list-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.skill-item-compact {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  font-size: 11px;
+}
+
+.skill-item-compact.proficient {
+  background: rgba(233, 69, 96, 0.12);
+  border-color: var(--accent);
+}
+
+.skill-item-compact .skill-name {
+  color: var(--text-secondary);
+}
+
+.skill-item-compact.proficient .skill-name {
+  color: var(--text);
+}
+
+.skill-item-compact .skill-bonus {
+  font-size: 10px;
+  color: var(--accent-light);
 }
 
 @media (max-width: 1280px) {

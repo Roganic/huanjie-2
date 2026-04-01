@@ -416,6 +416,7 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
         damage_rolls_total, damage_rolls = roll_damage(damage_dice)
         damage_modifier = modifier  # Add ability modifier to damage
         damage_total = max(1, damage_rolls_total + damage_modifier)  # Minimum 1 damage on hit
+        damage_total = min(damage_total, target.hp)  # Cap at target's remaining HP
         damage_detail = DamageDetail(
             dice_expression=damage_dice,
             rolls=damage_rolls,

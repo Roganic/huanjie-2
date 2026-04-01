@@ -505,6 +505,8 @@ class GMAgent:
             # Damage = weapon dice + ability modifier (min 1 damage on hit)
             damage_modifier = modifier  # Same ability used for attack roll
             damage_total = max(1, damage_result.total + damage_modifier)
+            # Cap damage at target's remaining HP so effect delta matches actual HP change
+            damage_total = min(damage_total, target.hp)
             damage_detail = DamageDetail(
                 dice_expression=damage_dice,
                 rolls=damage_result.rolls,

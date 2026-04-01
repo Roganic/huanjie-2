@@ -1,29 +1,20 @@
+# Render 部署配置
+# https://render.com
+
 services:
   - type: web
     name: huanjie-backend
-    runtime: docker
+    runtime: python
     plan: free
-    rootDir: app/backend
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    buildCommand: pip install -e .
+    startCommand: uvicorn src.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
-    autoDeployTrigger: commit
     envVars:
-      - key: CORS_ALLOW_ORIGINS
-        sync: false
+      - key: PYTHON_VERSION
+        value: 3.12.0
       - key: KIMI_API_KEY
-        sync: false
-      - key: KIMI_API_URL
-        value: https://api.moonshot.cn/v1/chat/completions
-      - key: KIMI_MODEL
-        value: moonshot-v1-8k
-      - key: KIMI_TIMEOUT_SECONDS
-        value: "5"
+        sync: false  # 在 Render Dashboard 中设置
       - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENAI_API_URL
-        value: https://api.openai.com/v1/chat/completions
-      - key: OPENAI_MODEL
-        value: gpt-4o-mini
-      - key: OPENAI_TIMEOUT_SECONDS
-        value: "5"
+        sync: false  # 在 Render Dashboard 中设置
+      - key: CORS_ALLOW_ORIGINS
+        value: "*"  # 生产环境应设置为具体的 GitHub Pages URL

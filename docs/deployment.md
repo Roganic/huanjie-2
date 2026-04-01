@@ -1,114 +1,233 @@
-# 部署说明
+# 部署指南
 
-本文档描述当前推荐的公开部署方式：前端部署到 GitHub Pages，后端部署到 Render 或 Railway。
+本文档说明如何将幻界 2.0 部署到公开环境，采用前后端分离架构：
 
-## 方案摘要
+- **前端**: GitHub Pages (静态站点)
+- **后端**: Railway 或 Render (云服务)
 
-- 前端：Vite 静态构建，运行时通过 `VITE_BACKEND_URL` 指向云后端
-- 后端：FastAPI + Docker，AI key 和 CORS 全部走环境变量
-- 验证方式：本地先跑构建与烟测，再做公开发布
-- 当前仓库已提供：
-- `app/frontend/.env.example`
-- `app/backend/env.example`
-  - `app/backend/Dockerfile`
-  - `app/backend/render.yaml`
-  - `app/backend/tests/test_deployment_flow.py`
+## 架构概览
 
-## 前端部署到 GitHub Pages
-
-在 `app/frontend/` 下执行：
-
-```bash
-npm install
-VITE_BACKEND_URL=https://your-backend.example.com \
-VITE_APP_BASE=/your-repo/ \
-npm run build:pages
+```
+┌─────────────────┐         ┌─────────────────┐
+│   GitHub Pages  │ ◄─────► │  Railway/Render │
+│   (静态前端)     │  HTTPS  │  (FastAPI后端)  │
+└─────────────────┘         └─────────────────┘
+        │                            │
+        └─────── VITE_BACKEND_URL ───┘
+                   (环境变量注入)
 ```
 
-说明：
+## 后端部署
 
-- `VITE_BACKEND_URL` 必须填写后端公开地址，不要带尾部 `/`
-- `VITE_APP_BASE` 在 GitHub Pages 项目页通常为 `/<repo>/`
-- 如果你使用用户主页根路径，可将 `VITE_APP_BASE=/`
-- 构建产物位于 `app/frontend/dist/`
+### 方式一: Railway (推荐)
 
-发布方式：
+1. **Fork 本仓库** 到你的 GitHub 账号
 
-1. 将 `dist/` 内容发布到 GitHub Pages 对应分支，或由 GitHub Actions 发布
-2. 打开 `https://<user>.github.io/<repo>/`
-3. 首次打开后确认前端健康状态能连到云后端
+2. **登录 Railway**: https://railway.app
 
-## 后端部署到 Render
+3. **创建项目**:
+   - 点击 "New Project" → "Deploy from GitHub repo"
+   - 选择 fork 的仓库
+   - 选择 `app/backend` 作为根目录
 
-后端目录：`app/backend/`
+4. **配置环境变量**:
+   在 Railway 项目 Settings → Variables 中添加:
 
-本地验证建议使用 Python 3.10+，容器镜像默认使用 Python 3.11。
+   ```
+   KIMI_API_KEY=your_kimi_api_key_here
+   # 或
+   OPENAI_API_KEY=your_openai_api_key_here
+   
+   # 可选配置
+   CORS_ALLOW_ORIGINS=https://yourusername.github.io
+   ```
 
-推荐使用仓库内的 Blueprint：
+5. **部署**:
+   - Railway 会自动检测 `railway.toml` 并部署
+   - 部署完成后，记下分配的域名 (如 `https://huanjie-api.up.railway.app`)
 
-1. 在 Render 里创建 Blueprint
-2. 将 Blueprint 文件路径指定为 `app/backend/render.yaml`
-3. 同步后设置环境变量：
-   - `CORS_ALLOW_ORIGINS=https://<user>.github.io`
-   - `KIMI_API_KEY=<your-key>` 或 `OPENAI_API_KEY=<your-key>`
-   - 可选：`KIMI_MODEL`、`OPENAI_MODEL`
-4. 部署完成后访问 `https://<your-render-service>/health`
+### 方式二: Render
 
-说明：
+1. **登录 Render**: https://render.com
 
-- `render.yaml` 已把 `rootDir` 固定到 `app/backend`
-- Docker 启动命令沿用 `Dockerfile` 里的 `uvicorn`
-- `PORT` 由平台注入，无需手动设置
+2. **创建 Web Service**:
+   - 点击 "New +" → "Web Service"
+   - 选择 GitHub 仓库
+   - 选择 `app/backend` 作为根目录
 
-## 后端部署到 Railway
+3. **配置**:
+   - Runtime: Python 3
+   - Build Command: `pip install -e .`
+   - Start Command: `uvicorn src.main:app --host 0.0.0.0 --port $PORT`
 
-如果使用 Railway，直接复用 `app/backend/Dockerfile`：
+4. **环境变量**:
+   在 Render 的 Environment 标签页添加:
 
-1. 新建服务并连接仓库
-2. 将服务根目录设置为 `app/backend`，或在服务变量里指定 Dockerfile 路径
-3. 配置环境变量：
-   - `CORS_ALLOW_ORIGINS=https://<user>.github.io`
-   - `KIMI_API_KEY=<your-key>` 或 `OPENAI_API_KEY=<your-key>`
-4. 部署后访问 `https://<your-railway-service>/health`
+   ```
+   KIMI_API_KEY=your_kimi_api_key_here
+   # 或
+   OPENAI_API_KEY=your_openai_api_key_here
+   ```
 
-## 发布前本地验证
+5. **部署**:
+   - Render 会自动部署
+   - 记下分配的域名 (如 `https://huanjie-api.onrender.com`)
 
-### 后端烟测
+## 前端部署 (GitHub Pages)
 
-```bash
-cd app/backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-python -m pytest tests/test_deployment_flow.py -v
-```
+### 1. 配置环境变量
 
-这条烟测覆盖：
-
-1. 创建角色
-2. 提交行动
-3. 返回叙事与场景推进
-4. 重置状态
-
-### 前端生产构建
+在前端目录创建生产环境配置:
 
 ```bash
 cd app/frontend
-npm install
-VITE_BACKEND_URL=https://example.com \
-VITE_APP_BASE=/demo/ \
-npm run build:pages
+cp .env.example .env.production
 ```
 
-## 公开部署后的验收清单
+编辑 `.env.production`:
 
-1. 打开前端公开 URL，确认页面能正常加载
-2. 页面右上角健康状态显示“后端已连接”
-3. 创建一个新角色并进入场景
-4. 输入一条行动，确认返回叙事文本、裁定结果和场景推进
-5. 点击“重置”，确认角色与场景状态回到初始值
+```
+VITE_BACKEND_URL=https://your-backend-url.railway.app
+# GitHub Pages 子路径格式: /repo-name/
+VITE_APP_BASE=/huanjie-2/
+```
 
-## 当前限制
+### 2. 本地构建测试
 
-- 仓库内已补齐部署配置，但实际发布仍需要 GitHub Pages / Render / Railway 账号权限
-- 本次会话无法直接替你创建真实线上服务，因此公开 URL 需要你按上面的步骤完成最后发布
+```bash
+cd app/frontend
+npm ci
+VITE_BACKEND_URL=https://your-backend-url.railway.app npm run build:pages
+```
+
+构建产物在 `dist/` 目录，可直接部署。
+
+### 3. 推送到 GitHub Pages
+
+#### 使用 GitHub Actions (推荐)
+
+在项目根目录创建 `.github/workflows/deploy-frontend.yml`:
+
+```yaml
+name: Deploy Frontend to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd app/frontend
+          npm ci
+
+      - name: Build
+        run: |
+          cd app/frontend
+          VITE_BACKEND_URL=${{ vars.BACKEND_URL }} npm run build:pages
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/frontend/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+```
+
+然后在 GitHub 仓库设置中:
+- Settings → Pages → Source: GitHub Actions
+- Settings → Secrets and variables → Variables → Repository variables
+- 添加 `BACKEND_URL` = `https://your-backend-url.railway.app`
+
+### 4. 验证部署
+
+访问 GitHub Pages URL，检查:
+- [ ] 页面正常加载
+- [ ] 健康检查指示器显示 "后端已连接"
+- [ ] 可以创建角色
+- [ ] 可以发送行动指令
+- [ ] 可以重置游戏
+
+## 环境变量参考
+
+### 前端 (构建时)
+
+| 变量名 | 说明 | 示例 |
+|--------|------|------|
+| `VITE_BACKEND_URL` | 后端 API 地址 | `https://api.example.com` |
+| `VITE_APP_BASE` | 应用基础路径 | `/huanjie-2/` |
+
+### 后端 (运行时)
+
+| 变量名 | 说明 | 必填 |
+|--------|------|------|
+| `KIMI_API_KEY` | Kimi API 密钥 | 二选一 |
+| `OPENAI_API_KEY` | OpenAI API 密钥 | 二选一 |
+| `PORT` | 服务端口 (由平台提供) | 自动 |
+| `CORS_ALLOW_ORIGINS` | 允许的跨域来源 | 可选 |
+
+## 本地开发
+
+本地开发不受部署配置影响，使用默认配置:
+
+```bash
+# 后端
+cd app/backend
+source .venv/bin/activate
+uvicorn src.main:app --reload
+
+# 前端 (新终端)
+cd app/frontend
+npm run dev
+```
+
+前端 dev server 会自动代理 `/api` 请求到 `http://localhost:8000`。
+
+## 故障排查
+
+### 前端显示 "后端离线"
+
+1. 检查后端健康端点: `https://your-backend.com/health`
+2. 检查 CORS 配置: 后端日志中查看是否有 CORS 错误
+3. 检查网络: 浏览器 DevTools → Network 查看请求状态
+
+### AI 叙事不生效
+
+1. 检查后端环境变量是否设置了 `KIMI_API_KEY` 或 `OPENAI_API_KEY`
+2. 检查后端日志中的 API 调用错误
+
+### 构建失败
+
+1. 确保 `VITE_BACKEND_URL` 不为空且格式正确
+2. 检查 `package.json` 中的 `build:pages` 脚本是否存在

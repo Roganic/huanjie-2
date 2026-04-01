@@ -41,9 +41,27 @@ class CharacterClass(str, Enum):
     ROGUE = "rogue"
 
 
+class ScenarioId(str, Enum):
+    DUNGEON_DELVE = "dungeon_delve"
+    TOWN_COMMISSION = "town_commission"
+    WILDERNESS_SURVIVAL = "wilderness_survival"
+
+
 class GamePhase(str, Enum):
     CHARACTER_CREATION = "character_creation"
     ADVENTURE = "adventure"
+
+
+class ScenarioPreset(BaseModel):
+    id: ScenarioId
+    name: str
+    tagline: str
+    summary: str
+    atmosphere: str
+    objective: str
+    threat: str
+    opening_hook: str
+    gm_style: str
 
 
 class Actor(BaseModel):
@@ -63,6 +81,11 @@ class Scene(BaseModel):
     id: str
     name: str
     description: str
+    scenario_id: ScenarioId | None = None
+    scenario_name: str | None = None
+    atmosphere: str | None = None
+    objective: str | None = None
+    threat: str | None = None
     actors: list[str] = Field(default_factory=list, description="Actor IDs present")
     time: int = Field(default=0, description="Abstract time ticks elapsed")
 
@@ -81,6 +104,7 @@ class BootstrapState(BaseModel):
     session_id: str
     phase: GamePhase
     actor: Actor | None = None
+    scenario: ScenarioPreset
     scene: Scene
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
 
@@ -88,6 +112,8 @@ class BootstrapState(BaseModel):
 class CharacterCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=40)
     character_class: CharacterClass
+    scenario_id: ScenarioId = ScenarioId.DUNGEON_DELVE
+    provider: str = Field(default="")
     ability_generation: str = Field(
         default="standard_array",
         description="Current prototype supports only standard_array.",

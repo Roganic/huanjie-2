@@ -13,6 +13,7 @@ interface Message {
 type HealthStatus = "loading" | "ok" | "error";
 type GamePhase = "character_creation" | "adventure";
 type CharacterClass = "warrior" | "mage" | "rogue";
+type ScenarioId = "dungeon_delve" | "town_commission" | "wilderness_survival";
 
 interface CheckDetail {
   ability: string;
@@ -75,8 +76,25 @@ interface Scene {
   id: string;
   name: string;
   description: string;
+  scenario_id?: ScenarioId | null;
+  scenario_name?: string | null;
+  atmosphere?: string | null;
+  objective?: string | null;
+  threat?: string | null;
   actors: string[];
   time?: number;
+}
+
+interface ScenarioPreset {
+  id: ScenarioId;
+  name: string;
+  tagline: string;
+  summary: string;
+  atmosphere: string;
+  objective: string;
+  threat: string;
+  opening_hook: string;
+  gm_style: string;
 }
 
 interface NarrativeHistoryEntry {
@@ -85,6 +103,7 @@ interface NarrativeHistoryEntry {
     resolution_type?: "auto_success" | "check";
     outcome?: "success" | "failure";
     check?: CheckDetail | null;
+    event_type?: "opening";
   };
   narration_summary: string;
   narration: string;
@@ -97,6 +116,7 @@ interface BootstrapState {
   session_id: string;
   phase: GamePhase;
   actor: Actor | null;
+  scenario: ScenarioPreset;
   scene: Scene;
   narrative_history: NarrativeHistoryEntry[];
 }
@@ -119,6 +139,7 @@ interface TimelineEntry {
 interface CharacterDraft {
   name: string;
   characterClass: CharacterClass;
+  scenarioId: ScenarioId;
 }
 
 const ABILITY_LABELS: Record<string, string> = {
@@ -168,6 +189,42 @@ const CLASS_SUMMARIES: Record<CharacterClass, string> = {
   mage: "高智力，HP 较低，依赖知识与法术叙事。",
   rogue: "高敏捷，中等防护，擅长机动与潜入。",
 };
+
+const DEFAULT_SCENARIOS: ScenarioPreset[] = [
+  {
+    id: "dungeon_delve",
+    name: "地下城探索",
+    tagline: "坍塌遗迹下的黑暗召唤着第一批火光。",
+    summary: "深入失落遗迹，尽快确认被封存的古物是否仍在原处。",
+    atmosphere: "潮湿、压抑、回声重叠，任何火光都像在吞噬黑暗。",
+    objective: "找到遗迹深处的封存室。",
+    threat: "不稳定地形、巡游怪物与潜在掠夺者。",
+    opening_hook: "你刚抵达遗迹入口，最后一支先遣队留下的绳索仍在风里轻晃。",
+    gm_style: "强调压迫感、资源消耗与未知空间。",
+  },
+  {
+    id: "town_commission",
+    name: "城镇任务",
+    tagline: "秩序表面平静，真正的问题埋在交易与耳语里。",
+    summary: "在边境城镇接受公开委托，沿线索接触人物并做出立场选择。",
+    atmosphere: "喧闹与戒备并存，消息流动很快。",
+    objective: "查清委托背后的真实风险。",
+    threat: "谎言、时限压力与势力冲突。",
+    opening_hook: "你踏入镇中心时，公告牌前已经围着争论不休的人群。",
+    gm_style: "强调人际张力、线索推进与社会压力。",
+  },
+  {
+    id: "wilderness_survival",
+    name: "荒野求生",
+    tagline: "路已经断了，接下来每一步都要靠判断与意志换来。",
+    summary: "在荒野中维持方向、体力与士气，同时处理逼近的自然威胁。",
+    atmosphere: "空旷、寒冷、风声不断，远处没有安全承诺。",
+    objective: "在补给耗尽前找到安全落脚点。",
+    threat: "恶劣天气、地形阻隔、饥饿疲劳与暗中追踪者。",
+    opening_hook: "你回头时，来路已经被天气和地势彻底吞没。",
+    gm_style: "强调环境压迫、旅途节奏与求生判断。",
+  },
+];
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const SESSION_STORAGE_KEY = "huanjie.session_id";
@@ -444,13 +501,47 @@ function CharacterCard({
   );
 }
 
-function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerName?: string; previousScene?: Scene | null }) {
+function SceneCard({
+  scene,
+  playerName,
+  previousScene,
+  scenario,
+}: {
+  scene: Scene;
+  playerName?: string;
+  previousScene?: Scene | null;
+  scenario?: ScenarioPreset | null;
+}) {
   const timeChanged = previousScene !== undefined && previousScene !== null && previousScene.time !== scene.time;
 
   return (
     <div className="scene-card">
       <div className="scene-name">{scene.name}</div>
       <p className="scene-desc">{scene.description}</p>
+
+      {(scenario || scene.objective || scene.threat || scene.atmosphere) && (
+        <div className="scene-meta-grid">
+          {scenario && <div className="scene-meta-pill">{scenario.tagline}</div>}
+          {(scene.objective || scenario?.objective) && (
+            <div className="scene-meta-item">
+              <span className="scene-meta-label">目标</span>
+              <span className="scene-meta-value">{scene.objective ?? scenario?.objective}</span>
+            </div>
+          )}
+          {(scene.threat || scenario?.threat) && (
+            <div className="scene-meta-item">
+              <span className="scene-meta-label">威胁</span>
+              <span className="scene-meta-value">{scene.threat ?? scenario?.threat}</span>
+            </div>
+          )}
+          {(scene.atmosphere || scenario?.atmosphere) && (
+            <div className="scene-meta-item">
+              <span className="scene-meta-label">基调</span>
+              <span className="scene-meta-value">{scene.atmosphere ?? scenario?.atmosphere}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {scene.time !== undefined && (
         <div className={`scene-time ${timeChanged ? "changed" : ""}`}>
@@ -593,20 +684,27 @@ function Timeline({
 function CharacterCreationScreen({
   draft,
   actorPreview,
+  scenarios,
   pending,
   error,
   onNameChange,
   onClassChange,
+  onScenarioChange,
   onSubmit,
 }: {
   draft: CharacterDraft;
   actorPreview: Actor | null;
+  scenarios: ScenarioPreset[];
   pending: boolean;
   error: string | null;
   onNameChange: (value: string) => void;
   onClassChange: (value: CharacterClass) => void;
+  onScenarioChange: (value: ScenarioId) => void;
   onSubmit: () => void;
 }) {
+  const selectedScenario =
+    scenarios.find((scenario) => scenario.id === draft.scenarioId) ?? scenarios[0] ?? null;
+
   return (
     <div className="creation-shell">
       <div className="creation-panel">
@@ -652,6 +750,31 @@ function CharacterCreationScreen({
             <div className="creation-method-value">标准数组 15 / 14 / 13 / 12 / 10 / 8</div>
           </div>
 
+          <div className="creation-field">
+            <span>冒险场景</span>
+            <div className="scenario-grid">
+              {scenarios.map((scenario) => (
+                <button
+                  key={scenario.id}
+                  type="button"
+                  className={`scenario-option ${draft.scenarioId === scenario.id ? "selected" : ""}`}
+                  onClick={() => onScenarioChange(scenario.id)}
+                  disabled={pending}
+                >
+                  <div className="scenario-option-header">
+                    <div className="scenario-option-title">{scenario.name}</div>
+                    <div className="scenario-option-tagline">{scenario.tagline}</div>
+                  </div>
+                  <div className="scenario-option-body">{scenario.summary}</div>
+                  <div className="scenario-option-foot">
+                    <span>目标：{scenario.objective}</span>
+                    <span>威胁：{scenario.threat}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {error && <div className="creation-error">{error}</div>}
 
           <button className="creation-submit" onClick={onSubmit} disabled={pending}>
@@ -664,6 +787,12 @@ function CharacterCreationScreen({
         {actorPreview ? (
           <>
             <CharacterCard actor={actorPreview} />
+            {selectedScenario && (
+              <div className="creation-summary-card">
+                <div className="creation-summary-title">开场场景</div>
+                <p>{selectedScenario.opening_hook}</p>
+              </div>
+            )}
             <div className="stats-grid">
               {ABILITY_KEYS.map((key) => (
                 <AbilityScore key={key} ability={key} score={actorPreview.abilities[key]} />
@@ -790,6 +919,28 @@ function buildSessionHeaders(sessionId?: string | null, extraHeaders?: HeadersIn
 function restoreMessagesFromHistory(history: NarrativeHistoryEntry[]): Message[] {
   return history.slice(-MAX_RESTORED_HISTORY).flatMap((entry, index) => {
     const baseId = entry.created_at || Date.now() + index * 10;
+    const isOpening = entry.resolution_summary.event_type === "opening";
+    const gmMessage = {
+      id: baseId + (isOpening ? 0 : 1),
+      role: "gm" as const,
+      text: `${entry.narration}\n\n${entry.scene_progression}\n\n${entry.gm_prompt}`.trim(),
+      resolution: {
+        action_summary: entry.action_summary,
+        resolution_type: entry.resolution_summary.resolution_type ?? "auto_success",
+        check: entry.resolution_summary.check ?? null,
+        outcome: entry.resolution_summary.outcome ?? "success",
+        effects: [],
+        narration: entry.narration,
+        scene_progression: entry.scene_progression,
+        gm_prompt: entry.gm_prompt,
+      },
+      timestamp: baseId + (isOpening ? 0 : 1),
+    };
+
+    if (isOpening) {
+      return [gmMessage];
+    }
+
     return [
       {
         id: baseId,
@@ -797,22 +948,7 @@ function restoreMessagesFromHistory(history: NarrativeHistoryEntry[]): Message[]
         text: entry.action_summary,
         timestamp: baseId,
       },
-      {
-        id: baseId + 1,
-        role: "gm" as const,
-        text: `${entry.narration}\n\n${entry.scene_progression}\n\n${entry.gm_prompt}`.trim(),
-        resolution: {
-          action_summary: entry.action_summary,
-          resolution_type: entry.resolution_summary.resolution_type ?? "auto_success",
-          check: entry.resolution_summary.check ?? null,
-          outcome: entry.resolution_summary.outcome ?? "success",
-          effects: [],
-          narration: entry.narration,
-          scene_progression: entry.scene_progression,
-          gm_prompt: entry.gm_prompt,
-        },
-        timestamp: baseId + 1,
-      },
+      gmMessage,
     ];
   });
 }
@@ -881,9 +1017,11 @@ function App() {
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>(PROVIDERS[0].id);
   const [streamingPreview, setStreamingPreview] = useState<StreamingPreview | null>(null);
+  const [scenarioOptions, setScenarioOptions] = useState<ScenarioPreset[]>(DEFAULT_SCENARIOS);
   const [creationDraft, setCreationDraft] = useState<CharacterDraft>({
     name: "",
     characterClass: "warrior",
+    scenarioId: "dungeon_delve",
   });
   const [creationError, setCreationError] = useState<string | null>(null);
   const messagesEnd = useRef<HTMLDivElement>(null);
@@ -922,6 +1060,27 @@ function App() {
 
     (async () => {
       try {
+        const response = await fetch(apiUrl("/state/scenarios"));
+        if (!response.ok) return;
+        const data: ScenarioPreset[] = await response.json();
+        if (!cancelled && data.length > 0) {
+          setScenarioOptions(data);
+        }
+      } catch {
+        // Fall back to local defaults.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
         const storedSessionId = getStoredSessionId();
         const response = await fetch(apiUrl("/state/bootstrap"), {
           headers: buildSessionHeaders(storedSessionId),
@@ -939,6 +1098,7 @@ function App() {
               setSessionId(fallbackData.session_id);
               storeSessionId(fallbackData.session_id);
               setBootstrap(fallbackData);
+              setCreationDraft((previous) => ({ ...previous, scenarioId: fallbackData.scenario.id }));
               setMessages([]);
               setTimeline([]);
             }
@@ -951,6 +1111,7 @@ function App() {
           setSessionId(data.session_id);
           storeSessionId(data.session_id);
           setBootstrap(data);
+          setCreationDraft((previous) => ({ ...previous, scenarioId: data.scenario.id }));
           setMessages(restoreMessagesFromHistory(data.narrative_history));
           setTimeline(restoreTimelineFromHistory(data.narrative_history));
         }
@@ -988,6 +1149,7 @@ function App() {
     storeSessionId(state.session_id);
     setPreviousBootstrap(null);
     setBootstrap(state);
+    setCreationDraft((previous) => ({ ...previous, scenarioId: state.scenario.id }));
     setTimeline([]);
     setInput("");
     setStreamingPreview(null);
@@ -1015,6 +1177,7 @@ function App() {
     setSessionId(state.session_id);
     storeSessionId(state.session_id);
     setBootstrap(state);
+    setCreationDraft((previous) => ({ ...previous, scenarioId: state.scenario.id }));
     setMessages(restoreMessagesFromHistory(state.narrative_history));
     setTimeline(restoreTimelineFromHistory(state.narrative_history));
     return state;
@@ -1027,7 +1190,9 @@ function App() {
     setCreationError(null);
 
     try {
-      const response = await fetch(apiUrl("/reset"), {
+      const url = new URL(apiUrl("/reset"), window.location.origin);
+      url.searchParams.set("scenario_id", creationDraft.scenarioId);
+      const response = await fetch(url.toString(), {
         method: "POST",
         headers: buildSessionHeaders(sessionId),
       });
@@ -1045,6 +1210,7 @@ function App() {
       setSessionId(state.session_id);
       storeSessionId(state.session_id);
       setBootstrap(state);
+      setCreationDraft((previous) => ({ ...previous, scenarioId: state.scenario.id }));
       setMessages([]);
       setTimeline([]);
       setInput("");
@@ -1078,6 +1244,8 @@ function App() {
         body: JSON.stringify({
           name,
           character_class: creationDraft.characterClass,
+          scenario_id: creationDraft.scenarioId,
+          provider: selectedProvider,
           ability_generation: "standard_array",
         }),
       });
@@ -1098,22 +1266,17 @@ function App() {
       setSessionId(state.session_id);
       storeSessionId(state.session_id);
       setBootstrap(state);
-      setMessages([
-        {
-          id: Date.now(),
-          role: "system",
-          text: `角色 ${name} 已创建，故事从 ${state.scene.name} 开始。`,
-          timestamp: Date.now(),
-        },
-      ]);
+      setCreationDraft((previous) => ({ ...previous, scenarioId: state.scenario.id }));
+      setMessages(restoreMessagesFromHistory(state.narrative_history));
       setTimeline([
         {
           id: Date.now(),
           type: "system",
           title: `创建角色：${name}`,
-          details: `${CLASS_LABELS[creationDraft.characterClass]} · 标准数组`,
+          details: `${CLASS_LABELS[creationDraft.characterClass]} · ${state.scenario.name}`,
           timestamp: Date.now(),
         },
+        ...restoreTimelineFromHistory(state.narrative_history),
       ]);
     } catch (error) {
       setCreationError(error instanceof Error ? error.message : String(error));
@@ -1381,6 +1544,7 @@ function App() {
               scene={bootstrap.scene}
               playerName={bootstrap.actor?.id}
               previousScene={previousBootstrap?.scene ?? null}
+              scenario={bootstrap.scenario}
             />
           ) : (
             <div className="sidebar-loading">加载中…</div>
@@ -1446,10 +1610,12 @@ function App() {
           <CharacterCreationScreen
             draft={creationDraft}
             actorPreview={actorPreview}
+            scenarios={scenarioOptions}
             pending={creatingCharacter}
             error={creationError}
             onNameChange={(value) => setCreationDraft((previous) => ({ ...previous, name: value }))}
             onClassChange={(value) => setCreationDraft((previous) => ({ ...previous, characterClass: value }))}
+            onScenarioChange={(value) => setCreationDraft((previous) => ({ ...previous, scenarioId: value }))}
             onSubmit={createCharacter}
           />
         )}

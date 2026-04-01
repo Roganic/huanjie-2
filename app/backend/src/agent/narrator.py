@@ -23,7 +23,7 @@ from ..models.action import (
     Effect,
     Outcome,
 )
-from ..models.state import Actor, NarrativeHistoryEntry, Scene
+from ..models.state import Actor, NarrativeHistoryEntry, ScenarioPreset, Scene
 from .providers import get_provider
 from .resolution_constraints import (
     NarrationConstraintContext,
@@ -69,6 +69,25 @@ Guidelines:
 - Return valid JSON only, with keys "action_result", "scene_progression", and "gm_prompt"
 
 Tone: dramatic but not overwrought, grounded fantasy adventure."""
+
+
+OPENING_SYSTEM_PROMPT = """You are a skilled Game Master (GM) opening a fantasy tabletop RPG scenario.
+Your task is to establish the first playable moment for the player.
+
+Guidelines:
+- Write in second person or tight third person limited perspective
+- Match the requested scenario tone and GM style closely
+- Do not summarize broadly; frame a concrete opening moment the player can act inside
+- Split your output into valid JSON with keys:
+  1. action_result: the opening narration beat
+  2. scene_progression: what in the scene is already moving, looming, or reacting
+  3. gm_prompt: a concrete immediate hook, choice, or pressure point
+- Keep each field to 1 short paragraph
+- Avoid explicit game mechanics and system jargon
+- Make the three scenario types feel noticeably different in atmosphere and pacing
+- Return valid JSON only
+
+Tone: grounded fantasy adventure with clear momentum."""
 
 
 class NarrationBundle(BaseModel):
@@ -283,6 +302,50 @@ def _fallback_narration_bundle(
     )
 
 
+def _fallback_opening_bundle(actor: Actor, scene: Scene, scenario: ScenarioPreset) -> NarrationBundle:
+    if scenario.id == "dungeon_delve":
+        return NarrationBundle(
+            action_result=(
+                f"{actor.name} stands before the broken mouth of {scene.name}, where cold air slips out between cracked stones "
+                "and the last safe daylight stops a few steps behind. Damp mortar, old dust, and something metallic linger in the dark below."
+            ),
+            scene_progression=(
+                "A frayed descent line sways against the stone lip, and somewhere deeper inside the ruin a dull knock answers the silence. "
+                "Whatever waits below is already moving on its own timetable."
+            ),
+            gm_prompt=(
+                "Do you descend immediately, inspect the abandoned entry gear for clues, or pause to listen and map the first stretch before committing?"
+            ),
+        )
+    if scenario.id == "town_commission":
+        return NarrationBundle(
+            action_result=(
+                f"{actor.name} reaches {scene.name} just as the square tips from routine noise into public argument. "
+                "A fresh notice has drawn merchants, guards, and worried townsfolk into the same uneasy circle."
+            ),
+            scene_progression=(
+                "Names, accusations, and half-finished rumors travel faster than facts, while a town official keeps trying and failing to restore order. "
+                "The job on offer is already pulling competing agendas into the open."
+            ),
+            gm_prompt=(
+                "Do you read the commission for yourself, speak to the loudest witness before the story shifts again, or watch the crowd for whoever seems most afraid of the truth?"
+            ),
+        )
+    return NarrationBundle(
+        action_result=(
+            f"{actor.name} crosses into {scene.name} with the weather closing behind like a door. "
+            "Wind cuts across open ground, and the trail you trusted an hour ago has already been half-erased by the land itself."
+        ),
+        scene_progression=(
+            "Your supplies feel finite in a way that is suddenly impossible to ignore, and the distant ridge offers the only hint of shelter before dark. "
+            "Something out beyond the scrub keeps pace without showing itself."
+        ),
+        gm_prompt=(
+            "Do you drive toward the ridge while you still have light, stop to secure water and bearings, or turn your attention to the unseen follower before it draws closer?"
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # API Client
 # ---------------------------------------------------------------------------
@@ -352,6 +415,14 @@ async def _call_openai_api(prompt: str) -> Optional[NarrationBundle]:
     if provider is None:
         return None
     generated = await provider.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
+    return _parse_narration_bundle(generated) if generated else None
+
+
+async def _call_opening_provider(prompt: str, provider_name: str) -> Optional[NarrationBundle]:
+    provider = get_provider(provider_name)
+    if provider is None:
+        return None
+    generated = await provider.generate(OPENING_SYSTEM_PROMPT, prompt)
     return _parse_narration_bundle(generated) if generated else None
 
 
@@ -479,3 +550,41 @@ def generate_narration(
         attack_result,
         narrative_history,
     )
+
+
+def generate_opening_narration(
+    actor: Actor,
+    scene: Scene,
+    scenario: ScenarioPreset,
+    provider: str = "",
+) -> NarrationBundle:
+    prompt = (
+        "Create the opening beat for a new adventure.\n\n"
+        f"Player character: {actor.name}\n"
+        f"Class: {actor.character_class.value if actor.character_class else 'adventurer'}\n"
+        f"Character description: {actor.description}\n"
+        f"Scenario: {scenario.name}\n"
+        f"Scenario summary: {scenario.summary}\n"
+        f"Atmosphere: {scenario.atmosphere}\n"
+        f"Objective: {scenario.objective}\n"
+        f"Threat: {scenario.threat}\n"
+        f"Opening hook: {scenario.opening_hook}\n"
+        f"GM style: {scenario.gm_style}\n"
+        f"Scene name: {scene.name}\n"
+        f"Scene description: {scene.description}\n\n"
+        "Requirements:\n"
+        "- Start at the first actionable moment.\n"
+        "- Make the scenario tone immediately visible.\n"
+        "- Give the player a clear immediate vector without dictating their choice.\n"
+    )
+
+    try:
+        import asyncio
+
+        generated = asyncio.run(_call_opening_provider(prompt, provider))
+        if generated:
+            return generated
+    except Exception:
+        pass
+
+    return _fallback_opening_bundle(actor, scene, scenario)

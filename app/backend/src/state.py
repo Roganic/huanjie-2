@@ -14,6 +14,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from .agent.narrator import generate_opening_narration
 from .models.action import Effect
 from .models.state import (
     AbilityScores,
@@ -24,6 +25,8 @@ from .models.state import (
     GamePhase,
     NarrativeHistoryEntry,
     Scene,
+    ScenarioId,
+    ScenarioPreset,
 )
 
 _CHARACTER_CREATION_SCENE_INIT = dict(
@@ -37,14 +40,47 @@ _CHARACTER_CREATION_SCENE_INIT = dict(
 )
 
 _ADVENTURE_SCENE_INIT = dict(
-    id="tavern-01",
-    name="The Rusty Lantern",
-    description=(
-        "A dimly-lit tavern at a crossroads village. The smell of stale ale "
-        "mixes with wood smoke. A few locals nurse their drinks in silence."
-    ),
+    id="scenario-entry-01",
+    name="Adventure Start",
+    description="Your chosen adventure is about to begin.",
     actors=[],
 )
+
+_SCENARIO_PRESETS: dict[ScenarioId, ScenarioPreset] = {
+    ScenarioId.DUNGEON_DELVE: ScenarioPreset(
+        id=ScenarioId.DUNGEON_DELVE,
+        name="地下城探索",
+        tagline="坍塌遗迹下的黑暗召唤着第一批火光。",
+        summary="深入一处失落遗迹，寻找目标并决定是掠取、封印还是生还离开。",
+        atmosphere="潮湿、压抑、回声重叠，任何火光都像在吞噬黑暗。",
+        objective="找到遗迹深处被标记的封存室，确认里面的古物是否仍然存在。",
+        threat="不稳定的地形、巡游怪物，以及可能先一步抵达的掠夺者。",
+        opening_hook="你刚抵达遗迹入口，最后一支先遣队留下的绳索还在风里轻晃。",
+        gm_style="强调压迫感、资源消耗、未知空间与步步深入的风险。",
+    ),
+    ScenarioId.TOWN_COMMISSION: ScenarioPreset(
+        id=ScenarioId.TOWN_COMMISSION,
+        name="城镇任务",
+        tagline="秩序表面平静，真正的问题埋在交易与耳语里。",
+        summary="在边境城镇接受一项公开委托，沿着线索接触人物、交换情报并做出立场选择。",
+        atmosphere="喧闹与戒备并存，街头消息流动很快，每个人都像知道一点内情。",
+        objective="查清委托背后的真实风险，并决定先保护谁、相信谁。",
+        threat="谎言、时限压力、势力冲突，以及失控后可能波及整座街区的后果。",
+        opening_hook="你踏入镇中心时，公告牌前已经围着争论不休的人群。",
+        gm_style="强调人际张力、线索推进、立场抉择与不断升级的社会压力。",
+    ),
+    ScenarioId.WILDERNESS_SURVIVAL: ScenarioPreset(
+        id=ScenarioId.WILDERNESS_SURVIVAL,
+        name="荒野求生",
+        tagline="路已经断了，接下来每一步都要靠判断与意志换来。",
+        summary="在荒野中挣扎前行，维持方向、体力与士气，同时处理逼近的自然或猎食威胁。",
+        atmosphere="空旷、寒冷、风声不断，远处的地平线没有任何安全承诺。",
+        objective="在补给耗尽前找到安全落脚点，确认下一段旅程仍可继续。",
+        threat="恶劣天气、地形阻隔、饥饿疲劳，以及暗处跟随的掠食者。",
+        opening_hook="你回头时，来路已经被天气和地势彻底吞没。",
+        gm_style="强调环境压迫、旅途节奏、消耗感与求生判断。",
+    ),
+}
 
 _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
     CharacterClass.WARRIOR: {
@@ -110,6 +146,11 @@ _COMBAT_SCENE_INIT = dict(
     id="combat-01",
     name="Forest Ambush",
     description="A narrow forest path. A goblin emerges from the underbrush.",
+    scenario_id=ScenarioId.WILDERNESS_SURVIVAL,
+    scenario_name="荒野求生",
+    atmosphere="林间伏击，草木间潜伏着突如其来的危险。",
+    objective="活过眼前的袭击并重新夺回行动节奏。",
+    threat="潜伏在灌木与阴影中的袭击者。",
     actors=["goblin-01"],
 )
 
@@ -132,6 +173,9 @@ class SessionData(BaseModel):
     phase: GamePhase = GamePhase.CHARACTER_CREATION
     actor: Actor | None = None
     enemy: Actor = Field(default_factory=lambda: Actor(**_ENEMY_INIT))
+    scenario: ScenarioPreset = Field(
+        default_factory=lambda: _SCENARIO_PRESETS[ScenarioId.DUNGEON_DELVE]
+    )
     scene: Scene = Field(default_factory=lambda: Scene(**_CHARACTER_CREATION_SCENE_INIT))
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
     updated_at: float = Field(default_factory=time.time)
@@ -148,10 +192,19 @@ def reset_current_session(token: Token[str | None]) -> None:
     _CURRENT_SESSION_ID.reset(token)
 
 
-def create_session() -> BootstrapState:
+def list_scenarios() -> list[ScenarioPreset]:
+    return [preset.model_copy(deep=True) for preset in _SCENARIO_PRESETS.values()]
+
+
+def get_scenario(scenario_id: ScenarioId | str | None = None) -> ScenarioPreset:
+    resolved = ScenarioId(scenario_id or ScenarioId.DUNGEON_DELVE)
+    return _SCENARIO_PRESETS[resolved].model_copy(deep=True)
+
+
+def create_session(scenario_id: ScenarioId | str | None = None) -> BootstrapState:
     session_id = uuid.uuid4().hex
     with _SESSION_LOCK:
-        session = _create_fresh_session(session_id)
+        session = _create_fresh_session(session_id, scenario_id=scenario_id)
         _sessions[session_id] = session
         _persist_session(session)
     return _bootstrap_from_session(session)
@@ -276,9 +329,15 @@ def create_character(
             description=str(template["description"]),
         )
         session.phase = GamePhase.ADVENTURE
-        session.scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [session.actor.id]})
+        session.scenario = get_scenario(req.scenario_id)
+        session.scene = _build_scenario_scene(session.scenario, actor_ids=[session.actor.id])
         session.enemy = Actor(**_ENEMY_INIT)
-        session.narrative_history = []
+        session.narrative_history = _build_opening_history(
+            actor=session.actor,
+            scene=session.scene,
+            scenario=session.scenario,
+            provider=req.provider,
+        )
         _save_session(session)
     return get_bootstrap_state(session_id=resolved_session_id)
 
@@ -292,10 +351,13 @@ def apply_effects(effects: list[Effect], session_id: str | None = None) -> None:
         _save_session(session)
 
 
-def reset_state(session_id: str | None = None) -> BootstrapState:
+def reset_state(
+    session_id: str | None = None,
+    scenario_id: ScenarioId | str | None = None,
+) -> BootstrapState:
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:
-        session = _create_fresh_session(resolved_session_id)
+        session = _create_fresh_session(resolved_session_id, scenario_id=scenario_id)
         _sessions[resolved_session_id] = session
         _persist_session(session)
     return _bootstrap_from_session(session)
@@ -347,6 +409,7 @@ def _bootstrap_from_session(session: SessionData) -> BootstrapState:
         session_id=session.session_id,
         phase=session.phase,
         actor=session.actor,
+        scenario=session.scenario,
         scene=session.scene,
         narrative_history=list(session.narrative_history),
     )
@@ -360,8 +423,64 @@ def _session_file(session_id: str) -> Path:
     return SESSION_STORE_DIR / f"{session_id}.json"
 
 
-def _create_fresh_session(session_id: str) -> SessionData:
-    return SessionData(session_id=session_id)
+def _create_fresh_session(
+    session_id: str,
+    scenario_id: ScenarioId | str | None = None,
+) -> SessionData:
+    scenario = get_scenario(scenario_id)
+    return SessionData(
+        session_id=session_id,
+        scenario=scenario,
+        scene=Scene(**_CHARACTER_CREATION_SCENE_INIT),
+    )
+
+
+def _build_scenario_scene(scenario: ScenarioPreset, actor_ids: list[str]) -> Scene:
+    return Scene(
+        **{
+            **_ADVENTURE_SCENE_INIT,
+            "id": f"{scenario.id.value}-entry",
+            "name": scenario.name,
+            "description": scenario.opening_hook,
+            "scenario_id": scenario.id,
+            "scenario_name": scenario.name,
+            "atmosphere": scenario.atmosphere,
+            "objective": scenario.objective,
+            "threat": scenario.threat,
+            "actors": actor_ids,
+        }
+    )
+
+
+def _build_opening_history(
+    actor: Actor,
+    scene: Scene,
+    scenario: ScenarioPreset,
+    provider: str = "",
+) -> list[NarrativeHistoryEntry]:
+    opening = generate_opening_narration(
+        actor=actor,
+        scene=scene,
+        scenario=scenario,
+        provider=provider,
+    )
+    return [
+        NarrativeHistoryEntry(
+            action_summary="开场叙事",
+            resolution_summary={
+                "resolution_type": "auto_success",
+                "outcome": "success",
+                "event_type": "opening",
+            },
+            narration_summary=" ".join(
+                [opening.action_result, opening.scene_progression, opening.gm_prompt]
+            )[:400],
+            narration=opening.action_result,
+            scene_progression=opening.scene_progression,
+            gm_prompt=opening.gm_prompt,
+            created_at=int(time.time() * 1000),
+        )
+    ]
 
 
 def _get_session(session_id: str, create_if_missing: bool) -> SessionData:

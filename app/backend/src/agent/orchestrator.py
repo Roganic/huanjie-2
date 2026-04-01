@@ -193,17 +193,12 @@ class GMAgent:
         actor: Actor,
         action_summary: str,
     ) -> ActionResponse:
-        """Resolve an auto-success action."""
-        # Apply time advancement
-        scene = get_scene()
-        self._call_apply_state_change(
-            target=scene.id,
-            field="time",
-            delta=1,
-            description="Time passes.",
-        )
+        """Resolve an auto-success action.
         
-        # Generate narrative
+        Auto-success actions (trivial actions like looking around) don't
+        advance time or cause any state changes - they just return narrative.
+        """
+        # Generate narrative (no state changes for auto-success)
         narrative_result = self._call_generate_narrative(
             req=req,
             outcome=Outcome.SUCCESS,
@@ -215,7 +210,7 @@ class GMAgent:
             check=None,
             attack=None,
             outcome=Outcome.SUCCESS,
-            effects=self.effects,
+            effects=[],  # No effects for auto-success
             narration=narrative_result.narrative,
         )
     

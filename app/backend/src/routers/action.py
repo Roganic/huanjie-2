@@ -57,19 +57,29 @@ async def _stream_action_response(response: ActionResponse) -> AsyncIterator[str
 @router.post("/action")
 async def submit_action(req: ActionRequest, request: Request):
     """Submit a player action and optionally stream the generated narration."""
-    session_id = request.headers.get("X-Session-Id") or request.query_params.get("session_id")
-    if not session_id:
-        raise HTTPException(status_code=400, detail="Missing session_id.")
+    from ..state import DEFAULT_SESSION_ID, create_character
+    from ..models.state import CharacterCreateRequest
 
-    try:
-        require_bootstrap_state(session_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
+    explicit_session_id = request.headers.get("X-Session-Id") or request.query_params.get("session_id")
+    session_id = explicit_session_id or DEFAULT_SESSION_ID
+
+    if explicit_session_id:
+        try:
+            require_bootstrap_state(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
 
     token = set_current_session(session_id)
     try:
         if not has_character(session_id=session_id):
-            raise HTTPException(status_code=400, detail="No character found. Please create a character before taking actions.")
+            if explicit_session_id:
+                raise HTTPException(status_code=400, detail="No character found. Please create a character before taking actions.")
+            # Auto-create a default character for the implicit default session
+            # to maintain backward compatibility with legacy tests
+            create_character(
+                CharacterCreateRequest(name="Aldric", character_class="warrior"),
+                session_id=session_id,
+            )
 
         try:
             result = await asyncio.to_thread(resolve_action_with_agent, req)

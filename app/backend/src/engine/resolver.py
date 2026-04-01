@@ -415,28 +415,28 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
         # Hit! Roll damage: weapon dice + ability modifier
         damage_rolls_total, damage_rolls = roll_damage(damage_dice)
         damage_modifier = modifier  # Add ability modifier to damage
-        damage_total = max(1, damage_rolls_total + damage_modifier)  # Minimum 1 damage on hit
-        damage_total = min(damage_total, target.hp)  # Cap at target's remaining HP
+        damage_calculated = max(1, damage_rolls_total + damage_modifier)  # Minimum 1 damage on hit
+        damage_applied = min(damage_calculated, target.hp)  # Cap at target's remaining HP for effect
         damage_detail = DamageDetail(
             dice_expression=damage_dice,
             rolls=damage_rolls,
             modifier=damage_modifier,
-            total=damage_total,
+            total=damage_calculated,  # Report calculated total (not capped by HP)
         )
         attack_detail.damage = damage_detail
 
-        # Apply damage effect to target
+        # Apply damage effect to target (capped by remaining HP)
         effects.append(
             Effect(
                 target=target.id,
                 field="hp",
-                delta=-damage_total,
-                description=f"{actor.name} hits {target.name} with {weapon} for {damage_total} damage.",
+                delta=-damage_applied,
+                description=f"{actor.name} hits {target.name} with {weapon} for {damage_applied} damage.",
             )
         )
 
         # Check if target is defeated
-        new_hp = max(0, target.hp - damage_total)
+        new_hp = max(0, target.hp - damage_applied)
         if new_hp == 0:
             effects.append(
                 Effect(

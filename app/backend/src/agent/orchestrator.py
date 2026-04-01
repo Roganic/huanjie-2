@@ -504,27 +504,27 @@ class GMAgent:
             
             # Damage = weapon dice + ability modifier (min 1 damage on hit)
             damage_modifier = modifier  # Same ability used for attack roll
-            damage_total = max(1, damage_result.total + damage_modifier)
-            # Cap damage at target's remaining HP so effect delta matches actual HP change
-            damage_total = min(damage_total, target.hp)
+            damage_calculated = max(1, damage_result.total + damage_modifier)
+            # Cap damage at target's remaining HP for effect application
+            damage_applied = min(damage_calculated, target.hp)
             damage_detail = DamageDetail(
                 dice_expression=damage_dice,
                 rolls=damage_result.rolls,
                 modifier=damage_modifier,
-                total=damage_total,
+                total=damage_calculated,  # Report calculated total (not capped by HP)
             )
             attack_detail.damage = damage_detail
             
-            # Apply damage to target
+            # Apply damage to target (capped by remaining HP)
             self._call_apply_state_change(
                 target=target.id,
                 field="hp",
-                delta=-damage_total,
-                description=f"{actor.name} hits {target.name} with {weapon} for {damage_total} damage.",
+                delta=-damage_applied,
+                description=f"{actor.name} hits {target.name} with {weapon} for {damage_applied} damage.",
             )
             
             # Check for defeat
-            new_hp = max(0, target.hp - damage_total)
+            new_hp = max(0, target.hp - damage_applied)
             if new_hp == 0:
                 self._call_apply_state_change(
                     target=target.id,

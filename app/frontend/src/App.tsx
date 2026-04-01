@@ -497,48 +497,49 @@ function StatusEffect({ name, isNew }: { name: string; isNew?: boolean }) {
 }
 
 function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolean }) {
-  const profBonus = actor.proficiency_bonus;
-  const classProfSkills = CLASS_SKILLS[actor.character_class ?? "warrior"] ?? [];
-  
-  // Merge standard skills with extra skills (e.g., Arcana for mages)
-  const allSkills = [...SKILLS, ...EXTRA_SKILLS];
+  // Prefer backend-provided skills when available; fallback to frontend computation
+  const skills = actor.skills && actor.skills.length > 0
+    ? actor.skills
+    : (() => {
+        const profBonus = actor.proficiency_bonus;
+        const classProfSkills = CLASS_SKILLS[actor.character_class ?? "warrior"] ?? [];
+        const allSkills = [...SKILLS, ...EXTRA_SKILLS];
+        return allSkills.map((skill) => {
+          const abilityMod = getModifier(actor.abilities[skill.ability]);
+          const isProficient = classProfSkills.includes(skill.name);
+          return {
+            name: skill.name,
+            ability: skill.ability,
+            proficient: isProficient,
+            modifier: abilityMod + (isProficient ? profBonus : 0),
+          };
+        });
+      })();
 
   if (compact) {
-    // Show only proficient skills (class proficiencies)
-    const proficientSkills = allSkills.filter(
-      (s) => classProfSkills.includes(s.name)
-    );
+    const proficientSkills = skills.filter((s) => s.proficient);
     return (
       <div className="skills-list-compact">
-        {proficientSkills.map((skill) => {
-          const abilityMod = getModifier(actor.abilities[skill.ability]);
-          const total = abilityMod + profBonus;
-          return (
-            <div key={skill.name} className="skill-item-compact proficient">
-              <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
-              <span className="skill-bonus">{formatModifier(total)}</span>
-            </div>
-          );
-        })}
+        {proficientSkills.map((skill) => (
+          <div key={skill.name} className="skill-item-compact proficient">
+            <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
+            <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
+          </div>
+        ))}
       </div>
     );
   }
 
   return (
     <div className="skills-list">
-      {allSkills.map((skill) => {
-        const abilityMod = getModifier(actor.abilities[skill.ability]);
-        const isProficient = classProfSkills.includes(skill.name);
-        const total = abilityMod + (isProficient ? profBonus : 0);
-        return (
-          <div key={skill.name} className={`skill-item ${isProficient ? "proficient" : ""}`}>
-            <span className="skill-dot">{isProficient ? "●" : "○"}</span>
-            <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
-            <span className="skill-ability">({ABILITY_LABELS[skill.ability]})</span>
-            <span className="skill-bonus">{formatModifier(total)}</span>
-          </div>
-        );
-      })}
+      {skills.map((skill) => (
+        <div key={skill.name} className={`skill-item ${skill.proficient ? "proficient" : ""}`}>
+          <span className="skill-dot">{skill.proficient ? "●" : "○"}</span>
+          <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
+          <span className="skill-ability">({ABILITY_LABELS[skill.ability]})</span>
+          <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -960,29 +961,49 @@ function createPreviewActor(draft: CharacterDraft): Actor | null {
   const trimmedName = draft.name.trim();
   if (!trimmedName) return null;
 
-  const classHp: Record<CharacterClass, number> = { warrior: 12, mage: 8, rogue: 10 };
-  const baseAc: Record<CharacterClass, number> = { warrior: 16, mage: 12, rogue: 14 };
+  // Hit dice match backend CLASS_HIT_DICE
+  const classHitDie: Record<CharacterClass, number> = { warrior: 10, mage: 6, rogue: 8 };
+
+  // Calculate HP: hit die max + CON modifier (matches backend)
+  const conMod = getModifier(draft.abilities.con);
+  const hp = classHitDie[draft.characterClass] + conMod;
 
   // Calculate AC based on abilities
   const dexMod = getModifier(draft.abilities.dex);
-  let ac = baseAc[draft.characterClass];
+  let ac = 16;
   if (draft.characterClass === "mage") {
     ac = 10 + dexMod;
   } else if (draft.characterClass === "rogue") {
     ac = 11 + dexMod;
   }
 
+  // Compute skills to match backend logic
+  const profBonus = 2;
+  const classProfSkills = CLASS_SKILLS[draft.characterClass] ?? [];
+  const allSkills = [...SKILLS, ...EXTRA_SKILLS];
+  const skills = allSkills.map((skill) => {
+    const abilityMod = getModifier(draft.abilities[skill.ability]);
+    const isProficient = classProfSkills.includes(skill.name);
+    return {
+      name: skill.name,
+      ability: skill.ability,
+      proficient: isProficient,
+      modifier: abilityMod + (isProficient ? profBonus : 0),
+    };
+  });
+
   return {
     id: `preview-${draft.characterClass}`,
     name: trimmedName,
     character_class: draft.characterClass,
     abilities: draft.abilities,
-    proficiency_bonus: 2,
-    hp: classHp[draft.characterClass],
-    hp_max: classHp[draft.characterClass],
+    proficiency_bonus: profBonus,
+    hp,
+    hp_max: hp,
     ac,
     description: CLASS_SUMMARIES[draft.characterClass],
     conditions: [],
+    skills,
   };
 }
 

@@ -200,6 +200,7 @@ class GMAgent:
         narration_summary = " ".join([
             narration_result.narrative.strip(),
             narration_result.scene_progression.strip(),
+            narration_result.gm_prompt.strip(),
         ]).strip()
 
         append_narrative_history(
@@ -264,6 +265,7 @@ class GMAgent:
             effects=[],  # No effects for auto-success
             narration=narrative_result.narrative,
             scene_progression=narrative_result.scene_progression,
+            gm_prompt=narrative_result.gm_prompt,
         )
     
     def _resolve_ability_check(
@@ -335,6 +337,7 @@ class GMAgent:
             effects=self.effects,
             narration=narrative_result.narrative,
             scene_progression=narrative_result.scene_progression,
+            gm_prompt=narrative_result.gm_prompt,
         )
     
     def _resolve_attack(self, req: ActionRequest, actor: Actor) -> ActionResponse:
@@ -451,6 +454,7 @@ class GMAgent:
             effects=self.effects,
             narration=narrative_result.narrative,
             scene_progression=narrative_result.scene_progression,
+            gm_prompt=narrative_result.gm_prompt,
         )
     
     def _resolve_attack_no_target(
@@ -476,6 +480,7 @@ class GMAgent:
             effects=self.effects,
             narration=f"{action_summary} — but the target cannot be found.",
             scene_progression="The confusion stalls the moment. You can pick a clear target, read the room for reactions, or reposition before the next move.",
+            gm_prompt="A beat of uncertainty hangs in the air. Clarify who you are actually engaging before the scene moves against you.",
         )
     
     def _resolve_spell_attack(self, req: ActionRequest, actor: Actor) -> ActionResponse:
@@ -633,6 +638,7 @@ class GMAgent:
             effects=self.effects,
             narration=narrative_result.narrative,
             scene_progression=narrative_result.scene_progression,
+            gm_prompt=narrative_result.gm_prompt,
         )
     
     # -----------------------------------------------------------------------

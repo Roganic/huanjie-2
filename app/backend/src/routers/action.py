@@ -34,7 +34,7 @@ async def _stream_action_response(response: ActionResponse) -> AsyncIterator[str
         },
     )
 
-    for field_name in ("narration", "scene_progression"):
+    for field_name in ("narration", "scene_progression", "gm_prompt"):
         full_text = getattr(response, field_name)
         for chunk in _chunk_text(full_text):
             yield _sse_event(

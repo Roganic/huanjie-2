@@ -154,3 +154,4 @@ class ActionResponse(BaseModel):
     effects: list[Effect] = Field(default_factory=list)
     narration: str
     scene_progression: str
+    gm_prompt: str

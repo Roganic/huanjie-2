@@ -209,14 +209,16 @@ def build_narrative_prompt(
     lines.append("=" * 60)
     lines.append("")
     lines.append("【写作指示 / WRITING INSTRUCTION】")
-    lines.append("基于以上硬约束和叙事空间，返回一个 JSON 对象，包含 action_result 与 scene_progression 两个字段。")
+    lines.append("基于以上硬约束和叙事空间，返回一个 JSON 对象，包含 action_result、scene_progression、gm_prompt 三个字段。")
     lines.append("要求：")
     lines.append("1. 严格遵守硬约束区的事实，不得与之矛盾")
     lines.append("2. 如果结果是失败，绝对不能描述为成功或命中")
     lines.append("3. 如果伤害是0，绝对不能描述为造成伤害")
     lines.append("4. 使用生动的感官细节，避免系统术语")
-    lines.append("5. scene_progression 必须至少包含 NPC 反应、环境变化、或对玩家的明确提示之一")
-    lines.append('6. 仅返回 JSON，例如 {"action_result": "...", "scene_progression": "..."}')
+    lines.append("5. scene_progression 负责描述动作结算后立刻发生的场景变化")
+    lines.append("6. gm_prompt 必须像 GM 主动抛出的下一拍，包含明确暗示、压力或可响应事件")
+    lines.append("7. gm_prompt 要尽量引用会话历史里的已发生事件，让场景呈现连续演进")
+    lines.append('8. 仅返回 JSON，例如 {"action_result": "...", "scene_progression": "...", "gm_prompt": "..."}')
 
     return "\n".join(lines)
 
@@ -273,4 +275,3 @@ def find_contradictions(
                 reasons.append("condition_applied_but_narrated_as_removed")
 
     return list(dict.fromkeys(reasons))
-

@@ -54,20 +54,19 @@ These are ABSOLUTE and CANNOT be changed, ignored, or contradicted in your narra
 Guidelines:
 - Write in second person ("you") or third person limited perspective
 - Use vivid, atmospheric language that fits the fantasy setting
-- Split your output into two distinct parts:
+- Split your output into three distinct parts:
   1. action_result: describe the action, its outcome, and the immediate consequences
-  2. scene_progression: proactively advance the scene with at least one of:
-     - NPC reaction
-     - environmental change
-     - a concrete prompt or opening the player can act on next
+  2. scene_progression: describe the immediate scene reaction or environmental change after the action
+  3. gm_prompt: proactively throw the next beat at the player with a concrete hint, pressure, or event
 - Keep each part to 1 short paragraph
+- Reuse recent session history when relevant so the scene evolves instead of resetting
 - Focus on sensory details: what the character sees, hears, feels
 - For combat: describe the tension, the clash of weapons, the impact
 - For skill checks: describe the effort, the struggle, the result
 - NEVER contradict the hard constraints - they are the ground truth
 - Never use system terminology like "roll", "DC", "modifier", "check"
 - Never break character or mention game mechanics explicitly
-- Return valid JSON only, with keys "action_result" and "scene_progression"
+- Return valid JSON only, with keys "action_result", "scene_progression", and "gm_prompt"
 
 Tone: dramatic but not overwrought, grounded fantasy adventure."""
 
@@ -77,6 +76,7 @@ class NarrationBundle(BaseModel):
 
     action_result: str
     scene_progression: str
+    gm_prompt: str
 
 
 def _build_hard_constraints(
@@ -214,16 +214,72 @@ def _fallback_scene_progression(
     )
 
 
+def _build_history_callback(narrative_history: Optional[list[NarrativeHistoryEntry]]) -> str:
+    if not narrative_history:
+        return ""
+
+    latest = narrative_history[-1]
+    seed = latest.narration_summary or latest.action_summary
+    compact = seed.replace("\n", " ").strip()
+    if len(compact) > 120:
+        compact = compact[:117].rstrip() + "..."
+
+    if len(narrative_history) >= 3:
+        return f" The scene is already carrying momentum from several exchanges, especially {compact}"
+    return f" The room is still reacting to the last beat: {compact}"
+
+
+def _fallback_gm_prompt(
+    req: ActionRequest,
+    actor: Actor,
+    scene: Scene,
+    outcome: Outcome,
+    attack_result: Optional[dict] = None,
+    narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
+) -> str:
+    history_callback = _build_history_callback(narrative_history)
+    time_pressure = (
+        f" Time in {scene.name} has advanced to beat {scene.time}."
+        if scene.time
+        else ""
+    )
+
+    if attack_result:
+        target = attack_result.get("target", "enemy")
+        if outcome == Outcome.SUCCESS:
+            return (
+                f"{target} staggers but does not leave the scene; something in the melee is about to answer your advantage."
+                f"{history_callback}{time_pressure} Do you press the wounded foe, break away to reposition, or react to whoever else moves?"
+            )
+        return (
+            f"{target} has seen your line now and the fight threatens to turn back on you."
+            f"{history_callback}{time_pressure} What do you do before the counterpressure lands?"
+        )
+
+    if outcome == Outcome.SUCCESS:
+        return (
+            f"A fresh opening has appeared in {scene.name}, but it will not stay open for long."
+            f"{history_callback}{time_pressure} Do you exploit that opening immediately, question whoever reacts, or examine what just shifted?"
+        )
+
+    return (
+        f"The failed attempt gives the scene permission to push back."
+        f"{history_callback}{time_pressure} What catches your attention first: an NPC response, a change in the environment, or a new tactic?"
+    )
+
+
 def _fallback_narration_bundle(
     req: ActionRequest,
     actor: Actor,
     scene: Scene,
     outcome: Outcome,
     attack_result: Optional[dict] = None,
+    narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
 ) -> NarrationBundle:
     return NarrationBundle(
         action_result=_fallback_action_result(req, actor, scene, outcome, attack_result),
         scene_progression=_fallback_scene_progression(req, actor, scene, outcome, attack_result),
+        gm_prompt=_fallback_gm_prompt(req, actor, scene, outcome, attack_result, narrative_history),
     )
 
 
@@ -232,7 +288,7 @@ def _fallback_narration_bundle(
 # ---------------------------------------------------------------------------
 
 def _parse_narration_bundle(content: str) -> Optional[NarrationBundle]:
-    """Parse the model response into the required two-part narration bundle."""
+    """Parse the model response into the required narration bundle."""
     raw = content.strip()
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1] if "\n" in raw else raw
@@ -245,12 +301,14 @@ def _parse_narration_bundle(content: str) -> Optional[NarrationBundle]:
 
     action_result = str(data.get("action_result", "")).strip()
     scene_progression = str(data.get("scene_progression", "")).strip()
-    if not action_result or not scene_progression:
+    gm_prompt = str(data.get("gm_prompt", "")).strip()
+    if not action_result or not scene_progression or not gm_prompt:
         return None
 
     return NarrationBundle(
         action_result=action_result,
         scene_progression=scene_progression,
+        gm_prompt=gm_prompt,
     )
 
 
@@ -413,4 +471,11 @@ def generate_narration(
                 },
             )
 
-    return _fallback_narration_bundle(req, actor, scene, outcome, attack_result)
+    return _fallback_narration_bundle(
+        req,
+        actor,
+        scene,
+        outcome,
+        attack_result,
+        narrative_history,
+    )

@@ -27,9 +27,12 @@ from ..models.state import Actor, NarrativeHistoryEntry, Scene
 from .providers import get_provider
 from .resolution_constraints import (
     NarrationConstraintContext,
+    ValidationResult,
     build_hard_constraints,
     build_narrative_prompt,
+    detect_unauthorized_numeric_declarations,
     find_contradictions,
+    validate_narrative_for_overreach,
 )
 
 # Backward-compatible export for existing scripts/tests.
@@ -51,6 +54,23 @@ These are ABSOLUTE and CANNOT be changed, ignored, or contradicted in your narra
 - If damage is "8", you MUST describe damage consistent with 8 HP loss
 - If target HP changes to "5", you CANNOT say the target was defeated
 - State changes (conditions, HP, resources) are FACTS, not suggestions
+
+ABSOLUTE PROHIBITION - 数值权威禁止 (NUMERIC AUTHORITY RESTRICTION):
+You are STRICTLY FORBIDDEN from announcing or modifying any numeric values in your narrative:
+- NEVER say "HP becomes", "HP 变为", "生命值变为" or any HP modification
+- NEVER say "You gain", "你获得", "你得到" followed by any numeric resource
+- NEVER say "You lose", "你失去", "你损失" followed by any numeric resource
+- NEVER announce specific damage numbers like "deals 5 damage" or "造成 5 点伤害"
+- NEVER announce healing amounts like "restores 3 HP" or "恢复 3 点生命"
+- NEVER state new HP totals like "now has 5 HP" or "现在剩下 5 点生命"
+
+The rule engine ALONE has authority over all numeric values. Your job is ONLY to describe:
+- Sensory details (what characters see, hear, feel)
+- Emotional reactions and dramatic tension
+- Environmental changes and atmospheric effects
+- Strategic implications and narrative consequences
+
+VIOLATION CONSEQUENCE: Any output containing unauthorized numeric declarations will be rejected.
 
 叙事规则：
 - 使用第二人称（"你"）或第三人称有限视角
@@ -431,44 +451,51 @@ def generate_narration(
 
     narrative = _run_provider(prompt)
     if narrative:
-        reasons = find_contradictions(
+        # Use comprehensive validation including numeric authority checks
+        validation = validate_narrative_for_overreach(
             action_result=narrative.action_result,
             scene_progression=narrative.scene_progression,
+            gm_prompt=narrative.gm_prompt,
             context=context,
         )
-        if not reasons:
+        
+        if validation.is_valid:
             return narrative
 
         logger.warning(
-            "Narration contradicted rule resolution; retrying once",
+            "Narration failed validation with %d violations; retrying once",
+            len(validation.violations),
             extra={
                 "outcome": outcome.value,
                 "action_intent": req.intent,
-                "reasons": reasons,
+                "violations": validation.violations,
             },
         )
         retry_prompt = (
             f"{prompt}\n\n"
             "【修正要求 / CORRECTION REQUIRED】\n"
-            "你上一版叙事与硬约束冲突。请严格修正，不得重复以下问题：\n"
-            f"{json.dumps(reasons, ensure_ascii=False)}"
+            "你上一版叙事违反以下约束规则。请严格修正，不得重复以下问题：\n"
+            f"{json.dumps(validation.violations, ensure_ascii=False)}\n\n"
+            "特别提醒：你作为叙事AI，绝对不得自行宣布或修改任何数值（如HP、伤害值等）。"
+            "数值相关描述只能通过感官细节体现，不得直接陈述数值变化。"
         )
         retry_narrative = _run_provider(retry_prompt)
         if retry_narrative:
-            retry_reasons = find_contradictions(
+            retry_validation = validate_narrative_for_overreach(
                 action_result=retry_narrative.action_result,
                 scene_progression=retry_narrative.scene_progression,
+                gm_prompt=retry_narrative.gm_prompt,
                 context=context,
             )
-            if not retry_reasons:
+            if retry_validation.is_valid:
                 return retry_narrative
 
             logger.warning(
-                "Narration retry still contradicted rule resolution; using fallback",
+                "Narration retry still failed validation; using fallback",
                 extra={
                     "outcome": outcome.value,
                     "action_intent": req.intent,
-                    "reasons": retry_reasons,
+                    "violations": retry_validation.violations,
                 },
             )
 

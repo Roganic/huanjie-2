@@ -64,14 +64,14 @@ async def test_proficiency_bonus_is_plus_two(client):
         })
     assert resp.status_code == 200
     data = resp.json()
-    assert data["actor"]["proficiency_bonus"] == 2
+    assert data["proficiency_bonus"] == 2
+    assert data["level"] == 1
 
 
 # ---------------------------------------------------------------------------
 # 3. HP calculation per class
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(reason="Backend bug: HP is taken from template directly without adding CON modifier.")
 @pytest.mark.asyncio
 async def test_warrior_hp_formula(client):
     """Warrior HP = 10 + CON modifier."""
@@ -83,12 +83,12 @@ async def test_warrior_hp_formula(client):
             "abilities": {"str": 10, "dex": 10, "con": 14, "int": 10, "wis": 10, "cha": 10},
         })
     assert resp.status_code == 200
-    actor = resp.json()["actor"]
+    data = resp.json()
     con_mod = (14 - 10) // 2
-    assert actor["hp"] == 10 + con_mod
+    assert data["hp"]["max"] == 10 + con_mod
+    assert data["hp"]["current"] == 10 + con_mod
 
 
-@pytest.mark.xfail(reason="Backend bug: HP is taken from template directly without adding CON modifier.")
 @pytest.mark.asyncio
 async def test_mage_hp_formula(client):
     """Mage HP = 6 + CON modifier."""
@@ -100,12 +100,12 @@ async def test_mage_hp_formula(client):
             "abilities": {"str": 10, "dex": 10, "con": 12, "int": 10, "wis": 10, "cha": 10},
         })
     assert resp.status_code == 200
-    actor = resp.json()["actor"]
+    data = resp.json()
     con_mod = (12 - 10) // 2
-    assert actor["hp"] == 6 + con_mod
+    assert data["hp"]["max"] == 6 + con_mod
+    assert data["hp"]["current"] == 6 + con_mod
 
 
-@pytest.mark.xfail(reason="Backend bug: HP is taken from template directly without adding CON modifier.")
 @pytest.mark.asyncio
 async def test_rogue_hp_formula(client):
     """Rogue HP = 8 + CON modifier."""
@@ -117,9 +117,10 @@ async def test_rogue_hp_formula(client):
             "abilities": {"str": 10, "dex": 10, "con": 13, "int": 10, "wis": 10, "cha": 10},
         })
     assert resp.status_code == 200
-    actor = resp.json()["actor"]
+    data = resp.json()
     con_mod = (13 - 10) // 2
-    assert actor["hp"] == 8 + con_mod
+    assert data["hp"]["max"] == 8 + con_mod
+    assert data["hp"]["current"] == 8 + con_mod
 
 
 # ---------------------------------------------------------------------------
@@ -137,9 +138,9 @@ async def test_mage_ac_unarmored(client):
             "abilities": {"str": 10, "dex": 14, "con": 10, "int": 10, "wis": 10, "cha": 10},
         })
     assert resp.status_code == 200
-    actor = resp.json()["actor"]
+    data = resp.json()
     dex_mod = (14 - 10) // 2
-    assert actor["ac"] == 10 + dex_mod
+    assert data["ac"] == 10 + dex_mod
 
 
 @pytest.mark.asyncio
@@ -153,9 +154,9 @@ async def test_rogue_ac_leather(client):
             "abilities": {"str": 10, "dex": 14, "con": 10, "int": 10, "wis": 10, "cha": 10},
         })
     assert resp.status_code == 200
-    actor = resp.json()["actor"]
+    data = resp.json()
     dex_mod = (14 - 10) // 2
-    assert actor["ac"] == 11 + dex_mod
+    assert data["ac"] == 11 + dex_mod
 
 
 @pytest.mark.asyncio
@@ -169,8 +170,8 @@ async def test_warrior_ac_heavy_armor(client):
             "abilities": {"str": 10, "dex": 8, "con": 10, "int": 10, "wis": 10, "cha": 10},
         })
     assert resp.status_code == 200
-    actor = resp.json()["actor"]
-    assert actor["ac"] == 16
+    data = resp.json()
+    assert data["ac"] == 16
 
 
 # ---------------------------------------------------------------------------
@@ -196,9 +197,9 @@ async def test_random_4d6_generation_via_api(client):
             "ability_generation": "random_4d6",
         })
     assert resp.status_code == 200
-    abilities = resp.json()["actor"]["abilities"]
+    attributes = resp.json()["attributes"]
     for key in ("str", "dex", "con", "int", "wis", "cha"):
-        score = abilities[key]
+        score = attributes[key]["score"]
         assert 3 <= score <= 18, f"API ability {key} was {score}, expected 3-18"
 
 
@@ -208,7 +209,7 @@ async def test_random_4d6_generation_via_api(client):
 
 @pytest.mark.asyncio
 async def test_character_persisted_after_creation(client):
-    """After POST /character/create, GET /state/bootstrap returns the same actor."""
+    """After POST /character/create, GET /character returns the same character."""
     async with client as c:
         create_resp = await c.post("/character/create", json={
             "name": "Persist",
@@ -216,30 +217,37 @@ async def test_character_persisted_after_creation(client):
             "ability_generation": "standard_array",
         })
         assert create_resp.status_code == 200
-        session_id = create_resp.json()["session_id"]
+        session_id = create_resp.headers.get("x-session-id") or create_resp.json().get("session_id")
 
-        get_resp = await c.get("/state/bootstrap", headers={"X-Session-Id": session_id})
+        # Fallback: get session_id from state/bootstrap if header not present
+        if not session_id:
+            bootstrap = await c.get("/state/bootstrap")
+            session_id = bootstrap.json()["session_id"]
+
+        get_resp = await c.get("/character", headers={"X-Session-Id": session_id})
         assert get_resp.status_code == 200
-        assert get_resp.json()["actor"]["name"] == "Persist"
+        assert get_resp.json()["name"] == "Persist"
 
 
 @pytest.mark.asyncio
 async def test_reset_clears_character(client):
-    """POST /reset clears the actor; subsequent GET returns actor=None."""
+    """POST /reset clears the actor; subsequent GET /character returns 404."""
     async with client as c:
         create_resp = await c.post("/character/create", json={
             "name": "ResetMe",
             "character_class": "warrior",
             "ability_generation": "standard_array",
         })
-        session_id = create_resp.json()["session_id"]
+        session_id = create_resp.headers.get("x-session-id")
+        if not session_id:
+            bootstrap = await c.get("/state/bootstrap")
+            session_id = bootstrap.json()["session_id"]
 
         reset_resp = await c.post("/reset", headers={"X-Session-Id": session_id})
         assert reset_resp.status_code == 200
 
-        get_resp = await c.get("/state/bootstrap", headers={"X-Session-Id": session_id})
-        assert get_resp.status_code == 200
-        assert get_resp.json()["actor"] is None
+        get_resp = await c.get("/character", headers={"X-Session-Id": session_id})
+        assert get_resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +263,10 @@ async def test_action_with_character_returns_200(client):
             "character_class": "warrior",
             "ability_generation": "standard_array",
         })
-        session_id = create_resp.json()["session_id"]
+        session_id = create_resp.headers.get("x-session-id")
+        if not session_id:
+            bootstrap = await c.get("/state/bootstrap")
+            session_id = bootstrap.json()["session_id"]
 
         action_resp = await c.post("/action", json={
             "scene_id": "tavern-01",
@@ -266,7 +277,6 @@ async def test_action_with_character_returns_200(client):
         assert action_resp.status_code == 200
 
 
-@pytest.mark.xfail(reason="Backend bug: action without character returns 409 instead of 400 per acceptance criteria.")
 @pytest.mark.asyncio
 async def test_action_without_character_returns_400(client):
     """Without a character, POST /action must return HTTP 400."""
@@ -284,23 +294,6 @@ async def test_action_without_character_returns_400(client):
         assert resp.status_code == 400
 
 
-@pytest.mark.asyncio
-async def test_action_without_character_returns_error(client):
-    """Without a character, POST /action returns an error (actual backend behavior: 409)."""
-    async with client as c:
-        # Create a valid session first so the session exists, then call /action without creating a character
-        bootstrap_resp = await c.get("/state/bootstrap")
-        session_id = bootstrap_resp.json()["session_id"]
-
-        resp = await c.post("/action", json={
-            "scene_id": "tavern-01",
-            "actor": "Nobody",
-            "intent": "look around",
-            "approach": "just look",
-        }, headers={"X-Session-Id": session_id})
-        assert resp.status_code == 409
-
-
 # ---------------------------------------------------------------------------
 # 8. Skill / check modifier integration correctness
 # ---------------------------------------------------------------------------
@@ -315,7 +308,10 @@ async def test_action_check_uses_correct_skill_modifier(client):
             "ability_generation": "manual",
             "abilities": {"str": 16, "dex": 10, "con": 10, "int": 10, "wis": 10, "cha": 10},
         })
-        session_id = create_resp.json()["session_id"]
+        session_id = create_resp.headers.get("x-session-id")
+        if not session_id:
+            bootstrap = await c.get("/state/bootstrap")
+            session_id = bootstrap.json()["session_id"]
 
         action_resp = await c.post("/action", json={
             "scene_id": "tavern-01",
@@ -369,3 +365,131 @@ async def test_create_character_rejects_invalid_generation_method(client):
             "ability_generation": "roll_3d6",
         })
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_character_rejects_ability_out_of_range(client):
+    """Ability scores outside 3-18 must be rejected."""
+    async with client as c:
+        resp = await c.post("/character/create", json={
+            "name": "Bad",
+            "character_class": "warrior",
+            "ability_generation": "manual",
+            "abilities": {"str": 20, "dex": 10, "con": 10, "int": 10, "wis": 10, "cha": 10},
+        })
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_character_rejects_ability_too_low(client):
+    """Ability scores below 3 must be rejected."""
+    async with client as c:
+        resp = await c.post("/character/create", json={
+            "name": "Bad",
+            "character_class": "warrior",
+            "ability_generation": "manual",
+            "abilities": {"str": 2, "dex": 10, "con": 10, "int": 10, "wis": 10, "cha": 10},
+        })
+    assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# 10. Character card format
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_character_card_format(client):
+    """POST /character/create must return a complete character card."""
+    async with client as c:
+        resp = await c.post("/character/create", json={
+            "name": "CardTest",
+            "character_class": "warrior",
+            "ability_generation": "manual",
+            "abilities": {"str": 16, "dex": 14, "con": 14, "int": 10, "wis": 12, "cha": 10},
+        })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["name"] == "CardTest"
+    assert data["class"] == "warrior"
+    assert data["level"] == 1
+    assert data["proficiency_bonus"] == 2
+    assert "attributes" in data
+    for attr in ("str", "dex", "con", "int", "wis", "cha"):
+        assert "score" in data["attributes"][attr]
+        assert "modifier" in data["attributes"][attr]
+    assert "hp" in data
+    assert "current" in data["hp"]
+    assert "max" in data["hp"]
+    assert "ac" in data
+    assert "skills" in data
+    assert len(data["skills"]) > 0
+    for skill in data["skills"]:
+        assert "name" in skill
+        assert "ability" in skill
+        assert "proficient" in skill
+        assert "modifier" in skill
+
+
+@pytest.mark.asyncio
+async def test_get_character_returns_404_when_no_character(client):
+    """GET /character without a created character must return 404."""
+    async with client as c:
+        bootstrap = await c.get("/state/bootstrap")
+        session_id = bootstrap.json()["session_id"]
+        resp = await c.get("/character", headers={"X-Session-Id": session_id})
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_character_matches_create_response(client):
+    """GET /character must return the same card as POST /character/create."""
+    async with client as c:
+        create_resp = await c.post("/character/create", json={
+            "name": "Match",
+            "character_class": "rogue",
+            "ability_generation": "standard_array",
+        })
+        assert create_resp.status_code == 200
+        created = create_resp.json()
+
+        session_id = create_resp.headers.get("x-session-id")
+        if not session_id:
+            bootstrap = await c.get("/state/bootstrap")
+            session_id = bootstrap.json()["session_id"]
+
+        get_resp = await c.get("/character", headers={"X-Session-Id": session_id})
+        assert get_resp.status_code == 200
+        fetched = get_resp.json()
+        assert fetched == created
+
+
+@pytest.mark.asyncio
+async def test_character_create_query_reset_flow(client):
+    """Integration: create -> query -> reset -> query returns 404."""
+    async with client as c:
+        # Create character
+        create_resp = await c.post("/character/create", json={
+            "name": "Flow",
+            "character_class": "mage",
+            "ability_generation": "standard_array",
+        })
+        assert create_resp.status_code == 200
+
+        session_id = create_resp.headers.get("x-session-id")
+        if not session_id:
+            bootstrap = await c.get("/state/bootstrap")
+            session_id = bootstrap.json()["session_id"]
+
+        # Query character
+        get_resp = await c.get("/character", headers={"X-Session-Id": session_id})
+        assert get_resp.status_code == 200
+        assert get_resp.json()["name"] == "Flow"
+        assert get_resp.json()["class"] == "mage"
+
+        # Reset
+        reset_resp = await c.post("/reset", headers={"X-Session-Id": session_id})
+        assert reset_resp.status_code == 200
+
+        # Query after reset
+        get_after = await c.get("/character", headers={"X-Session-Id": session_id})
+        assert get_after.status_code == 404

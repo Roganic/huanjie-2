@@ -19,11 +19,15 @@ from .models.state import (
     AbilityScores,
     Actor,
     BootstrapState,
+    CharacterCard,
     CharacterClass,
     CharacterCreateRequest,
+    CharacterSkill,
     GamePhase,
+    HP,
     NarrativeHistoryEntry,
     Scene,
+    Skill,
 )
 
 _CHARACTER_CREATION_SCENE_INIT = dict(
@@ -54,7 +58,7 @@ _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
             "wis": 12,
             "cha": 10,
         }),
-        "hp": 12,
+        "hp": 10,
         "ac": 16,
     },
     CharacterClass.MAGE: {
@@ -67,7 +71,7 @@ _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
             "wis": 14,
             "cha": 10,
         }),
-        "hp": 8,
+        "hp": 6,
         "ac": 12,
     },
     CharacterClass.ROGUE: {
@@ -80,9 +84,36 @@ _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
             "wis": 14,
             "cha": 8,
         }),
-        "hp": 10,
+        "hp": 8,
         "ac": 14,
     },
+}
+
+_SKILL_DEFINITIONS: list[dict[str, str]] = [
+    {"name": "athletics", "ability": "str"},
+    {"name": "acrobatics", "ability": "dex"},
+    {"name": "sleight_of_hand", "ability": "dex"},
+    {"name": "stealth", "ability": "dex"},
+    {"name": "arcana", "ability": "int"},
+    {"name": "history", "ability": "int"},
+    {"name": "investigation", "ability": "int"},
+    {"name": "nature", "ability": "int"},
+    {"name": "religion", "ability": "int"},
+    {"name": "animal_handling", "ability": "wis"},
+    {"name": "insight", "ability": "wis"},
+    {"name": "medicine", "ability": "wis"},
+    {"name": "perception", "ability": "wis"},
+    {"name": "survival", "ability": "wis"},
+    {"name": "deception", "ability": "cha"},
+    {"name": "intimidation", "ability": "cha"},
+    {"name": "performance", "ability": "cha"},
+    {"name": "persuasion", "ability": "cha"},
+]
+
+_CLASS_SKILL_PROFICIENCIES: dict[CharacterClass, set[str]] = {
+    CharacterClass.WARRIOR: {"athletics", "intimidation", "perception", "survival"},
+    CharacterClass.MAGE: {"arcana", "history", "investigation", "insight"},
+    CharacterClass.ROGUE: {"acrobatics", "sleight_of_hand", "stealth", "deception", "persuasion"},
 }
 
 _ENEMY_INIT = dict(
@@ -268,6 +299,19 @@ def _roll_4d6_drop_lowest() -> AbilityScores:
     })
 
 
+def _build_skills(abilities: AbilityScores, character_class: CharacterClass, proficiency_bonus: int) -> list[Skill]:
+    proficiencies = _CLASS_SKILL_PROFICIENCIES.get(character_class, set())
+    skills: list[Skill] = []
+    for definition in _SKILL_DEFINITIONS:
+        ability = definition["ability"]
+        name = definition["name"]
+        proficient = name in proficiencies
+        ability_mod = abilities.modifier(ability)
+        modifier = ability_mod + (proficiency_bonus if proficient else 0)
+        skills.append(Skill(name=name, ability=ability, proficient=proficient, modifier=modifier))
+    return skills
+
+
 def create_character(
     req: CharacterCreateRequest,
     session_id: str | None = None,
@@ -276,7 +320,7 @@ def create_character(
     with _SESSION_LOCK:
         session = _get_session(resolved_session_id, create_if_missing=True)
         template = _CLASS_TEMPLATES[req.character_class]
-        hp = int(template["hp"])
+        base_hp = int(template["hp"])
         base_ac = int(template["ac"])
         actor_id = f"{req.character_class.value}-{req.name.strip().lower().replace(' ', '-')}"
 
@@ -288,6 +332,10 @@ def create_character(
         else:  # standard_array (default)
             abilities = template["abilities"]
 
+        # Calculate HP: base + CON modifier
+        con_mod = abilities.modifier("con")
+        hp = base_hp + con_mod
+
         # Calculate AC based on DEX modifier (for light armor classes)
         dex_mod = abilities.modifier("dex")
         if req.character_class == CharacterClass.MAGE:
@@ -297,16 +345,20 @@ def create_character(
         else:  # WARRIOR
             ac = base_ac  # Chain mail (no DEX bonus)
 
+        skills = _build_skills(abilities, req.character_class, proficiency_bonus=2)
+
         session.actor = Actor(
             id=actor_id,
             name=req.name.strip(),
             character_class=req.character_class,
             abilities=abilities,
             proficiency_bonus=2,
+            level=1,
             hp=hp,
             hp_max=hp,
             ac=ac,
             description=str(template["description"]),
+            skills=skills,
         )
         session.phase = GamePhase.ADVENTURE
         session.scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [session.actor.id]})
@@ -314,6 +366,55 @@ def create_character(
         session.narrative_history = []
         _save_session(session)
     return get_bootstrap_state(session_id=resolved_session_id)
+
+
+def get_character_card(session_id: str | None = None) -> CharacterCard | None:
+    actor = get_actor(session_id=session_id)
+    if actor is None:
+        return None
+    return CharacterCard(
+        name=actor.name,
+        class_=actor.character_class.value if actor.character_class else "",
+        level=actor.level,
+        proficiency_bonus=actor.proficiency_bonus,
+        attributes={
+            "str": {
+                "score": actor.abilities.str_,
+                "modifier": actor.abilities.modifier("str"),
+            },
+            "dex": {
+                "score": actor.abilities.dex,
+                "modifier": actor.abilities.modifier("dex"),
+            },
+            "con": {
+                "score": actor.abilities.con,
+                "modifier": actor.abilities.modifier("con"),
+            },
+            "int": {
+                "score": actor.abilities.int_,
+                "modifier": actor.abilities.modifier("int"),
+            },
+            "wis": {
+                "score": actor.abilities.wis,
+                "modifier": actor.abilities.modifier("wis"),
+            },
+            "cha": {
+                "score": actor.abilities.cha,
+                "modifier": actor.abilities.modifier("cha"),
+            },
+        },
+        hp=HP(current=actor.hp, max=actor.hp_max),
+        ac=actor.ac,
+        skills=[
+            CharacterSkill(
+                name=skill.name,
+                ability=skill.ability,
+                proficient=skill.proficient,
+                modifier=skill.modifier,
+            )
+            for skill in actor.skills
+        ],
+    )
 
 
 def apply_effects(effects: list[Effect], session_id: str | None = None) -> None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, validator
 
 
 class AbilityScores(BaseModel):
@@ -17,6 +17,13 @@ class AbilityScores(BaseModel):
     cha: int
 
     model_config = {"populate_by_name": True}
+
+    @field_validator("str_", "dex", "con", "int_", "wis", "cha")
+    @classmethod
+    def _ability_score_range(cls, v: int) -> int:
+        if not 3 <= v <= 18:
+            raise ValueError("ability score must be between 3 and 18")
+        return v
 
     def modifier(self, ability: str) -> int:
         """Return the D&D-style modifier for a given ability abbreviation."""
@@ -46,17 +53,26 @@ class GamePhase(str, Enum):
     ADVENTURE = "adventure"
 
 
+class Skill(BaseModel):
+    name: str
+    ability: str
+    proficient: bool
+    modifier: int
+
+
 class Actor(BaseModel):
     id: str
     name: str
     character_class: CharacterClass | None = None
     abilities: AbilityScores
     proficiency_bonus: int = 2
+    level: int = 1
     hp: int
     hp_max: int
     ac: int = 10  # Armor Class, default 10 + DEX modifier
     conditions: list[str] = Field(default_factory=list)
     description: str = ""
+    skills: list[Skill] = Field(default_factory=list)
 
 
 class Scene(BaseModel):
@@ -83,6 +99,36 @@ class BootstrapState(BaseModel):
     actor: Actor | None = None
     scene: Scene
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
+
+
+class AttributeWithModifier(BaseModel):
+    score: int
+    modifier: int
+
+
+class HP(BaseModel):
+    current: int
+    max: int
+
+
+class CharacterSkill(BaseModel):
+    name: str
+    ability: str
+    proficient: bool
+    modifier: int
+
+
+class CharacterCard(BaseModel):
+    name: str
+    class_: str = Field(..., alias="class")
+    level: int
+    proficiency_bonus: int
+    attributes: dict[str, AttributeWithModifier]
+    hp: HP
+    ac: int
+    skills: list[CharacterSkill]
+
+    model_config = {"populate_by_name": True}
 
 
 class CharacterCreateRequest(BaseModel):

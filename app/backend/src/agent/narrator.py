@@ -12,6 +12,7 @@ Hard Constraint Principle:
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Optional
 
@@ -24,9 +25,16 @@ from ..models.action import (
 )
 from ..models.state import Actor, NarrativeHistoryEntry, Scene
 from .providers import get_provider
+from .resolution_constraints import (
+    NarrationConstraintContext,
+    build_hard_constraints,
+    build_narrative_prompt,
+    find_contradictions,
+)
 
 # Backward-compatible export for existing scripts/tests.
 KIMI_API_KEY = os.getenv("KIMI_API_KEY", "")
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Prompt Templates
@@ -71,90 +79,27 @@ class NarrationBundle(BaseModel):
     scene_progression: str
 
 
-FAILURE_HIT_INDICATORS = (
-    " hits ",
-    " hit ",
-    " strikes ",
-    " strike ",
-    " struck ",
-    " connected ",
-    " lands cleanly",
-    " landed cleanly",
-    " wounds ",
-    " wounded ",
-    " slashes ",
-    " pierces ",
-)
-
-DEFEAT_INDICATORS = (
-    " defeated",
-    " defeat ",
-    " slain",
-    " kills ",
-    " killed ",
-    " dead",
-)
-
-
 def _build_hard_constraints(
     outcome: Outcome,
     check_result: Optional[dict] = None,
     attack_result: Optional[dict] = None,
+    saving_throw_result: Optional[dict] = None,
     effects: Optional[list[Effect]] = None,
     actor: Optional[Actor] = None,
     target: Optional[Actor] = None,
 ) -> list[str]:
-    """Build the hard constraint section listing rule engine facts.
-    
-    These are inviolable facts that the AI narrative must respect.
-    """
-    lines: list[str] = []
-    
-    # Core outcome - this is always present
-    outcome_cn = "成功" if outcome == Outcome.SUCCESS else "失败"
-    lines.append(f"- 裁定结果 / Outcome: {outcome_cn} ({outcome.value})")
-    
-    # Check details with specific numbers
-    if check_result:
-        ability = check_result.get("ability", "")
-        roll = check_result.get("roll", 0)
-        total = check_result.get("total", 0)
-        dc = check_result.get("dc", 0)
-        modifier = check_result.get("modifier", 0)
-        lines.append(f"- 检定详情 / Check: {ability.upper()}, 掷骰={roll}, 调整值={modifier}, 总计={total}, DC={dc}")
-    
-    # Attack details with specific numbers
-    if attack_result:
-        weapon = attack_result.get("weapon", "weapon")
-        target_name = attack_result.get("target", "enemy")
-        damage = attack_result.get("damage")
-        
-        if outcome == Outcome.SUCCESS:
-            if damage:
-                damage_total = damage.get("total", 0)
-                lines.append(f"- 命中结果 / Attack: 命中 (HIT)")
-                lines.append(f"- 伤害数值 / Damage: {damage_total} 点")
-                if target:
-                    new_hp = max(0, target.hp - damage_total)
-                    lines.append(f"- 目标状态 / Target State: {target.name} HP 从 {target.hp} 变为 {new_hp}")
-            else:
-                lines.append(f"- 命中结果 / Attack: 命中 (HIT)，但未造成伤害")
-        else:
-            lines.append(f"- 命中结果 / Attack: 未命中 (MISS)")
-            lines.append(f"- 伤害数值 / Damage: 0 (攻击未命中，无伤害)")
-    
-    # State changes from effects
-    if effects:
-        for eff in effects:
-            if eff.field == "hp" and isinstance(eff.delta, int):
-                delta_str = f"+{eff.delta}" if eff.delta > 0 else str(eff.delta)
-                lines.append(f"- 状态变更 / State Change: {eff.target} HP {delta_str}")
-            elif eff.field == "conditions_add" and isinstance(eff.delta, str):
-                lines.append(f"- 状态变更 / State Change: {eff.target} 获得状态 [{eff.delta}]")
-            elif eff.field == "conditions_remove" and isinstance(eff.delta, str):
-                lines.append(f"- 状态变更 / State Change: {eff.target} 移除状态 [{eff.delta}]")
-    
-    return lines
+    """Backward-compatible wrapper around centralized constraint mapping."""
+    return build_hard_constraints(
+        NarrationConstraintContext(
+            outcome=outcome,
+            check_result=check_result,
+            attack_result=attack_result,
+            saving_throw_result=saving_throw_result,
+            effects=effects,
+            actor=actor,
+            target=target,
+        )
+    )
 
 
 def _build_narrative_prompt(
@@ -164,116 +109,27 @@ def _build_narrative_prompt(
     outcome: Outcome,
     check_result: Optional[dict] = None,
     attack_result: Optional[dict] = None,
+    saving_throw_result: Optional[dict] = None,
     effects: Optional[list[Effect]] = None,
     target: Optional[Actor] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
 ) -> str:
-    """Build the user prompt for narrative generation with hard constraints.
-    
-    The prompt explicitly separates:
-    1. 【硬约束区】Hard Constraints - rule engine facts (ABSOLUTE)
-    2. 【叙事空间】Narrative Space - context for creative writing
-    """
-    lines: list[str] = []
-    
-    # ========================================================================
-    # SECTION 1: HARD CONSTRAINTS (硬约束区)
-    # These are inviolable facts from the rule engine
-    # ========================================================================
-    lines.append("【硬约束区 / HARD CONSTRAINTS】")
-    lines.append("以下是由规则引擎裁定的确定事实，叙事必须与此完全一致，不可更改：")
-    lines.append("")
-    
-    hard_constraints = _build_hard_constraints(
-        outcome=outcome,
-        check_result=check_result,
-        attack_result=attack_result,
-        effects=effects,
+    """Backward-compatible wrapper around centralized prompt building."""
+    return build_narrative_prompt(
+        req=req,
         actor=actor,
-        target=target,
+        scene=scene,
+        context=NarrationConstraintContext(
+            outcome=outcome,
+            check_result=check_result,
+            attack_result=attack_result,
+            saving_throw_result=saving_throw_result,
+            effects=effects,
+            actor=actor,
+            target=target,
+        ),
+        narrative_history=narrative_history,
     )
-    lines.extend(hard_constraints)
-    lines.append("")
-    lines.append("=" * 60)
-    lines.append("")
-    
-    # ========================================================================
-    # SECTION 2: NARRATIVE SPACE (叙事空间)
-    # Context for creative writing (AI has freedom here)
-    # ========================================================================
-    lines.append("【叙事空间 / NARRATIVE SPACE】")
-    lines.append("以下信息供叙事参考，你可以自由发挥：")
-    lines.append("")
-    
-    # Scene context
-    lines.append(f"场景 / Scene: {scene.name}")
-    lines.append(f"场景描述 / Scene Description: {scene.description}")
-    lines.append("")
-    
-    # Character context
-    lines.append(f"角色 / Character: {actor.name}")
-    lines.append(f"角色描述 / Character Description: {actor.description}")
-    lines.append(f"角色状态 / Character Status: HP {actor.hp}/{actor.hp_max}")
-    lines.append("")
-
-    lines.append("会话历史 / Session Narrative History:")
-    if narrative_history:
-        for idx, entry in enumerate(narrative_history, start=1):
-            resolution_json = json.dumps(
-                entry.resolution_summary,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
-            lines.append(f"{idx}. 行动: {entry.action_summary}")
-            lines.append(f"   裁定: {resolution_json}")
-            lines.append(f"   摘要: {entry.narration_summary}")
-    else:
-        lines.append("无。当前是本次会话中最早需要参考的动作。")
-    lines.append("")
-    
-    # Action context
-    lines.append(f"行动意图 / Action Intent: {req.intent}")
-    lines.append(f"行动方式 / Action Approach: {req.approach}")
-    
-    # Ability context (flavor only, no numbers)
-    if check_result:
-        ability = check_result.get("ability", "")
-        ability_desc = {
-            "str": "力量与体格 / strength and physical power",
-            "dex": "敏捷与灵巧 / agility and finesse",
-            "con": "体质与耐力 / endurance and resilience",
-            "int": "智力与学识 / intellect and knowledge",
-            "wis": "感知与洞察 / perception and insight",
-            "cha": "魅力与个性 / force of personality",
-        }.get(ability, ability)
-        lines.append(f"相关属性 / Relevant Ability: {ability_desc}")
-    
-    # Combat context
-    if attack_result:
-        weapon = attack_result.get("weapon", "weapon")
-        target_name = attack_result.get("target", "enemy")
-        lines.append("")
-        lines.append(f"战斗信息 / Combat Info:")
-        lines.append(f"- 武器 / Weapon: {weapon}")
-        lines.append(f"- 目标 / Target: {target_name}")
-    
-    # ========================================================================
-    # SECTION 3: WRITING INSTRUCTION
-    # ========================================================================
-    lines.append("")
-    lines.append("=" * 60)
-    lines.append("")
-    lines.append("【写作指示 / WRITING INSTRUCTION】")
-    lines.append("基于以上硬约束和叙事空间，返回一个 JSON 对象，包含 action_result 与 scene_progression 两个字段。")
-    lines.append("要求：")
-    lines.append("1. 严格遵守硬约束区的事实，不得与之矛盾")
-    lines.append("2. 如果结果是失败，绝对不能描述为成功或命中")
-    lines.append("3. 如果伤害是0，绝对不能描述为造成伤害")
-    lines.append("4. 使用生动的感官细节，避免系统术语")
-    lines.append("5. scene_progression 必须至少包含 NPC 反应、环境变化、或对玩家的明确提示之一")
-    lines.append('6. 仅返回 JSON，例如 {"action_result": "...", "scene_progression": "..."}')
-
-    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -402,25 +258,27 @@ def _narration_respects_constraints(
     narration: NarrationBundle,
     outcome: Outcome,
     attack_result: Optional[dict] = None,
+    check_result: Optional[dict] = None,
+    saving_throw_result: Optional[dict] = None,
+    effects: Optional[list[Effect]] = None,
+    actor: Optional[Actor] = None,
     target: Optional[Actor] = None,
 ) -> bool:
-    """Lightweight guardrail for obvious contradictions against rule results."""
-    combined = f" {narration.action_result.lower()} {narration.scene_progression.lower()} "
-
-    if attack_result:
-        damage = attack_result.get("damage") or {}
-        damage_total = int(damage.get("total", 0) or 0)
-
-        if outcome == Outcome.FAILURE or damage_total <= 0:
-            if any(indicator in combined for indicator in FAILURE_HIT_INDICATORS):
-                return False
-
-        if target and damage_total > 0:
-            new_hp = max(0, target.hp - damage_total)
-            if new_hp > 0 and any(indicator in combined for indicator in DEFEAT_INDICATORS):
-                return False
-
-    return True
+    """Backward-compatible boolean helper for contradiction validation."""
+    reasons = find_contradictions(
+        action_result=narration.action_result,
+        scene_progression=narration.scene_progression,
+        context=NarrationConstraintContext(
+            outcome=outcome,
+            check_result=check_result,
+            attack_result=attack_result,
+            saving_throw_result=saving_throw_result,
+            effects=effects,
+            actor=actor,
+            target=target,
+        ),
+    )
+    return not reasons
 
 
 async def _call_kimi_api(prompt: str) -> Optional[NarrationBundle]:
@@ -446,6 +304,7 @@ def generate_narration(
     outcome: Outcome,
     check_result: Optional[dict] = None,
     attack_result: Optional[dict] = None,
+    saving_throw_result: Optional[dict] = None,
     effects: Optional[list[Effect]] = None,
     target: Optional[Actor] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
@@ -471,7 +330,15 @@ def generate_narration(
     Returns:
         Narration bundle for action result and scene progression
     """
-    # Build the prompt with hard constraints
+    context = NarrationConstraintContext(
+        outcome=outcome,
+        check_result=check_result,
+        attack_result=attack_result,
+        saving_throw_result=saving_throw_result,
+        effects=effects,
+        actor=actor,
+        target=target,
+    )
     prompt = _build_narrative_prompt(
         req=req,
         actor=actor,
@@ -479,34 +346,71 @@ def generate_narration(
         outcome=outcome,
         check_result=check_result,
         attack_result=attack_result,
+        saving_throw_result=saving_throw_result,
         effects=effects,
         target=target,
         narrative_history=narrative_history,
     )
 
-    narrative: Optional[NarrationBundle] = None
-    try:
-        import asyncio
+    def _run_provider(current_prompt: str) -> Optional[NarrationBundle]:
+        try:
+            import asyncio
 
-        if req.provider == "openai":
-            narrative = asyncio.run(_call_openai_api(prompt))
-        elif req.provider == "kimi" or KIMI_API_KEY:
-            narrative = asyncio.run(_call_kimi_api(prompt))
-        else:
+            if req.provider == "openai":
+                return asyncio.run(_call_openai_api(current_prompt))
+            if req.provider == "kimi" or KIMI_API_KEY:
+                return asyncio.run(_call_kimi_api(current_prompt))
+
             provider = get_provider(req.provider)
-            if provider is not None:
-                generated = asyncio.run(provider.generate(NARRATIVE_SYSTEM_PROMPT, prompt))
-                narrative = _parse_narration_bundle(generated) if generated else None
-    except Exception:
-        narrative = None
+            if provider is None:
+                return None
 
-    if narrative and _narration_respects_constraints(
-        narration=narrative,
-        outcome=outcome,
-        attack_result=attack_result,
-        target=target,
-    ):
-        return narrative
+            generated = asyncio.run(provider.generate(NARRATIVE_SYSTEM_PROMPT, current_prompt))
+            return _parse_narration_bundle(generated) if generated else None
+        except Exception:
+            return None
 
-    # Fall back to template
+    narrative = _run_provider(prompt)
+    if narrative:
+        reasons = find_contradictions(
+            action_result=narrative.action_result,
+            scene_progression=narrative.scene_progression,
+            context=context,
+        )
+        if not reasons:
+            return narrative
+
+        logger.warning(
+            "Narration contradicted rule resolution; retrying once",
+            extra={
+                "outcome": outcome.value,
+                "action_intent": req.intent,
+                "reasons": reasons,
+            },
+        )
+        retry_prompt = (
+            f"{prompt}\n\n"
+            "【修正要求 / CORRECTION REQUIRED】\n"
+            "你上一版叙事与硬约束冲突。请严格修正，不得重复以下问题：\n"
+            f"{json.dumps(reasons, ensure_ascii=False)}"
+        )
+        retry_narrative = _run_provider(retry_prompt)
+        if retry_narrative:
+            retry_reasons = find_contradictions(
+                action_result=retry_narrative.action_result,
+                scene_progression=retry_narrative.scene_progression,
+                context=context,
+            )
+            if not retry_reasons:
+                return retry_narrative
+
+            logger.warning(
+                "Narration retry still contradicted rule resolution; using fallback",
+                extra={
+                    "outcome": outcome.value,
+                    "action_intent": req.intent,
+                    "reasons": retry_reasons,
+                },
+            )
+
     return _fallback_narration_bundle(req, actor, scene, outcome, attack_result)

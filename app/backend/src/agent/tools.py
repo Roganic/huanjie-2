@@ -297,11 +297,11 @@ def tool_generate_narrative(
     from .narrator import generate_narration
     
     state = tool_get_current_state()
-    
-    # Build combined context for narrative
-    context = {}
-    if saving_throw_result:
-        context["saving_throw"] = saving_throw_result
+    target = None
+    if attack_result:
+        target_name = attack_result.get("target")
+        if isinstance(target_name, str):
+            target = get_actor_by_id_or_name(target_name)
     
     narrative = generate_narration(
         req=req,
@@ -310,7 +310,9 @@ def tool_generate_narrative(
         outcome=outcome,
         check_result=check_result,
         attack_result=attack_result,
+        saving_throw_result=saving_throw_result,
         effects=effects,
+        target=target,
         narrative_history=narrative_history or get_narrative_context(),
     )
     

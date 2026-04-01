@@ -236,13 +236,28 @@ def build_narrative_prompt(
     lines.append("")
     lines.append(f"场景 / Scene: {scene.name}")
     lines.append(f"场景描述 / Scene Description: {scene.description}")
+    if scene.flags:
+        lines.append(f"场景状态 / Scene Flags: {', '.join(scene.flags)}")
     lines.append("")
     lines.append(f"角色 / Character: {actor.name}")
     lines.append(f"角色描述 / Character Description: {actor.description}")
     character_class_str = actor.character_class.value if actor.character_class else "adventurer"
     lines.append(f"角色职业 / Character Class: {character_class_str}")
     lines.append(f"角色等级 / Level: 1 (熟练加值 / Proficiency: +{actor.proficiency_bonus})")
+    lines.append(
+        f"角色属性 / Abilities: "
+        f"STR {actor.abilities.str_}({actor.abilities.modifier('str'):+d}), "
+        f"DEX {actor.abilities.dex}({actor.abilities.modifier('dex'):+d}), "
+        f"CON {actor.abilities.con}({actor.abilities.modifier('con'):+d}), "
+        f"INT {actor.abilities.int_}({actor.abilities.modifier('int'):+d}), "
+        f"WIS {actor.abilities.wis}({actor.abilities.modifier('wis'):+d}), "
+        f"CHA {actor.abilities.cha}({actor.abilities.modifier('cha'):+d})"
+    )
     lines.append(f"角色状态 / Character Status: HP {actor.hp}/{actor.hp_max}, AC {actor.ac}")
+    if actor.skills:
+        proficient_skills = [s.name for s in actor.skills if s.proficient]
+        if proficient_skills:
+            lines.append(f"熟练技能 / Proficient Skills: {', '.join(proficient_skills)}")
     lines.append("")
 
     if context.target:

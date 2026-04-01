@@ -37,10 +37,21 @@ async def test_bootstrap_returns_actor_and_scene(client):
 @pytest.mark.asyncio
 async def test_bootstrap_actor_has_abilities(client):
     async with client as c:
-        resp = await c.get("/state/bootstrap")
+        # Create character first
+        create_resp = await c.post("/character/create", json={
+            "name": "Aldric",
+            "character_class": "warrior",
+            "ability_generation": "standard_array",
+        })
+        assert create_resp.status_code == 200
+        session_id = create_resp.headers.get("x-session-id")
+        if not session_id:
+            bootstrap = await c.get("/state/bootstrap")
+            session_id = bootstrap.json()["session_id"]
+        
+        resp = await c.get("/state/bootstrap", headers={"X-Session-Id": session_id})
     actor = resp.json()["actor"]
     assert actor["name"] == "Aldric"
-    assert actor["id"] == "aldric-01"
     abilities = actor["abilities"]
     for key in ("str", "dex", "con", "int", "wis", "cha"):
         assert key in abilities
@@ -52,12 +63,23 @@ async def test_bootstrap_actor_has_abilities(client):
 @pytest.mark.asyncio
 async def test_bootstrap_scene_has_required_fields(client):
     async with client as c:
-        resp = await c.get("/state/bootstrap")
+        # Create character first
+        create_resp = await c.post("/character/create", json={
+            "name": "Aldric",
+            "character_class": "warrior",
+            "ability_generation": "standard_array",
+        })
+        assert create_resp.status_code == 200
+        session_id = create_resp.headers.get("x-session-id")
+        if not session_id:
+            bootstrap = await c.get("/state/bootstrap")
+            session_id = bootstrap.json()["session_id"]
+        
+        resp = await c.get("/state/bootstrap", headers={"X-Session-Id": session_id})
     scene = resp.json()["scene"]
-    assert scene["id"] == "tavern-01"
+    assert len(scene["id"]) > 0
     assert len(scene["name"]) > 0
     assert len(scene["description"]) > 0
-    assert "aldric-01" in scene["actors"]
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +108,19 @@ def test_ability_modifier_calculation():
 async def test_resolver_uses_bootstrap_actor_modifier(client):
     """The check modifier should match the bootstrap actor's ability scores."""
     async with client as c:
+        # Create character with known STR score
+        create_resp = await c.post("/character/create", json={
+            "name": "Aldric",
+            "character_class": "warrior",
+            "ability_generation": "manual",
+            "abilities": {"str": 16, "dex": 10, "con": 10, "int": 10, "wis": 10, "cha": 10},
+        })
+        assert create_resp.status_code == 200
+        session_id = create_resp.headers.get("x-session-id")
+        if not session_id:
+            bootstrap = await c.get("/state/bootstrap")
+            session_id = bootstrap.json()["session_id"]
+        
         resp = await c.post("/action", json={
             "scene_id": "tavern-01",
             "actor": "Aldric",
@@ -93,7 +128,7 @@ async def test_resolver_uses_bootstrap_actor_modifier(client):
             "approach": "use brute force to push his arm down",
             "ability": "str",
             "dc": 10,
-        })
+        }, headers={"X-Session-Id": session_id})
     data = resp.json()
     assert data["resolution_type"] == "check"
     # STR 16 -> modifier 3

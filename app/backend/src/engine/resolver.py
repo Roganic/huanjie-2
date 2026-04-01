@@ -151,11 +151,13 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
 
     # --- auto-success path ---
     if _is_auto_success(req.intent, req.approach):
+        # Auto-success actions are truly trivial, so no time cost or effects
         narration = generate_narration(
             req=req,
             actor=actor,
             scene=scene,
             outcome=Outcome.SUCCESS,
+            effects=[],
         )
         return ActionResponse(
             action_summary=action_summary,
@@ -209,6 +211,7 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
         scene=scene,
         outcome=outcome,
         check_result=check_result,
+        effects=effects,
     )
 
     return ActionResponse(
@@ -327,13 +330,15 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
         "damage": damage_detail.model_dump() if damage_detail else None,
     }
     
-    # Generate AI narration with fallback
+    # Generate AI narration with fallback (pass target and effects for hard constraints)
     narration = generate_narration(
         req=req,
         actor=actor,
         scene=scene,
         outcome=outcome,
         attack_result=attack_result,
+        effects=effects,
+        target=target,
     )
 
     return ActionResponse(

@@ -922,6 +922,10 @@ function CharacterCreationScreen({
                 ))}
               </div>
             </div>
+            <div className="creation-preview-section">
+              <h3>职业技能</h3>
+              <SkillsList actor={actorPreview} compact />
+            </div>
           </>
         ) : (
           <div className="sidebar-loading">输入姓名并选择职业后查看预览。</div>
@@ -935,29 +939,52 @@ function createPreviewActor(draft: CharacterDraft): Actor | null {
   const trimmedName = draft.name.trim();
   if (!trimmedName) return null;
 
-  const classHp: Record<CharacterClass, number> = { warrior: 12, mage: 8, rogue: 10 };
-  const baseAc: Record<CharacterClass, number> = { warrior: 16, mage: 12, rogue: 14 };
+  // Base HP from hit die (max value) - matches backend CLASS_HIT_DICE
+  const classBaseHp: Record<CharacterClass, number> = { warrior: 10, mage: 6, rogue: 8 };
+  
+  // Calculate CON modifier and final HP
+  const conMod = getModifier(draft.abilities.con);
+  const baseHp = classBaseHp[draft.characterClass];
+  const hp = baseHp + conMod;
 
-  // Calculate AC based on abilities
+  // Calculate AC based on abilities and class
   const dexMod = getModifier(draft.abilities.dex);
-  let ac = baseAc[draft.characterClass];
+  let ac: number;
   if (draft.characterClass === "mage") {
-    ac = 10 + dexMod;
+    ac = 10 + dexMod;  // Unarmored
   } else if (draft.characterClass === "rogue") {
-    ac = 11 + dexMod;
+    ac = 11 + dexMod;  // Leather armor
+  } else {
+    ac = 16;  // Warrior with heavy armor (no DEX bonus)
   }
+
+  // Calculate skills with proficiency bonus
+  const profBonus = 2;
+  const classProfSkills = CLASS_SKILLS[draft.characterClass];
+  const allSkills = [...SKILLS, ...EXTRA_SKILLS];
+  const skills = allSkills.map(skill => {
+    const abilityMod = getModifier(draft.abilities[skill.ability]);
+    const isProficient = classProfSkills.includes(skill.name);
+    return {
+      name: skill.name,
+      ability: skill.ability,
+      proficient: isProficient,
+      modifier: abilityMod + (isProficient ? profBonus : 0),
+    };
+  });
 
   return {
     id: `preview-${draft.characterClass}`,
     name: trimmedName,
     character_class: draft.characterClass,
     abilities: draft.abilities,
-    proficiency_bonus: 2,
-    hp: classHp[draft.characterClass],
-    hp_max: classHp[draft.characterClass],
+    proficiency_bonus: profBonus,
+    hp,
+    hp_max: hp,
     ac,
     description: CLASS_SUMMARIES[draft.characterClass],
     conditions: [],
+    skills,
   };
 }
 

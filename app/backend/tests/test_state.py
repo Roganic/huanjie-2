@@ -30,6 +30,8 @@ async def test_bootstrap_returns_actor_and_scene(client):
     data = resp.json()
     assert "actor" in data
     assert "scene" in data
+    assert "narrative_history" in data
+    assert data["narrative_history"] == []
 
 
 @pytest.mark.asyncio

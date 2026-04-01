@@ -17,7 +17,7 @@ from src.agent.narrator import (
     NarrationBundle,
 )
 from src.models.action import ActionRequest, ActionType, Effect, Outcome
-from src.models.state import AbilityScores, Actor, Scene
+from src.models.state import AbilityScores, Actor, NarrativeHistoryEntry, Scene
 from src.main import app
 from src.state import reset_state
 
@@ -279,6 +279,32 @@ class TestBuildNarrativePrompt:
         assert "写作指示" in prompt or "WRITING INSTRUCTION" in prompt
         # Should mention hard constraints
         assert "硬约束" in prompt
+
+    def test_prompt_includes_session_narrative_history(self, sample_actor, sample_scene):
+        req = ActionRequest(
+            scene_id="dungeon-01",
+            actor="Aldric",
+            intent="search the altar",
+            approach="brush dust away and inspect the carvings",
+        )
+
+        prompt = _build_narrative_prompt(
+            req=req,
+            actor=sample_actor,
+            scene=sample_scene,
+            outcome=Outcome.SUCCESS,
+            narrative_history=[
+                NarrativeHistoryEntry(
+                    action_summary="Aldric questioned the ferryman",
+                    resolution_summary={"outcome": "success", "resolution_type": "check"},
+                    narration_summary="The ferryman revealed that the cave once housed a shrine.",
+                )
+            ],
+        )
+
+        assert "Session Narrative History" in prompt
+        assert "Aldric questioned the ferryman" in prompt
+        assert "The ferryman revealed" in prompt
 
 
 class TestNarrationConstraintValidation:
@@ -618,3 +644,36 @@ class TestPromptHardConstraintInjection:
                 "未命中" in hard_section or "MISS" in hard_section), (
             "Miss should explicitly state zero damage or miss in hard constraints"
         )
+
+
+@pytest.mark.asyncio
+async def test_second_action_prompt_includes_prior_narrative_history(monkeypatch, client):
+    prompts: list[str] = []
+    original_builder = _build_narrative_prompt
+
+    def capture_prompt(*args, **kwargs):
+        prompt = original_builder(*args, **kwargs)
+        prompts.append(prompt)
+        return prompt
+
+    monkeypatch.setattr("src.agent.narrator._build_narrative_prompt", capture_prompt)
+
+    async with client as c:
+        await c.post("/action", json={
+            "scene_id": "tavern-01",
+            "actor": "Aldric",
+            "intent": "inspect the fireplace",
+            "approach": "kneel beside the ashes and search for recent traces",
+        })
+        await c.post("/action", json={
+            "scene_id": "tavern-01",
+            "actor": "Aldric",
+            "intent": "question the innkeeper",
+            "approach": "ask about whoever used the hearth last",
+            "ability": "cha",
+            "dc": 10,
+        })
+
+    assert len(prompts) == 2
+    assert "Session Narrative History" in prompts[1]
+    assert "Aldric attempts to inspect the fireplace" in prompts[1]

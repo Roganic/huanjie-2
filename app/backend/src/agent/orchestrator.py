@@ -29,8 +29,14 @@ from ..models.action import (
     ResolutionType,
     SavingThrowDetail,
 )
-from ..models.state import Actor
-from ..state import get_actor, get_actor_by_id_or_name, get_scene
+from ..models.state import Actor, NarrativeHistoryEntry
+from ..state import (
+    append_narrative_history,
+    get_actor,
+    get_actor_by_id_or_name,
+    get_narrative_context,
+    get_scene,
+)
 from .narrator import generate_narration
 from .tools import (
     ApplyStateChangeResult,
@@ -165,6 +171,7 @@ class GMAgent:
         outcome: Outcome,
         check_result: Optional[dict] = None,
         attack_result: Optional[dict] = None,
+        saving_throw_result: Optional[dict] = None,
     ) -> NarrativeResult:
         """Call generate_narrative tool and record result."""
         result = tool_generate_narrative(
@@ -172,9 +179,42 @@ class GMAgent:
             outcome=outcome,
             check_result=check_result,
             attack_result=attack_result,
+            saving_throw_result=saving_throw_result,
+            narrative_history=get_narrative_context(),
         )
         self.tool_results.append(result)
         return result
+
+    def _record_narrative_history(
+        self,
+        action_summary: str,
+        resolution_type: ResolutionType,
+        outcome: Outcome,
+        narration_result: NarrativeResult,
+        check_result: Optional[dict] = None,
+        attack_result: Optional[dict] = None,
+        saving_throw_result: Optional[dict] = None,
+    ) -> None:
+        """Persist a compact narrative memory item for future prompt context."""
+        narration_summary = " ".join([
+            narration_result.narrative.strip(),
+            narration_result.scene_progression.strip(),
+        ]).strip()
+
+        append_narrative_history(
+            NarrativeHistoryEntry(
+                action_summary=action_summary,
+                resolution_summary={
+                    "resolution_type": resolution_type.value,
+                    "outcome": outcome.value,
+                    "check": check_result,
+                    "attack": attack_result,
+                    "saving_throw": saving_throw_result,
+                    "effects": [effect.model_dump(mode="json") for effect in self.effects],
+                },
+                narration_summary=narration_summary[:400],
+            )
+        )
     
     # -----------------------------------------------------------------------
     # Resolution Paths
@@ -206,6 +246,12 @@ class GMAgent:
         narrative_result = self._call_generate_narrative(
             req=req,
             outcome=Outcome.SUCCESS,
+        )
+        self._record_narrative_history(
+            action_summary=action_summary,
+            resolution_type=ResolutionType.AUTO_SUCCESS,
+            outcome=Outcome.SUCCESS,
+            narration_result=narrative_result,
         )
         
         return ActionResponse(
@@ -269,6 +315,13 @@ class GMAgent:
         narrative_result = self._call_generate_narrative(
             req=req,
             outcome=outcome,
+            check_result=check_result,
+        )
+        self._record_narrative_history(
+            action_summary=action_summary,
+            resolution_type=ResolutionType.CHECK,
+            outcome=outcome,
+            narration_result=narrative_result,
             check_result=check_result,
         )
         
@@ -378,6 +431,13 @@ class GMAgent:
         narrative_result = self._call_generate_narrative(
             req=req,
             outcome=outcome,
+            attack_result=attack_result,
+        )
+        self._record_narrative_history(
+            action_summary=action_summary,
+            resolution_type=ResolutionType.CHECK,
+            outcome=outcome,
+            narration_result=narrative_result,
             attack_result=attack_result,
         )
         
@@ -551,6 +611,15 @@ class GMAgent:
             req=req,
             outcome=outcome,
             attack_result=attack_result,
+            saving_throw_result=saving_throw_detail.model_dump() if saving_throw_detail else None,
+        )
+        self._record_narrative_history(
+            action_summary=action_summary,
+            resolution_type=ResolutionType.CHECK,
+            outcome=outcome,
+            narration_result=narrative_result,
+            attack_result=attack_result,
+            saving_throw_result=saving_throw_detail.model_dump() if saving_throw_detail else None,
         )
         
         return ActionResponse(

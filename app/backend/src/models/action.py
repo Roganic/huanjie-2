@@ -26,6 +26,10 @@ class ActionRequest(BaseModel):
     actor: str = Field(..., description="Who is acting")
     intent: str = Field(..., description="What the actor wants to achieve")
     approach: str = Field(..., description="How they attempt it")
+    provider: Optional[str] = Field(
+        default=None,
+        description="Narration provider override (e.g. kimi/openai)",
+    )
     action_type: ActionType = Field(
         default=ActionType.GENERIC,
         description="Type of action (generic, attack, or spell_attack)",

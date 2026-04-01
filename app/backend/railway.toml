@@ -1,5 +1,9 @@
 # Railway 部署配置
 # https://railway.app
+#
+# 部署后请在 Railway Dashboard → Variables 中配置：
+#   CORS_ALLOW_ORIGINS  (前端 GitHub Pages origin)
+#   KIMI_API_KEY        (或 OPENAI_API_KEY，至少配一个)
 
 [build]
 builder = "DOCKERFILE"

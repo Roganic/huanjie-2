@@ -1375,14 +1375,12 @@ function App() {
         ability_generation: creationDraft.abilityGeneration,
       };
 
-      // Backend ignores abilities when ability_generation is standard_array.
-      // To respect the player's allocation, send as manual with the chosen abilities.
-      if (creationDraft.abilityGeneration === "standard_array") {
+      // Backend ignores abilities when ability_generation is standard_array or random_4d6.
+      // To respect the player's chosen/rolled abilities, send as manual with the chosen abilities.
+      if (creationDraft.abilityGeneration === "standard_array" || creationDraft.abilityGeneration === "random_4d6") {
         body.ability_generation = "manual";
-        body.abilities = creationDraft.abilities;
-      } else {
-        body.abilities = creationDraft.abilities;
       }
+      body.abilities = creationDraft.abilities;
 
       const response = await fetch(apiUrl("/character/create"), {
         method: "POST",

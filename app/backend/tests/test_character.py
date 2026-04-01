@@ -331,7 +331,48 @@ async def test_action_check_uses_correct_ability_modifier(client):
 
 
 # ---------------------------------------------------------------------------
-# 9. Error paths
+# 9. Reset clears character and blocks actions
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_action_after_reset_returns_400(client):
+    """After POST /reset, POST /action must return 400 until a new character is created."""
+    async with client as c:
+        create_resp = await c.post("/character/create", json={
+            "name": "ResetAction",
+            "character_class": "warrior",
+            "ability_generation": "standard_array",
+        })
+        session_id = create_resp.headers.get("x-session-id")
+        if not session_id:
+            bootstrap = await c.get("/state/bootstrap")
+            session_id = bootstrap.json()["session_id"]
+
+        # Verify action works with character
+        action_resp = await c.post("/action", json={
+            "scene_id": "tavern-01",
+            "actor": "ResetAction",
+            "intent": "look around",
+            "approach": "casually glance",
+        }, headers={"X-Session-Id": session_id})
+        assert action_resp.status_code == 200
+
+        # Reset
+        reset_resp = await c.post("/reset", headers={"X-Session-Id": session_id})
+        assert reset_resp.status_code == 200
+
+        # Action after reset should fail
+        action_after = await c.post("/action", json={
+            "scene_id": "tavern-01",
+            "actor": "ResetAction",
+            "intent": "look around",
+            "approach": "casually glance",
+        }, headers={"X-Session-Id": session_id})
+        assert action_after.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# 10. Error paths
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio

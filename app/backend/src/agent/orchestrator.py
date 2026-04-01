@@ -27,6 +27,7 @@ from ..models.action import (
     Effect,
     Outcome,
     ResolutionType,
+    SavingThrowDetail,
 )
 from ..models.state import Actor
 from ..state import get_actor, get_actor_by_id_or_name, get_scene
@@ -106,6 +107,9 @@ class GMAgent:
         actor = state_result.actor
         
         # Step 2: Route to appropriate resolution path
+        if req.action_type == ActionType.SPELL_ATTACK or req.requires_saving_throw:
+            return self._resolve_spell_attack(req, actor)
+        
         if req.action_type == ActionType.ATTACK or req.weapon is not None:
             return self._resolve_attack(req, actor)
         
@@ -407,6 +411,153 @@ class GMAgent:
             outcome=Outcome.FAILURE,
             effects=self.effects,
             narration=f"{action_summary} — but the target cannot be found.",
+        )
+    
+    def _resolve_spell_attack(self, req: ActionRequest, actor: Actor) -> ActionResponse:
+        """Resolve a spell attack with attack roll + target saving throw.
+        
+        This demonstrates multi-step GM Agent orchestration:
+        1. Attack roll (spell attack)
+        2. If hit, target makes saving throw
+        3. Damage depends on saving throw outcome (full/half)
+        4. Apply all state changes
+        5. Generate narrative
+        """
+        target_id = req.target or "goblin-01"
+        target = get_actor_by_id_or_name(target_id)
+        
+        if target is None:
+            return self._resolve_attack_no_target(req, actor, target_id)
+        
+        action_summary = f"{actor.name} casts {req.intent} at {target.name}"
+        
+        # Spell parameters
+        damage_dice = req.damage_dice or "2d6"  # Default spell damage
+        spell_dc = req.saving_throw_dc or 13  # Default spell DC
+        save_ability = req.saving_throw_ability or "dex"  # Default DEX save
+        
+        # Step 1: Spell attack roll (using caster's spell attack modifier)
+        # For simplicity, use INT + proficiency
+        spell_attack_mod = actor.abilities.modifier("int") + actor.proficiency_bonus
+        attack_roll = self._call_roll_dice(
+            dice_type=DiceType.D20,
+            reason=f"Spell attack roll against {target.name}",
+            advantage=req.advantage,
+            modifier=spell_attack_mod,
+        )
+        
+        total_attack = attack_roll.total
+        target_ac = target.ac
+        hit = total_attack >= target_ac
+        
+        # Build attack detail
+        attack_detail = AttackDetail(
+            target=target.id,
+            weapon="spell",
+            hit_roll=attack_roll.roll,
+            total_attack=total_attack,
+            target_ac=target_ac,
+            damage=None,
+        )
+        
+        saving_throw_detail: Optional[SavingThrowDetail] = None
+        damage_detail: Optional[DamageDetail] = None
+        outcome = Outcome.FAILURE
+        
+        # Step 2: If spell hits, target makes saving throw
+        if hit:
+            save_modifier = target.abilities.modifier(save_ability)
+            save_roll = self._call_roll_dice(
+                dice_type=DiceType.D20,
+                reason=f"{save_ability.upper()} saving throw for {target.name}",
+                modifier=save_modifier,
+            )
+            
+            total_save = save_roll.total
+            save_success = total_save >= spell_dc
+            save_outcome = Outcome.SUCCESS if save_success else Outcome.FAILURE
+            
+            saving_throw_detail = SavingThrowDetail(
+                target=target.id,
+                ability=save_ability,
+                dc=spell_dc,
+                roll=save_roll.roll,
+                modifier=save_modifier,
+                total=total_save,
+                outcome=save_outcome,
+            )
+            
+            # Step 3: Roll damage
+            damage_result = self._call_roll_dice(
+                dice_type=DiceType.DAMAGE,
+                reason="Spell damage",
+                dice_expression=damage_dice,
+            )
+            
+            # Damage: full on failed save, half on successful save
+            damage_total = damage_result.total // 2 if save_success else damage_result.total
+            damage_detail = DamageDetail(
+                dice_expression=damage_dice,
+                rolls=damage_result.rolls,
+                total=damage_total,
+            )
+            attack_detail.damage = damage_detail
+            
+            # Step 4: Apply damage
+            self._call_apply_state_change(
+                target=target.id,
+                field="hp",
+                delta=-damage_total,
+                description=(
+                    f"{actor.name}'s spell hits {target.name} for {damage_total} damage "
+                    f"({'half damage - save successful' if save_success else 'full damage'})."
+                ),
+            )
+            
+            # Check for defeat
+            new_hp = max(0, target.hp - damage_total)
+            if new_hp == 0:
+                self._call_apply_state_change(
+                    target=target.id,
+                    field="conditions_add",
+                    delta="defeated",
+                    description=f"{target.name} has been defeated!",
+                )
+            
+            # Overall outcome is success if spell hit
+            outcome = Outcome.SUCCESS
+        
+        # Step 5: Advance time
+        scene = get_scene()
+        self._call_apply_state_change(
+            target=scene.id,
+            field="time",
+            delta=1,
+            description="Combat time passes.",
+        )
+        
+        # Step 6: Generate narrative
+        attack_result = {
+            "weapon": "spell",
+            "target": target.name,
+            "damage": damage_detail.model_dump() if damage_detail else None,
+            "saving_throw": saving_throw_detail.model_dump() if saving_throw_detail else None,
+        }
+        narrative_result = self._call_generate_narrative(
+            req=req,
+            outcome=outcome,
+            attack_result=attack_result,
+        )
+        
+        return ActionResponse(
+            action_summary=action_summary,
+            resolution_type=ResolutionType.CHECK,
+            check=None,
+            attack=attack_detail,
+            saving_throw=saving_throw_detail,
+            outcome=outcome,
+            effects=self.effects,
+            narration=narrative_result.narrative,
         )
     
     # -----------------------------------------------------------------------

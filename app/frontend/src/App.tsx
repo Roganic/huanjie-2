@@ -148,6 +148,41 @@ function formatTime(timestamp: number): string {
 // Components
 // ---------------------------------------------------------------------------
 
+function NarrationBlock({ text }: { text: string }) {
+  // Split by newlines and render each paragraph
+  const paragraphs = text.split('\n').filter(p => p.trim() !== '');
+  
+  return (
+    <div className="narration-block">
+      <div className="narration-header">
+        <span className="narration-icon">📖</span>
+        <span className="narration-label">GM 叙述</span>
+      </div>
+      <div className="narration-content">
+        {paragraphs.map((paragraph, index) => (
+          <p key={index} className="narration-paragraph">{paragraph}</p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LoadingNarration() {
+  return (
+    <div className="narration-block loading">
+      <div className="narration-header">
+        <span className="narration-icon">🎲</span>
+        <span className="narration-label">GM 正在叙述</span>
+      </div>
+      <div className="narration-skeleton">
+        <div className="skeleton-line" />
+        <div className="skeleton-line short" />
+        <div className="skeleton-line medium" />
+      </div>
+    </div>
+  );
+}
+
 function ResolutionCard({ res }: { res: ActionResponse }) {
   const isCheck = res.resolution_type === "check";
   const outcomeClass = res.outcome === "success" ? "outcome-success" : "outcome-failure";
@@ -155,46 +190,50 @@ function ResolutionCard({ res }: { res: ActionResponse }) {
 
   return (
     <div className="resolution-card">
-      <div className={`outcome-badge ${outcomeClass}`}>
-        {isCheck ? "检定" : "自动成功"} — {outcomeLabel}
+      {/* System Info Section - Collapsible */}
+      <div className="system-info-section">
+        <div className={`outcome-badge ${outcomeClass}`}>
+          {isCheck ? "检定" : "自动成功"} — {outcomeLabel}
+        </div>
+
+        {isCheck && res.check && (
+          <div className="check-details">
+            <span className="check-ability">
+              {ABILITY_LABELS[res.check.ability] ?? res.check.ability}
+            </span>
+            <span className="check-roll">
+              d20={res.check.roll}
+              {res.check.modifier >= 0 ? "+" : ""}
+              {res.check.modifier}
+              {res.check.proficiency_bonus > 0 && `+${res.check.proficiency_bonus}`}
+              {" = "}
+              <strong>{res.check.total}</strong>
+            </span>
+            <span className="check-dc">DC {res.check.dc}</span>
+            {res.check.advantage !== null && (
+              <span className="check-adv">
+                {res.check.advantage ? "优势" : "劣势"}
+              </span>
+            )}
+          </div>
+        )}
+
+        {res.effects.length > 0 && (
+          <div className="effects-list">
+            {res.effects.map((e, i) => (
+              <div 
+                key={i} 
+                className={`effect-item ${typeof e.delta === 'number' && e.delta > 0 ? 'positive' : typeof e.delta === 'number' && e.delta < 0 ? 'negative' : ''}`}
+              >
+                {e.description}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {isCheck && res.check && (
-        <div className="check-details">
-          <span className="check-ability">
-            {ABILITY_LABELS[res.check.ability] ?? res.check.ability}
-          </span>
-          <span className="check-roll">
-            d20={res.check.roll}
-            {res.check.modifier >= 0 ? "+" : ""}
-            {res.check.modifier}
-            {res.check.proficiency_bonus > 0 && `+${res.check.proficiency_bonus}`}
-            {" = "}
-            <strong>{res.check.total}</strong>
-          </span>
-          <span className="check-dc">DC {res.check.dc}</span>
-          {res.check.advantage !== null && (
-            <span className="check-adv">
-              {res.check.advantage ? "优势" : "劣势"}
-            </span>
-          )}
-        </div>
-      )}
-
-      {res.effects.length > 0 && (
-        <div className="effects-list">
-          {res.effects.map((e, i) => (
-            <div 
-              key={i} 
-              className={`effect-item ${typeof e.delta === 'number' && e.delta > 0 ? 'positive' : typeof e.delta === 'number' && e.delta < 0 ? 'negative' : ''}`}
-            >
-              {e.description}
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="narration">{res.narration}</div>
+      {/* Narration Section - Prominent */}
+      <NarrationBlock text={res.narration} />
     </div>
   );
 }
@@ -731,6 +770,13 @@ function App() {
               {m.resolution ? <ResolutionCard res={m.resolution} /> : m.text}
             </div>
           ))}
+          {/* Loading state while waiting for AI response */}
+          {sending && (
+            <div className="message gm loading">
+              <div className="role">GM</div>
+              <LoadingNarration />
+            </div>
+          )}
           <div ref={messagesEnd} />
         </div>
         <div className="input-bar">

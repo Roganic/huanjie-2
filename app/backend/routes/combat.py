@@ -5,29 +5,22 @@ from __future__ import annotations
 import asyncio
 import json
 import random
-import time
 from collections.abc import AsyncIterator
-from typing import Literal, Optional, Union
+from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from ..models.action import (
+from src.models.action import (
     ActionRequest,
-    ActionResponse,
     ActionType,
-    AttackDetail,
-    DamageDetail,
     Effect,
     Outcome,
-    ResolutionType,
 )
-from ..models.state import Actor, Scene
-from ..state import (
-    apply_effects,
+from src.models.state import Scene
+from src.state import (
     get_actor,
-    get_actor_by_id_or_name,
     get_enemy,
     get_scene,
     has_character,
@@ -36,7 +29,7 @@ from ..state import (
     set_combat_scene,
     set_current_session,
 )
-from ..agent.orchestrator import resolve_action_with_agent
+from src.agent.orchestrator import resolve_action_with_agent
 
 router = APIRouter(tags=["combat"])
 
@@ -67,7 +60,7 @@ class CombatState(BaseModel):
     current_actor_id: str
     scene: Scene
     status: Literal["active", "victory", "defeat", "escaped"]
-    log: list[CombatLogEntry] = []
+    log: list["CombatLogEntry"] = []
 
 
 class CombatLogEntry(BaseModel):
@@ -123,14 +116,14 @@ _combats: dict[str, CombatState] = {}
 # Helper Functions
 # ---------------------------------------------------------------------------
 
-def _roll_initiative(actor: Actor) -> int:
+def _roll_initiative(actor) -> int:
     """Roll initiative for an actor (d20 + DEX modifier)."""
     dex_mod = actor.abilities.modifier("dex")
     roll = random.randint(1, 20)
     return roll + dex_mod
 
 
-def _actor_to_participant(actor: Actor, is_player: bool, initiative: int) -> CombatParticipant:
+def _actor_to_participant(actor, is_player: bool, initiative: int) -> CombatParticipant:
     """Convert an Actor to a CombatParticipant."""
     return CombatParticipant(
         id=actor.id,
@@ -209,9 +202,6 @@ def _resolve_combat_action(
     if not actor:
         raise ValueError(f"Actor {actor_id} not found in combat")
 
-    player_actor = get_actor(session_id=session_id)
-    enemy_actor = get_enemy(session_id=session_id)
-
     # Build ActionRequest for the orchestrator
     action_req = ActionRequest(
         scene_id=combat.scene.id,
@@ -276,7 +266,7 @@ def _resolve_combat_action(
 def _get_action_intent(req: CombatActionRequest) -> str:
     """Generate intent text from combat action request."""
     if req.action_type == "attack":
-        return f"attack the enemy"
+        return "attack the enemy"
     elif req.action_type == "defend":
         return "take defensive stance"
     elif req.action_type == "skill":

@@ -12,16 +12,15 @@ Hard Constraint Principle:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from typing import Optional
 
 import httpx
+from pydantic import BaseModel
 
 from ..models.action import (
     ActionRequest,
-    ActionResponse,
-    CheckDetail,
-    DamageDetail,
     Effect,
     Outcome,
 )
@@ -41,7 +40,7 @@ KIMI_TIMEOUT_SECONDS = float(os.getenv("KIMI_TIMEOUT_SECONDS", "5"))
 # ---------------------------------------------------------------------------
 
 NARRATIVE_SYSTEM_PROMPT = """You are a skilled Game Master (GM) for a fantasy tabletop RPG.
-Your task is to write immersive narrative descriptions of player actions.
+Your task is to write immersive narrative descriptions of player actions and proactively advance the scene.
 
 CRITICAL RULE - HARD CONSTRAINTS (绝对不可违反):
 The "【硬约束区 / HARD CONSTRAINTS】" section in the prompt contains ESTABLISHED FACTS determined by the rule engine.
@@ -54,16 +53,29 @@ These are ABSOLUTE and CANNOT be changed, ignored, or contradicted in your narra
 Guidelines:
 - Write in second person ("you") or third person limited perspective
 - Use vivid, atmospheric language that fits the fantasy setting
-- Describe the action, its outcome, and the immediate consequences
-- Keep it to 1-3 paragraphs (150-300 words)
+- Split your output into two distinct parts:
+  1. action_result: describe the action, its outcome, and the immediate consequences
+  2. scene_progression: proactively advance the scene with at least one of:
+     - NPC reaction
+     - environmental change
+     - a concrete prompt or opening the player can act on next
+- Keep each part to 1 short paragraph
 - Focus on sensory details: what the character sees, hears, feels
 - For combat: describe the tension, the clash of weapons, the impact
 - For skill checks: describe the effort, the struggle, the result
 - NEVER contradict the hard constraints - they are the ground truth
 - Never use system terminology like "roll", "DC", "modifier", "check"
 - Never break character or mention game mechanics explicitly
+- Return valid JSON only, with keys "action_result" and "scene_progression"
 
 Tone: dramatic but not overwrought, grounded fantasy adventure."""
+
+
+class NarrationBundle(BaseModel):
+    """Structured narration result for action and proactive scene advancement."""
+
+    action_result: str
+    scene_progression: str
 
 
 def _build_hard_constraints(
@@ -218,13 +230,15 @@ def _build_narrative_prompt(
     lines.append("=" * 60)
     lines.append("")
     lines.append("【写作指示 / WRITING INSTRUCTION】")
-    lines.append("基于以上硬约束和叙事空间，撰写一段沉浸式的叙事描述（150-300字）。")
+    lines.append("基于以上硬约束和叙事空间，返回一个 JSON 对象，包含 action_result 与 scene_progression 两个字段。")
     lines.append("要求：")
     lines.append("1. 严格遵守硬约束区的事实，不得与之矛盾")
     lines.append("2. 如果结果是失败，绝对不能描述为成功或命中")
     lines.append("3. 如果伤害是0，绝对不能描述为造成伤害")
     lines.append("4. 使用生动的感官细节，避免系统术语")
-    
+    lines.append("5. scene_progression 必须至少包含 NPC 反应、环境变化、或对玩家的明确提示之一")
+    lines.append('6. 仅返回 JSON，例如 {"action_result": "...", "scene_progression": "..."}')
+
     return "\n".join(lines)
 
 
@@ -232,7 +246,7 @@ def _build_narrative_prompt(
 # Fallback Templates (when API is unavailable)
 # ---------------------------------------------------------------------------
 
-def _fallback_narration(
+def _fallback_action_result(
     req: ActionRequest,
     actor: Actor,
     scene: Scene,
@@ -240,8 +254,6 @@ def _fallback_narration(
     attack_result: Optional[dict] = None,
 ) -> str:
     """Generate a template fallback narrative when API is unavailable."""
-    
-    action_desc = f"{req.actor} {req.intent}"
     
     if attack_result:
         # Combat fallback
@@ -253,7 +265,7 @@ def _fallback_narration(
             if damage:
                 return (
                     f"{actor.name} lunges forward with {weapon} in hand, striking at the {target}. "
-                    f"The attack hits true, biting into flesh with a sickening crunch."
+                    f"The blow lands cleanly, and the impact echoes through the scene."
                 )
             else:
                 return (
@@ -280,12 +292,80 @@ def _fallback_narration(
         )
 
 
+def _fallback_scene_progression(
+    req: ActionRequest,
+    actor: Actor,
+    scene: Scene,
+    outcome: Outcome,
+    attack_result: Optional[dict] = None,
+) -> str:
+    """Return a deterministic scene progression when AI is unavailable."""
+    if attack_result:
+        target = attack_result.get("target", "enemy")
+        if outcome == Outcome.SUCCESS:
+            return (
+                f"The {target} recoils and the air in {scene.name} tightens around the clash. "
+                f"You can press the advantage now or scan the room for whoever reacts next."
+            )
+        return (
+            f"The {target} regains footing as the fight resets for a heartbeat, and nearby movement grows tense. "
+            f"You can reposition, watch for a counterattack, or call out to control the next exchange."
+        )
+
+    if outcome == Outcome.SUCCESS:
+        return (
+            f"A ripple of response moves through {scene.name} as the moment settles into its new shape. "
+            f"You can follow the opening immediately, watch how others react, or probe the environment for what changed."
+        )
+
+    return (
+        f"The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around {actor.name}. "
+        f"You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes."
+    )
+
+
+def _fallback_narration_bundle(
+    req: ActionRequest,
+    actor: Actor,
+    scene: Scene,
+    outcome: Outcome,
+    attack_result: Optional[dict] = None,
+) -> NarrationBundle:
+    return NarrationBundle(
+        action_result=_fallback_action_result(req, actor, scene, outcome, attack_result),
+        scene_progression=_fallback_scene_progression(req, actor, scene, outcome, attack_result),
+    )
+
+
 # ---------------------------------------------------------------------------
 # API Client
 # ---------------------------------------------------------------------------
 
-async def _call_kimi_api(prompt: str) -> Optional[str]:
-    """Call Kimi API to generate narrative text.
+def _parse_narration_bundle(content: str) -> Optional[NarrationBundle]:
+    """Parse the model response into the required two-part narration bundle."""
+    raw = content.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1] if "\n" in raw else raw
+        raw = raw.rsplit("```", 1)[0].strip()
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+    action_result = str(data.get("action_result", "")).strip()
+    scene_progression = str(data.get("scene_progression", "")).strip()
+    if not action_result or not scene_progression:
+        return None
+
+    return NarrationBundle(
+        action_result=action_result,
+        scene_progression=scene_progression,
+    )
+
+
+async def _call_kimi_api(prompt: str) -> Optional[NarrationBundle]:
+    """Call Kimi API to generate structured narrative text.
     
     Returns None if API call fails or times out.
     """
@@ -319,7 +399,9 @@ async def _call_kimi_api(prompt: str) -> Optional[str]:
             
             if "choices" in data and len(data["choices"]) > 0:
                 content = data["choices"][0].get("message", {}).get("content", "")
-                return content.strip() if content else None
+                if not content:
+                    return None
+                return _parse_narration_bundle(content.strip())
             return None
             
     except asyncio.TimeoutError:
@@ -343,8 +425,8 @@ def generate_narration(
     attack_result: Optional[dict] = None,
     effects: Optional[list[Effect]] = None,
     target: Optional[Actor] = None,
-) -> str:
-    """Generate narrative text for an action resolution.
+) -> NarrationBundle:
+    """Generate structured narrative text for an action resolution.
     
     This is a synchronous wrapper around the async API call.
     Falls back to template narrative if API is unavailable.
@@ -363,7 +445,7 @@ def generate_narration(
         target: Optional target actor (for combat context)
         
     Returns:
-        Immersive narrative text (or fallback if API unavailable)
+        Narration bundle for action result and scene progression
     """
     # Build the prompt with hard constraints
     prompt = _build_narrative_prompt(
@@ -392,4 +474,4 @@ def generate_narration(
             pass
     
     # Fall back to template
-    return _fallback_narration(req, actor, scene, outcome, attack_result)
+    return _fallback_narration_bundle(req, actor, scene, outcome, attack_result)

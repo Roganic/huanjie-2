@@ -815,11 +815,22 @@
   border-color: var(--info);
 }
 
+.timeline-item.type-scene .timeline-dot {
+  background: #c7a86d;
+  border-color: #c7a86d;
+  box-shadow: 0 0 0 4px rgba(199, 168, 109, 0.14);
+}
+
 .timeline-content {
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
+}
+
+.timeline-item.type-scene .timeline-content {
+  border-color: rgba(199, 168, 109, 0.35);
+  background: linear-gradient(180deg, rgba(199, 168, 109, 0.08), rgba(10, 15, 28, 0.92));
 }
 
 .timeline-header {
@@ -1026,6 +1037,15 @@
 .narration-block.loading {
   background: linear-gradient(135deg, rgba(26, 39, 64, 0.5), rgba(26, 26, 46, 0.6));
   border-style: dashed;
+}
+
+.narration-block.progression {
+  background: linear-gradient(135deg, rgba(74, 54, 24, 0.72), rgba(32, 26, 18, 0.94));
+  border-color: rgba(199, 168, 109, 0.38);
+}
+
+.narration-block.progression::before {
+  background: linear-gradient(90deg, #6e5330, #c7a86d, #f1d39b);
 }
 
 .narration-header {

@@ -2,6 +2,11 @@
 
 Provides immersive, GM-style narrative text for game actions.
 Falls back to template narratives when API is unavailable.
+
+Hard Constraint Principle:
+- Rule engine results (success/failure, damage values, state changes) are INVIOLABLE facts
+- AI narrative MUST respect these facts and cannot contradict them
+- The prompt explicitly separates "ESTABLISHED FACTS" from "NARRATIVE SPACE"
 """
 
 from __future__ import annotations
@@ -12,7 +17,14 @@ from typing import Optional
 
 import httpx
 
-from ..models.action import ActionRequest, ActionResponse, Outcome
+from ..models.action import (
+    ActionRequest,
+    ActionResponse,
+    CheckDetail,
+    DamageDetail,
+    Effect,
+    Outcome,
+)
 from ..models.state import Actor, Scene
 
 # ---------------------------------------------------------------------------
@@ -28,8 +40,16 @@ KIMI_TIMEOUT_SECONDS = float(os.getenv("KIMI_TIMEOUT_SECONDS", "5"))
 # Prompt Templates
 # ---------------------------------------------------------------------------
 
-NARRATIVE_SYSTEM_PROMPT = """You are a skilled Game Master (GM) for a fantasy tabletop RPG. 
+NARRATIVE_SYSTEM_PROMPT = """You are a skilled Game Master (GM) for a fantasy tabletop RPG.
 Your task is to write immersive narrative descriptions of player actions.
+
+CRITICAL RULE - HARD CONSTRAINTS (绝对不可违反):
+The "【硬约束区 / HARD CONSTRAINTS】" section in the prompt contains ESTABLISHED FACTS determined by the rule engine.
+These are ABSOLUTE and CANNOT be changed, ignored, or contradicted in your narrative:
+- If outcome is "失败" (failure), you CANNOT describe it as success or hitting
+- If damage is "8", you MUST describe damage consistent with 8 HP loss
+- If target HP changes to "5", you CANNOT say the target was defeated
+- State changes (conditions, HP, resources) are FACTS, not suggestions
 
 Guidelines:
 - Write in second person ("you") or third person limited perspective
@@ -39,10 +59,72 @@ Guidelines:
 - Focus on sensory details: what the character sees, hears, feels
 - For combat: describe the tension, the clash of weapons, the impact
 - For skill checks: describe the effort, the struggle, the result
+- NEVER contradict the hard constraints - they are the ground truth
 - Never use system terminology like "roll", "DC", "modifier", "check"
 - Never break character or mention game mechanics explicitly
 
 Tone: dramatic but not overwrought, grounded fantasy adventure."""
+
+
+def _build_hard_constraints(
+    outcome: Outcome,
+    check_result: Optional[dict] = None,
+    attack_result: Optional[dict] = None,
+    effects: Optional[list[Effect]] = None,
+    actor: Optional[Actor] = None,
+    target: Optional[Actor] = None,
+) -> list[str]:
+    """Build the hard constraint section listing rule engine facts.
+    
+    These are inviolable facts that the AI narrative must respect.
+    """
+    lines: list[str] = []
+    
+    # Core outcome - this is always present
+    outcome_cn = "成功" if outcome == Outcome.SUCCESS else "失败"
+    lines.append(f"- 裁定结果 / Outcome: {outcome_cn} ({outcome.value})")
+    
+    # Check details with specific numbers
+    if check_result:
+        ability = check_result.get("ability", "")
+        roll = check_result.get("roll", 0)
+        total = check_result.get("total", 0)
+        dc = check_result.get("dc", 0)
+        modifier = check_result.get("modifier", 0)
+        lines.append(f"- 检定详情 / Check: {ability.upper()}, 掷骰={roll}, 调整值={modifier}, 总计={total}, DC={dc}")
+    
+    # Attack details with specific numbers
+    if attack_result:
+        weapon = attack_result.get("weapon", "weapon")
+        target_name = attack_result.get("target", "enemy")
+        damage = attack_result.get("damage")
+        
+        if outcome == Outcome.SUCCESS:
+            if damage:
+                damage_total = damage.get("total", 0)
+                lines.append(f"- 命中结果 / Attack: 命中 (HIT)")
+                lines.append(f"- 伤害数值 / Damage: {damage_total} 点")
+                if target:
+                    new_hp = max(0, target.hp - damage_total)
+                    lines.append(f"- 目标状态 / Target State: {target.name} HP 从 {target.hp} 变为 {new_hp}")
+            else:
+                lines.append(f"- 命中结果 / Attack: 命中 (HIT)，但未造成伤害")
+        else:
+            lines.append(f"- 命中结果 / Attack: 未命中 (MISS)")
+            lines.append(f"- 伤害数值 / Damage: 0 (攻击未命中，无伤害)")
+    
+    # State changes from effects
+    if effects:
+        for eff in effects:
+            if eff.field == "hp" and isinstance(eff.delta, int):
+                delta_str = f"+{eff.delta}" if eff.delta > 0 else str(eff.delta)
+                lines.append(f"- 状态变更 / State Change: {eff.target} HP {delta_str}")
+            elif eff.field == "conditions_add" and isinstance(eff.delta, str):
+                lines.append(f"- 状态变更 / State Change: {eff.target} 获得状态 [{eff.delta}]")
+            elif eff.field == "conditions_remove" and isinstance(eff.delta, str):
+                lines.append(f"- 状态变更 / State Change: {eff.target} 移除状态 [{eff.delta}]")
+    
+    return lines
 
 
 def _build_narrative_prompt(
@@ -52,55 +134,98 @@ def _build_narrative_prompt(
     outcome: Outcome,
     check_result: Optional[dict] = None,
     attack_result: Optional[dict] = None,
+    effects: Optional[list[Effect]] = None,
+    target: Optional[Actor] = None,
 ) -> str:
-    """Build the user prompt for narrative generation."""
+    """Build the user prompt for narrative generation with hard constraints.
     
-    # Build context section
-    context_lines = [
-        f"Scene: {scene.name}",
-        f"Scene Description: {scene.description}",
-        f"",
-        f"Character: {actor.name}",
-        f"Character Description: {actor.description}",
-        f"Character Status: HP {actor.hp}/{actor.hp_max}",
-        f"",
-        f"Action Intent: {req.intent}",
-        f"Action Approach: {req.approach}",
-        f"Outcome: {outcome.value.upper()}",
-    ]
+    The prompt explicitly separates:
+    1. 【硬约束区】Hard Constraints - rule engine facts (ABSOLUTE)
+    2. 【叙事空间】Narrative Space - context for creative writing
+    """
+    lines: list[str] = []
     
-    # Add check details if present (without game mechanics terminology)
+    # ========================================================================
+    # SECTION 1: HARD CONSTRAINTS (硬约束区)
+    # These are inviolable facts from the rule engine
+    # ========================================================================
+    lines.append("【硬约束区 / HARD CONSTRAINTS】")
+    lines.append("以下是由规则引擎裁定的确定事实，叙事必须与此完全一致，不可更改：")
+    lines.append("")
+    
+    hard_constraints = _build_hard_constraints(
+        outcome=outcome,
+        check_result=check_result,
+        attack_result=attack_result,
+        effects=effects,
+        actor=actor,
+        target=target,
+    )
+    lines.extend(hard_constraints)
+    lines.append("")
+    lines.append("=" * 60)
+    lines.append("")
+    
+    # ========================================================================
+    # SECTION 2: NARRATIVE SPACE (叙事空间)
+    # Context for creative writing (AI has freedom here)
+    # ========================================================================
+    lines.append("【叙事空间 / NARRATIVE SPACE】")
+    lines.append("以下信息供叙事参考，你可以自由发挥：")
+    lines.append("")
+    
+    # Scene context
+    lines.append(f"场景 / Scene: {scene.name}")
+    lines.append(f"场景描述 / Scene Description: {scene.description}")
+    lines.append("")
+    
+    # Character context
+    lines.append(f"角色 / Character: {actor.name}")
+    lines.append(f"角色描述 / Character Description: {actor.description}")
+    lines.append(f"角色状态 / Character Status: HP {actor.hp}/{actor.hp_max}")
+    lines.append("")
+    
+    # Action context
+    lines.append(f"行动意图 / Action Intent: {req.intent}")
+    lines.append(f"行动方式 / Action Approach: {req.approach}")
+    
+    # Ability context (flavor only, no numbers)
     if check_result:
         ability = check_result.get("ability", "")
         ability_desc = {
-            "str": "strength and physical power",
-            "dex": "agility and finesse",
-            "con": "endurance and resilience",
-            "int": "intellect and knowledge",
-            "wis": "perception and insight",
-            "cha": "force of personality",
+            "str": "力量与体格 / strength and physical power",
+            "dex": "敏捷与灵巧 / agility and finesse",
+            "con": "体质与耐力 / endurance and resilience",
+            "int": "智力与学识 / intellect and knowledge",
+            "wis": "感知与洞察 / perception and insight",
+            "cha": "魅力与个性 / force of personality",
         }.get(ability, ability)
-        context_lines.append(f"This action relied on the character's {ability_desc}.")
+        lines.append(f"相关属性 / Relevant Ability: {ability_desc}")
     
-    # Add attack details if present
+    # Combat context
     if attack_result:
         weapon = attack_result.get("weapon", "weapon")
-        target = attack_result.get("target", "enemy")
-        damage = attack_result.get("damage")
-        context_lines.append(f"")
-        context_lines.append(f"Combat Details:")
-        context_lines.append(f"- Weapon: {weapon}")
-        context_lines.append(f"- Target: {target}")
-        if damage and outcome == Outcome.SUCCESS:
-            damage_total = damage.get("total", 0)
-            context_lines.append(f"- The attack landed a solid hit, dealing significant damage.")
-        elif outcome == Outcome.FAILURE:
-            context_lines.append(f"- The attack failed to connect.")
+        target_name = attack_result.get("target", "enemy")
+        lines.append("")
+        lines.append(f"战斗信息 / Combat Info:")
+        lines.append(f"- 武器 / Weapon: {weapon}")
+        lines.append(f"- 目标 / Target: {target_name}")
     
-    context_lines.append(f"")
-    context_lines.append(f"Write an immersive narrative describing this moment.")
+    # ========================================================================
+    # SECTION 3: WRITING INSTRUCTION
+    # ========================================================================
+    lines.append("")
+    lines.append("=" * 60)
+    lines.append("")
+    lines.append("【写作指示 / WRITING INSTRUCTION】")
+    lines.append("基于以上硬约束和叙事空间，撰写一段沉浸式的叙事描述（150-300字）。")
+    lines.append("要求：")
+    lines.append("1. 严格遵守硬约束区的事实，不得与之矛盾")
+    lines.append("2. 如果结果是失败，绝对不能描述为成功或命中")
+    lines.append("3. 如果伤害是0，绝对不能描述为造成伤害")
+    lines.append("4. 使用生动的感官细节，避免系统术语")
     
-    return "\n".join(context_lines)
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -216,11 +341,16 @@ def generate_narration(
     outcome: Outcome,
     check_result: Optional[dict] = None,
     attack_result: Optional[dict] = None,
+    effects: Optional[list[Effect]] = None,
+    target: Optional[Actor] = None,
 ) -> str:
     """Generate narrative text for an action resolution.
     
     This is a synchronous wrapper around the async API call.
     Falls back to template narrative if API is unavailable.
+    
+    Hard constraints (outcome, damage, state changes) are injected into the prompt
+    to ensure AI narrative respects rule engine results.
     
     Args:
         req: The action request
@@ -229,12 +359,23 @@ def generate_narration(
         outcome: Success or failure
         check_result: Optional check details
         attack_result: Optional attack details
+        effects: Optional list of state change effects
+        target: Optional target actor (for combat context)
         
     Returns:
         Immersive narrative text (or fallback if API unavailable)
     """
-    # Build the prompt
-    prompt = _build_narrative_prompt(req, actor, scene, outcome, check_result, attack_result)
+    # Build the prompt with hard constraints
+    prompt = _build_narrative_prompt(
+        req=req,
+        actor=actor,
+        scene=scene,
+        outcome=outcome,
+        check_result=check_result,
+        attack_result=attack_result,
+        effects=effects,
+        target=target,
+    )
     
     # Try to call Kimi API (only if key is configured)
     if KIMI_API_KEY:

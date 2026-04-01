@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 from dataclasses import dataclass
 from typing import Optional
 
 from ..models.action import ActionRequest, Effect, Outcome
 from ..models.state import Actor, NarrativeHistoryEntry, Scene
 
+logger = logging.getLogger(__name__)
 
 FAILURE_HIT_INDICATORS = (
     " hits ",
@@ -58,6 +61,77 @@ DEFEAT_INDICATORS = (
     " collapses lifeless",
 )
 
+# Patterns for detecting unauthorized numeric declarations in narrative
+# These patterns indicate AI trying to override rule engine authority
+UNAUTHORIZED_HP_PATTERNS = [
+    # Chinese HP change patterns
+    re.compile(r"HP\s*变为\s*\d+"),
+    re.compile(r"生命值\s*变为\s*\d+"),
+    re.compile(r"血量\s*变为\s*\d+"),
+    re.compile(r"生命\s*变为\s*\d+"),
+    re.compile(r"HP\s*变成\s*\d+"),
+    re.compile(r"生命值\s*变成\s*\d+"),
+    re.compile(r"现在\s*(?:有|剩|余)\s*\d+\s*(?:点)?\s*(?:HP|生命|血量)"),
+    re.compile(r"(?:HP|生命|血量)\s*(?:现在|目前)\s*(?:是|为|有)\s*\d+"),
+    # English HP change patterns
+    re.compile(r"HP\s*(?:becomes?|is\s*now|drops?\s*to|falls?\s*to)\s*\d+"),
+    re.compile(r"(?:has|have)\s*\d+\s*(?:HP|hit\s*points?|health)\s*(?:left|remaining)?"),
+    re.compile(r"(?:now\s*)?(?:has|have|with)\s*\d+\s*(?:HP|hit\s*points?)"),
+]
+
+UNAUTHORIZED_RESOURCE_GAIN_PATTERNS = [
+    # Chinese gain patterns
+    re.compile(r"你\s*(?:获得|得到|增加)\s*\d+\s*(?:点)?"),
+    re.compile(r"(?:获得|得到|增加)\s*\d+\s*(?:点)?\s*(?:HP|生命|血量|伤害|攻击)"),
+    # English gain patterns
+    re.compile(r"(?:you\s*)?(?:gain|get|receive|obtain|acquire)\s*\d+\s*(?:HP|hit\s*points?|health|damage|attack)"),
+]
+
+UNAUTHORIZED_RESOURCE_LOSS_PATTERNS = [
+    # Chinese loss patterns  
+    re.compile(r"你\s*(?:失去|损失|减少)\s*\d+\s*(?:点)?"),
+    re.compile(r"(?:失去|损失|减少)\s*\d+\s*(?:点)?\s*(?:HP|生命|血量)"),
+    # English loss patterns
+    re.compile(r"(?:you\s*)?(?:lose|take)\s*\d+\s*(?:HP|hit\s*points?|damage|health)"),
+]
+
+UNAUTHORIZED_DAMAGE_ANNOUNCEMENT_PATTERNS = [
+    # Chinese damage announcement patterns
+    re.compile(r"(?:造成|受到|受到|承受)\s*\d+\s*(?:点)?\s*(?:伤害|damage)"),
+    re.compile(r"\d+\s*(?:点)?\s*(?:伤害|damage)\s*(?:点数)?"),
+    # English damage announcement patterns
+    re.compile(r"(?:deals?|takes?|took|suffers?|inflicts?)\s*\d+\s*(?:points?\s*of\s*)?damage"),
+    re.compile(r"\d+\s*(?:points?\s*of\s*)?damage"),
+]
+
+UNAUTHORIZED_HEALING_ANNOUNCEMENT_PATTERNS = [
+    # Chinese healing patterns
+    re.compile(r"(?:恢复|回复|治疗)\s*\d+\s*(?:点)?\s*(?:HP|生命|血量|health)"),
+    re.compile(r"\d+\s*(?:点)?\s*(?:HP|生命|血量)\s*(?:恢复|回复|治疗)"),
+    # English healing patterns
+    re.compile(r"(?:heals?|restores?|recovers?)\s*\d+\s*(?:HP|hit\s*points?|health)"),
+    re.compile(r"\d+\s*(?:HP|hit\s*points?)\s*(?:healed|restored|recovered)"),
+]
+
+UNAUTHORIZED_AC_PATTERNS = [
+    # Chinese AC patterns
+    re.compile(r"AC\s*变为\s*\d+"),
+    re.compile(r"护甲值\s*变为\s*\d+"),
+    re.compile(r"AC\s*变成\s*\d+"),
+    # English AC patterns
+    re.compile(r"AC\s*(?:becomes?|is\s*now)\s*\d+"),
+    re.compile(r"armor\s*class\s*(?:becomes?|is\s*now)\s*\d+"),
+]
+
+ALL_UNAUTHORIZED_PATTERNS = (
+    UNAUTHORIZED_HP_PATTERNS
+    + UNAUTHORIZED_RESOURCE_GAIN_PATTERNS
+    + UNAUTHORIZED_RESOURCE_LOSS_PATTERNS
+    + UNAUTHORIZED_DAMAGE_ANNOUNCEMENT_PATTERNS
+    + UNAUTHORIZED_HEALING_ANNOUNCEMENT_PATTERNS
+    + UNAUTHORIZED_AC_PATTERNS
+)
+
 
 @dataclass(frozen=True)
 class NarrationConstraintContext:
@@ -70,6 +144,14 @@ class NarrationConstraintContext:
     effects: Optional[list[Effect]] = None
     actor: Optional[Actor] = None
     target: Optional[Actor] = None
+
+
+@dataclass
+class ValidationResult:
+    """Result of post-processing validation."""
+    is_valid: bool
+    violations: list[str]
+    marked_narrative: Optional[str] = None
 
 
 def build_hard_constraints(context: NarrationConstraintContext) -> list[str]:
@@ -278,3 +360,123 @@ def find_contradictions(
                 reasons.append("condition_applied_but_narrated_as_removed")
 
     return list(dict.fromkeys(reasons))
+
+
+def detect_unauthorized_numeric_declarations(text: str) -> list[dict]:
+    """Detect unauthorized numeric declarations in narrative text.
+    
+    This function scans the narrative for patterns that indicate the AI is trying
+    to override rule engine authority by declaring numerical values directly.
+    
+    Args:
+        text: The narrative text to scan
+        
+    Returns:
+        List of violation dictionaries with pattern type and matched text
+    """
+    violations: list[dict] = []
+    text_normalized = text.lower().replace("", "").replace("", "")
+    
+    # Check all unauthorized patterns
+    for pattern in ALL_UNAUTHORIZED_PATTERNS:
+        for match in pattern.finditer(text):
+            violations.append({
+                "type": "unauthorized_numeric_declaration",
+                "pattern": pattern.pattern[:50] + "..." if len(pattern.pattern) > 50 else pattern.pattern,
+                "matched_text": match.group(0),
+                "position": match.start(),
+            })
+    
+    # Additional manual checks for common patterns not easily captured by regex
+    unauthorized_phrases = [
+        ("HP 变为", "hp_change"),
+        ("hp 变为", "hp_change"),
+        ("生命值变为", "hp_change"),
+        ("血量变为", "hp_change"),
+        ("你获得", "resource_gain"),
+        ("你失去", "resource_loss"),
+        ("造成", "damage_announcement"),
+        ("点伤害", "damage_announcement"),
+        ("恢复", "healing_announcement"),
+        ("点生命", "healing_announcement"),
+    ]
+    
+    for phrase, violation_type in unauthorized_phrases:
+        if phrase in text:
+            # Check if it's followed by a number (basic heuristic)
+            idx = text.find(phrase)
+            if idx >= 0:
+                after_phrase = text[idx + len(phrase):idx + len(phrase) + 10]
+                if any(c.isdigit() for c in after_phrase):
+                    violations.append({
+                        "type": violation_type,
+                        "pattern": f"{phrase} + number",
+                        "matched_text": phrase,
+                        "position": idx,
+                    })
+    
+    return violations
+
+
+def validate_narrative_for_overreach(
+    action_result: str,
+    scene_progression: str,
+    gm_prompt: str,
+    context: NarrationConstraintContext | None = None,
+) -> ValidationResult:
+    """Validate narrative text for AI overreach on numeric authority.
+    
+    This is the main post-processing validation function that checks if the AI
+    has attempted to declare numerical values without authorization from the
+    rule engine.
+    
+    Args:
+        action_result: The action_result field from narration
+        scene_progression: The scene_progression field from narration
+        gm_prompt: The gm_prompt field from narration
+        context: Optional constraint context for additional validation
+        
+    Returns:
+        ValidationResult with is_valid flag, violations list, and marked narrative
+    """
+    all_violations: list[str] = []
+    combined_text = f"{action_result} {scene_progression} {gm_prompt}"
+    
+    # Check for unauthorized numeric declarations
+    numeric_violations = detect_unauthorized_numeric_declarations(combined_text)
+    for v in numeric_violations:
+        all_violations.append(f"{v['type']}: '{v['matched_text']}' at position {v['position']}")
+    
+    # Also run the contradiction checks if context is provided
+    if context:
+        contradictions = find_contradictions(action_result, scene_progression, context)
+        all_violations.extend(contradictions)
+    
+    is_valid = len(all_violations) == 0
+    
+    # Log warnings for any violations
+    if not is_valid:
+        logger.warning(
+            "Narrative validation detected %d violations: %s",
+            len(all_violations),
+            "; ".join(all_violations),
+            extra={
+                "violations": all_violations,
+                "action_result_preview": action_result[:100] if action_result else "",
+            },
+        )
+    
+    # Create marked narrative if there are violations
+    marked_narrative = None
+    if not is_valid:
+        violation_marker = "\n\n[VALIDATION WARNING - 校验警告]\n"
+        violation_marker += "以下叙事内容违反数值约束规则，已被标记：\n"
+        for i, v in enumerate(all_violations, 1):
+            violation_marker += f"{i}. {v}\n"
+        marked_narrative = combined_text + violation_marker
+    
+    return ValidationResult(
+        is_valid=is_valid,
+        violations=all_violations,
+        marked_narrative=marked_narrative,
+    )

@@ -154,6 +154,11 @@ const CLASS_SKILLS: Record<CharacterClass, string[]> = {
   rogue: ["杂技", "欺骗", "洞察", "巧手", "隐匿"],
 };
 
+// Arcana skill for mage class proficiency
+const EXTRA_SKILLS: Skill[] = [
+  { name: "奥秘", ability: "int", proficient: false },
+];
+
 const DEFAULT_ABILITIES: AbilityScores = { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 };
 
 const ABILITY_LABELS: Record<string, string> = {
@@ -245,6 +250,9 @@ function getClassAbilities(characterClass: CharacterClass): AbilityScores {
   };
   return templates[characterClass];
 }
+
+// Alias for compatibility with existing code
+const getDefaultAbilities = getClassAbilities;
 
 function formatModifier(mod: number): string {
   return mod >= 0 ? `+${mod}` : `${mod}`;
@@ -468,20 +476,22 @@ function StatusEffect({ name, isNew }: { name: string; isNew?: boolean }) {
 function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolean }) {
   const profBonus = actor.proficiency_bonus;
   const classProfSkills = CLASS_SKILLS[actor.character_class ?? "warrior"] ?? [];
+  
+  // Merge standard skills with extra skills (e.g., Arcana for mages)
+  const allSkills = [...SKILLS, ...EXTRA_SKILLS];
 
   if (compact) {
-    // Show only proficient skills
-    const proficientSkills = SKILLS.filter(
-      (s) => classProfSkills.includes(s.name) || s.proficient
-    ).slice(0, 6);
+    // Show only proficient skills (class proficiencies)
+    const proficientSkills = allSkills.filter(
+      (s) => classProfSkills.includes(s.name)
+    );
     return (
       <div className="skills-list-compact">
         {proficientSkills.map((skill) => {
           const abilityMod = getModifier(actor.abilities[skill.ability]);
-          const isProficient = classProfSkills.includes(skill.name);
-          const total = abilityMod + (isProficient ? profBonus : 0);
+          const total = abilityMod + profBonus;
           return (
-            <div key={skill.name} className={`skill-item-compact ${isProficient ? "proficient" : ""}`}>
+            <div key={skill.name} className="skill-item-compact proficient">
               <span className="skill-name">{skill.name}</span>
               <span className="skill-bonus">{formatModifier(total)}</span>
             </div>
@@ -493,7 +503,7 @@ function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolea
 
   return (
     <div className="skills-list">
-      {SKILLS.map((skill) => {
+      {allSkills.map((skill) => {
         const abilityMod = getModifier(actor.abilities[skill.ability]);
         const isProficient = classProfSkills.includes(skill.name);
         const total = abilityMod + (isProficient ? profBonus : 0);
@@ -922,15 +932,6 @@ function createPreviewActor(draft: CharacterDraft): Actor | null {
     description: CLASS_SUMMARIES[draft.characterClass],
     conditions: [],
   };
-}
-
-function getDefaultAbilities(characterClass: CharacterClass): AbilityScores {
-  const templates: Record<CharacterClass, AbilityScores> = {
-    warrior: { str: 15, dex: 13, con: 14, int: 8, wis: 12, cha: 10 },
-    mage: { str: 8, dex: 13, con: 12, int: 15, wis: 14, cha: 10 },
-    rogue: { str: 10, dex: 15, con: 13, int: 12, wis: 14, cha: 8 },
-  };
-  return templates[characterClass];
 }
 
 interface ParsedStreamEvent {

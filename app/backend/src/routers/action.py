@@ -11,7 +11,12 @@ from fastapi.responses import StreamingResponse
 
 from ..agent.orchestrator import resolve_action_with_agent
 from ..models.action import ActionRequest, ActionResponse
-from ..state import has_character
+from ..state import (
+    has_character,
+    require_bootstrap_state,
+    reset_current_session,
+    set_current_session,
+)
 
 router = APIRouter(tags=["game"])
 
@@ -52,29 +57,42 @@ async def _stream_action_response(response: ActionResponse) -> AsyncIterator[str
 @router.post("/action")
 async def submit_action(req: ActionRequest, request: Request):
     """Submit a player action and optionally stream the generated narration."""
-    if not has_character():
-        raise HTTPException(status_code=409, detail="Create a character before taking actions.")
+    session_id = request.headers.get("X-Session-Id") or request.query_params.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Missing session_id.")
 
     try:
-        result = await asyncio.to_thread(resolve_action_with_agent, req)
-    except Exception as exc:  # pragma: no cover - surfaced to client as SSE error
-        error_message = str(exc)
+        require_bootstrap_state(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
 
-        async def error_stream() -> AsyncIterator[str]:
-            yield _sse_event("error", {"message": error_message})
+    token = set_current_session(session_id)
+    try:
+        if not has_character(session_id=session_id):
+            raise HTTPException(status_code=409, detail="Create a character before taking actions.")
 
-        return StreamingResponse(error_stream(), media_type="text/event-stream")
+        try:
+            result = await asyncio.to_thread(resolve_action_with_agent, req)
+        except Exception as exc:  # pragma: no cover - surfaced to client as SSE error
+            error_message = str(exc)
 
-    accepts_stream = "text/event-stream" in request.headers.get("accept", "")
-    if not accepts_stream:
-        return result
+            async def error_stream() -> AsyncIterator[str]:
+                yield _sse_event("error", {"message": error_message})
 
-    return StreamingResponse(
-        _stream_action_response(result),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+            return StreamingResponse(error_stream(), media_type="text/event-stream")
+
+        accepts_stream = "text/event-stream" in request.headers.get("accept", "")
+        if not accepts_stream:
+            return result
+
+        return StreamingResponse(
+            _stream_action_response(result),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    finally:
+        reset_current_session(token)

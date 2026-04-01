@@ -71,9 +71,14 @@ class NarrativeHistoryEntry(BaseModel):
     action_summary: str
     resolution_summary: dict[str, Any] = Field(default_factory=dict)
     narration_summary: str
+    narration: str = ""
+    scene_progression: str = ""
+    gm_prompt: str = ""
+    created_at: int = Field(default=0, description="Client-friendly creation timestamp in ms")
 
 
 class BootstrapState(BaseModel):
+    session_id: str
     phase: GamePhase
     actor: Actor | None = None
     scene: Scene

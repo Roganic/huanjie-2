@@ -1,15 +1,18 @@
-"""Mutable in-memory state store for the V1 prototype.
-
-Provides a single actor and scene whose fields can be mutated by
-action effects.  ``apply_effects`` is the only write path — all
-mutations go through the same Effect model returned by the resolver.
-
-This module will eventually be replaced by proper session / persistence.
-"""
+"""Session-scoped mutable state store for the V1 prototype."""
 
 from __future__ import annotations
 
+import json
+import os
+import tempfile
+import threading
+import time
+import uuid
+from contextvars import ContextVar, Token
+from pathlib import Path
 from typing import Optional
+
+from pydantic import BaseModel, Field
 
 from .models.action import Effect
 from .models.state import (
@@ -22,10 +25,6 @@ from .models.state import (
     NarrativeHistoryEntry,
     Scene,
 )
-
-# ---------------------------------------------------------------------------
-# Initial data (used to build the first mutable copies)
-# ---------------------------------------------------------------------------
 
 _CHARACTER_CREATION_SCENE_INIT = dict(
     id="character-creation-01",
@@ -89,7 +88,6 @@ _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
     },
 }
 
-# A simple enemy for combat testing
 _ENEMY_INIT = dict(
     id="goblin-01",
     name="Goblin Scout",
@@ -104,11 +102,10 @@ _ENEMY_INIT = dict(
     proficiency_bonus=2,
     hp=7,
     hp_max=7,
-    ac=12,  # Leather armor + DEX
+    ac=12,
     description="A small, wiry goblin with a rusty dagger.",
 )
 
-# Combat scene with enemy
 _COMBAT_SCENE_INIT = dict(
     id="combat-01",
     name="Forest Ambush",
@@ -116,45 +113,80 @@ _COMBAT_SCENE_INIT = dict(
     actors=["goblin-01"],
 )
 
-# ---------------------------------------------------------------------------
-# Mutable singletons
-# ---------------------------------------------------------------------------
-
-_phase: GamePhase = GamePhase.CHARACTER_CREATION
-_actor: Actor | None = None
-_enemy: Actor = Actor(**_ENEMY_INIT)
-_scene: Scene = Scene(**_CHARACTER_CREATION_SCENE_INIT)
-_narrative_history: list[NarrativeHistoryEntry] = []
-
-
 MAX_STORED_NARRATIVE_HISTORY = 50
 DEFAULT_PROMPT_HISTORY_ENTRIES = 5
 DEFAULT_PROMPT_HISTORY_CHARS = 1800
+DEFAULT_SESSION_ID = "default-session"
+SESSION_TTL_SECONDS = max(60, int(os.getenv("SESSION_TTL_SECONDS", "43200")))
+SESSION_STORE_DIR = Path(
+    os.getenv("SESSION_STATE_DIR", Path(tempfile.gettempdir()) / "huanjie-2-sessions")
+)
+SESSION_STORE_DIR.mkdir(parents=True, exist_ok=True)
+
+_CURRENT_SESSION_ID: ContextVar[str | None] = ContextVar("current_session_id", default=None)
+_SESSION_LOCK = threading.RLock()
 
 
-def get_bootstrap_state() -> BootstrapState:
-    """Return the current (live) actor and scene."""
-    return BootstrapState(
-        phase=_phase,
-        actor=_actor,
-        scene=_scene,
-        narrative_history=list(_narrative_history),
-    )
+class SessionData(BaseModel):
+    session_id: str
+    phase: GamePhase = GamePhase.CHARACTER_CREATION
+    actor: Actor | None = None
+    enemy: Actor = Field(default_factory=lambda: Actor(**_ENEMY_INIT))
+    scene: Scene = Field(default_factory=lambda: Scene(**_CHARACTER_CREATION_SCENE_INIT))
+    narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
+    updated_at: float = Field(default_factory=time.time)
 
 
-def get_actor() -> Actor | None:
-    return _actor
+_sessions: dict[str, SessionData] = {}
 
 
-def get_enemy() -> Actor:
-    """Get the enemy actor (for combat testing)."""
-    return _enemy
+def set_current_session(session_id: str) -> Token[str | None]:
+    return _CURRENT_SESSION_ID.set(session_id)
 
 
-def get_actor_by_id_or_name(target: str) -> Optional[Actor]:
-    """Find an actor by ID or name (case-insensitive)."""
+def reset_current_session(token: Token[str | None]) -> None:
+    _CURRENT_SESSION_ID.reset(token)
+
+
+def create_session() -> BootstrapState:
+    session_id = uuid.uuid4().hex
+    with _SESSION_LOCK:
+        session = _create_fresh_session(session_id)
+        _sessions[session_id] = session
+        _persist_session(session)
+    return _bootstrap_from_session(session)
+
+
+def session_exists(session_id: str) -> bool:
+    try:
+        _get_session(session_id, create_if_missing=False)
+    except KeyError:
+        return False
+    return True
+
+
+def get_bootstrap_state(session_id: str | None = None) -> BootstrapState:
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return _bootstrap_from_session(session)
+
+
+def require_bootstrap_state(session_id: str) -> BootstrapState:
+    session = _get_session(session_id, create_if_missing=False)
+    return _bootstrap_from_session(session)
+
+
+def get_actor(session_id: str | None = None) -> Actor | None:
+    return _get_session(_resolve_session_id(session_id), create_if_missing=True).actor
+
+
+def get_enemy(session_id: str | None = None) -> Actor:
+    return _get_session(_resolve_session_id(session_id), create_if_missing=True).enemy
+
+
+def get_actor_by_id_or_name(target: str, session_id: str | None = None) -> Optional[Actor]:
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
     target_lower = target.lower()
-    for actor in [_actor, _enemy]:
+    for actor in [session.actor, session.enemy]:
         if actor is None:
             continue
         if actor.id.lower() == target_lower or actor.name.lower() == target_lower:
@@ -162,30 +194,39 @@ def get_actor_by_id_or_name(target: str) -> Optional[Actor]:
     return None
 
 
-def get_scene() -> Scene:
-    return _scene
+def get_scene(session_id: str | None = None) -> Scene:
+    return _get_session(_resolve_session_id(session_id), create_if_missing=True).scene
 
 
-def get_narrative_history() -> list[NarrativeHistoryEntry]:
-    """Return the full narrative history for the current in-memory session."""
-    return list(_narrative_history)
+def get_narrative_history(session_id: str | None = None) -> list[NarrativeHistoryEntry]:
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return list(session.narrative_history)
 
 
-def append_narrative_history(entry: NarrativeHistoryEntry) -> None:
-    """Append a narrative memory item and cap total in-memory growth."""
-    global _narrative_history
-    _narrative_history = [*_narrative_history, entry][-MAX_STORED_NARRATIVE_HISTORY:]
+def append_narrative_history(
+    entry: NarrativeHistoryEntry,
+    session_id: str | None = None,
+) -> None:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        session.narrative_history = [
+            *session.narrative_history,
+            entry,
+        ][-MAX_STORED_NARRATIVE_HISTORY:]
+        _save_session(session)
 
 
 def get_narrative_context(
     max_entries: int = DEFAULT_PROMPT_HISTORY_ENTRIES,
     max_chars: int = DEFAULT_PROMPT_HISTORY_CHARS,
+    session_id: str | None = None,
 ) -> list[NarrativeHistoryEntry]:
-    """Return recent narrative history bounded for prompt injection."""
+    history = get_narrative_history(session_id=session_id)
     selected: list[NarrativeHistoryEntry] = []
     current_chars = 0
 
-    for entry in reversed(_narrative_history[-max_entries:]):
+    for entry in reversed(history[-max_entries:]):
         entry_chars = len(entry.model_dump_json())
         if selected and current_chars + entry_chars > max_chars:
             break
@@ -196,117 +237,196 @@ def get_narrative_context(
     return selected
 
 
-def set_combat_scene() -> None:
-    """Switch to combat scene with enemy present."""
-    global _scene
-    actors = ["goblin-01"]
-    if _actor is not None:
-        actors.insert(0, _actor.id)
-    _scene = Scene(**{**_COMBAT_SCENE_INIT, "actors": actors})
+def set_combat_scene(session_id: str | None = None) -> None:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        actors = ["goblin-01"]
+        if session.actor is not None:
+            actors.insert(0, session.actor.id)
+        session.scene = Scene(**{**_COMBAT_SCENE_INIT, "actors": actors})
+        _save_session(session)
 
 
-def has_character() -> bool:
-    return _actor is not None and _phase == GamePhase.ADVENTURE
+def has_character(session_id: str | None = None) -> bool:
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return session.actor is not None and session.phase == GamePhase.ADVENTURE
 
 
-def create_character(req: CharacterCreateRequest) -> BootstrapState:
-    """Create the player's starting character and enter the opening scene."""
-    global _actor, _phase, _scene, _narrative_history
+def create_character(
+    req: CharacterCreateRequest,
+    session_id: str | None = None,
+) -> BootstrapState:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        template = _CLASS_TEMPLATES[req.character_class]
+        hp = int(template["hp"])
+        actor_id = f"{req.character_class.value}-{req.name.strip().lower().replace(' ', '-')}"
 
-    template = _CLASS_TEMPLATES[req.character_class]
-    hp = int(template["hp"])
-    actor_id = f"{req.character_class.value}-{req.name.strip().lower().replace(' ', '-')}"
+        session.actor = Actor(
+            id=actor_id,
+            name=req.name.strip(),
+            character_class=req.character_class,
+            abilities=template["abilities"],
+            proficiency_bonus=2,
+            hp=hp,
+            hp_max=hp,
+            ac=int(template["ac"]),
+            description=str(template["description"]),
+        )
+        session.phase = GamePhase.ADVENTURE
+        session.scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [session.actor.id]})
+        session.enemy = Actor(**_ENEMY_INIT)
+        session.narrative_history = []
+        _save_session(session)
+    return get_bootstrap_state(session_id=resolved_session_id)
 
-    _actor = Actor(
-        id=actor_id,
-        name=req.name.strip(),
-        character_class=req.character_class,
-        abilities=template["abilities"],
-        proficiency_bonus=2,
-        hp=hp,
-        hp_max=hp,
-        ac=int(template["ac"]),
-        description=str(template["description"]),
+
+def apply_effects(effects: list[Effect], session_id: str | None = None) -> None:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        for effect in effects:
+            _apply_one(session, effect)
+        _save_session(session)
+
+
+def reset_state(session_id: str | None = None) -> BootstrapState:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _create_fresh_session(resolved_session_id)
+        _sessions[resolved_session_id] = session
+        _persist_session(session)
+    return _bootstrap_from_session(session)
+
+
+def _apply_one(session: SessionData, eff: Effect) -> None:
+    actor = session.actor
+    enemy = session.enemy
+    scene = session.scene
+
+    if actor is not None and eff.target in (actor.id, actor.name):
+        if eff.field == "hp" and isinstance(eff.delta, int):
+            session.actor = actor.model_copy(
+                update={"hp": max(0, min(actor.hp_max, actor.hp + eff.delta))}
+            )
+        elif eff.field == "conditions_add" and isinstance(eff.delta, str):
+            if eff.delta not in actor.conditions:
+                session.actor = actor.model_copy(
+                    update={"conditions": [*actor.conditions, eff.delta]}
+                )
+        elif eff.field == "conditions_remove" and isinstance(eff.delta, str):
+            session.actor = actor.model_copy(
+                update={"conditions": [c for c in actor.conditions if c != eff.delta]}
+            )
+        return
+
+    if eff.target in (enemy.id, enemy.name):
+        if eff.field == "hp" and isinstance(eff.delta, int):
+            session.enemy = enemy.model_copy(
+                update={"hp": max(0, min(enemy.hp_max, enemy.hp + eff.delta))}
+            )
+        elif eff.field == "conditions_add" and isinstance(eff.delta, str):
+            if eff.delta not in enemy.conditions:
+                session.enemy = enemy.model_copy(
+                    update={"conditions": [*enemy.conditions, eff.delta]}
+                )
+        elif eff.field == "conditions_remove" and isinstance(eff.delta, str):
+            session.enemy = enemy.model_copy(
+                update={"conditions": [c for c in enemy.conditions if c != eff.delta]}
+            )
+        return
+
+    if eff.target == scene.id and eff.field == "time" and isinstance(eff.delta, int):
+        session.scene = scene.model_copy(update={"time": scene.time + eff.delta})
+
+
+def _bootstrap_from_session(session: SessionData) -> BootstrapState:
+    return BootstrapState(
+        session_id=session.session_id,
+        phase=session.phase,
+        actor=session.actor,
+        scene=session.scene,
+        narrative_history=list(session.narrative_history),
     )
-    _phase = GamePhase.ADVENTURE
-    _scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [_actor.id]})
-    _narrative_history = []
-    return get_bootstrap_state()
 
 
-# ---------------------------------------------------------------------------
-# Effect application
-# ---------------------------------------------------------------------------
-
-def apply_effects(effects: list[Effect]) -> None:
-    """Apply a list of effects to the mutable state store.
-
-    Silently skips effects whose target or field is not recognised so
-    that the resolver can emit forward-looking effect types without
-    breaking current state handling.
-    """
-    for eff in effects:
-        _apply_one(eff)
+def _resolve_session_id(session_id: str | None) -> str:
+    return session_id or _CURRENT_SESSION_ID.get() or DEFAULT_SESSION_ID
 
 
-def _apply_one(eff: Effect) -> None:
-    global _actor, _enemy, _scene
-
-    # --- actor-targeted effects ---
-    if _actor is not None and eff.target in (_actor.id, _actor.name):
-        if eff.field == "hp" and isinstance(eff.delta, int):
-            _actor = _actor.model_copy(
-                update={"hp": max(0, min(_actor.hp_max, _actor.hp + eff.delta))}
-            )
-        elif eff.field == "conditions_add" and isinstance(eff.delta, str):
-            if eff.delta not in _actor.conditions:
-                _actor = _actor.model_copy(
-                    update={"conditions": [*_actor.conditions, eff.delta]}
-                )
-        elif eff.field == "conditions_remove" and isinstance(eff.delta, str):
-            _actor = _actor.model_copy(
-                update={
-                    "conditions": [c for c in _actor.conditions if c != eff.delta],
-                }
-            )
-        # unrecognised actor field — silently skip
-
-    # --- enemy-targeted effects ---
-    elif eff.target in (_enemy.id, _enemy.name):
-        if eff.field == "hp" and isinstance(eff.delta, int):
-            _enemy = _enemy.model_copy(
-                update={"hp": max(0, min(_enemy.hp_max, _enemy.hp + eff.delta))}
-            )
-        elif eff.field == "conditions_add" and isinstance(eff.delta, str):
-            if eff.delta not in _enemy.conditions:
-                _enemy = _enemy.model_copy(
-                    update={"conditions": [*_enemy.conditions, eff.delta]}
-                )
-        elif eff.field == "conditions_remove" and isinstance(eff.delta, str):
-            _enemy = _enemy.model_copy(
-                update={
-                    "conditions": [c for c in _enemy.conditions if c != eff.delta],
-                }
-            )
-        # unrecognised enemy field — silently skip
-
-    # --- scene-targeted effects ---
-    elif eff.target == _scene.id:
-        if eff.field == "time" and isinstance(eff.delta, int):
-            _scene = _scene.model_copy(
-                update={"time": _scene.time + eff.delta}
-            )
+def _session_file(session_id: str) -> Path:
+    return SESSION_STORE_DIR / f"{session_id}.json"
 
 
-# ---------------------------------------------------------------------------
-# Reset (for tests)
-# ---------------------------------------------------------------------------
+def _create_fresh_session(session_id: str) -> SessionData:
+    return SessionData(session_id=session_id)
 
-def reset_state() -> None:
-    """Restore mutable state to its initial values."""
-    global _phase, _actor, _enemy, _scene, _narrative_history
-    _phase = GamePhase.CHARACTER_CREATION
-    _actor = None
-    _enemy = Actor(**_ENEMY_INIT)
-    _scene = Scene(**_CHARACTER_CREATION_SCENE_INIT)
-    _narrative_history = []
+
+def _get_session(session_id: str, create_if_missing: bool) -> SessionData:
+    with _SESSION_LOCK:
+        session = _sessions.get(session_id)
+        if session is None:
+            session = _load_session(session_id)
+            if session is not None:
+                _sessions[session_id] = session
+
+        if session is None:
+            if not create_if_missing:
+                raise KeyError(session_id)
+            session = _create_fresh_session(session_id)
+            _sessions[session_id] = session
+            _persist_session(session)
+            return session
+
+        if _is_expired(session):
+            _delete_session(session_id)
+            if not create_if_missing:
+                raise KeyError(session_id)
+            session = _create_fresh_session(session_id)
+            _sessions[session_id] = session
+            _persist_session(session)
+            return session
+
+        session.updated_at = time.time()
+        _persist_session(session)
+        return session
+
+
+def _load_session(session_id: str) -> SessionData | None:
+    session_file = _session_file(session_id)
+    if not session_file.exists():
+        return None
+
+    data = json.loads(session_file.read_text(encoding="utf-8"))
+    session = SessionData.model_validate(data)
+    if _is_expired(session):
+        session_file.unlink(missing_ok=True)
+        return None
+    return session
+
+
+def _save_session(session: SessionData) -> None:
+    session.updated_at = time.time()
+    _persist_session(session)
+
+
+def _persist_session(session: SessionData) -> None:
+    _session_file(session.session_id).write_text(
+        json.dumps(
+            session.model_dump(mode="json", by_alias=True),
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _delete_session(session_id: str) -> None:
+    _sessions.pop(session_id, None)
+    _session_file(session_id).unlink(missing_ok=True)
+
+
+def _is_expired(session: SessionData) -> bool:
+    return (time.time() - session.updated_at) > SESSION_TTL_SECONDS

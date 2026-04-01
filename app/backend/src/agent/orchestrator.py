@@ -15,6 +15,7 @@ Example multi-step scenario:
 
 from __future__ import annotations
 
+import time
 from typing import Optional
 
 from ..models.action import (
@@ -215,6 +216,10 @@ class GMAgent:
                     "effects": [effect.model_dump(mode="json") for effect in self.effects],
                 },
                 narration_summary=narration_summary[:400],
+                narration=narration_result.narrative,
+                scene_progression=narration_result.scene_progression,
+                gm_prompt=narration_result.gm_prompt,
+                created_at=int(time.time() * 1000),
             )
         )
     

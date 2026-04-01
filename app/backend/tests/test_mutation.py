@@ -5,20 +5,18 @@ from httpx import ASGITransport, AsyncClient
 
 from src.main import app
 from src.models.action import Effect
-from src.models.state import CharacterClass, CharacterCreateRequest, NarrativeHistoryEntry
+from src.models.state import NarrativeHistoryEntry
 from src.state import (
     apply_effects,
     append_narrative_history,
-    create_character,
     get_actor,
     get_bootstrap_state,
     get_narrative_context,
     get_narrative_history,
     get_scene,
     reset_state,
-    set_current_session,
-    reset_current_session,
 )
+from tests.conftest import create_default_actor
 
 
 @pytest.fixture(autouse=True)
@@ -33,65 +31,43 @@ def client():
     return AsyncClient(transport=transport, base_url="http://test")
 
 
-@pytest.fixture
-def default_actor():
-    """Create a default actor for unit tests."""
-    create_character(CharacterCreateRequest(
-        name="Aldric",
-        character_class=CharacterClass.WARRIOR,
-        ability_generation="standard_array",
-    ))
-    return get_actor()
-
-
-async def _create_character_via_api(client: AsyncClient, name: str = "Aldric") -> str:
-    """Create a character via API and return session_id."""
-    resp = await client.post("/character/create", json={
-        "name": name,
-        "character_class": "warrior",
-        "ability_generation": "standard_array",
-    })
-    assert resp.status_code == 200
-    session_id = resp.headers.get("x-session-id")
-    if not session_id:
-        bootstrap = await client.get("/state/bootstrap")
-        session_id = bootstrap.json()["session_id"]
-    return session_id
-
-
 # ---------------------------------------------------------------------------
 # Unit: apply_effects on actor HP
 # ---------------------------------------------------------------------------
 
-def test_hp_damage(default_actor):
+def test_hp_damage():
+    create_default_actor()
     assert get_actor().hp == 12
     apply_effects([
-        Effect(target=default_actor.id, field="hp", delta=-3, description="test"),
+        Effect(target=get_actor().id, field="hp", delta=-3, description="test"),
     ])
     assert get_actor().hp == 9
 
 
-def test_hp_heal(default_actor):
+def test_hp_heal():
+    create_default_actor()
     apply_effects([
-        Effect(target=default_actor.id, field="hp", delta=-5, description="dmg"),
+        Effect(target=get_actor().id, field="hp", delta=-5, description="dmg"),
     ])
     assert get_actor().hp == 7
     apply_effects([
-        Effect(target=default_actor.id, field="hp", delta=2, description="heal"),
+        Effect(target=get_actor().id, field="hp", delta=2, description="heal"),
     ])
     assert get_actor().hp == 9
 
 
-def test_hp_does_not_exceed_max(default_actor):
+def test_hp_does_not_exceed_max():
+    create_default_actor()
     apply_effects([
-        Effect(target=default_actor.id, field="hp", delta=100, description="overheal"),
+        Effect(target=get_actor().id, field="hp", delta=100, description="overheal"),
     ])
-    assert get_actor().hp == default_actor.hp_max  # hp_max
+    assert get_actor().hp == 12  # hp_max
 
 
-def test_hp_does_not_go_below_zero(default_actor):
+def test_hp_does_not_go_below_zero():
+    create_default_actor()
     apply_effects([
-        Effect(target=default_actor.id, field="hp", delta=-999, description="overkill"),
+        Effect(target=get_actor().id, field="hp", delta=-999, description="overkill"),
     ])
     assert get_actor().hp == 0
 
@@ -100,37 +76,41 @@ def test_hp_does_not_go_below_zero(default_actor):
 # Unit: conditions
 # ---------------------------------------------------------------------------
 
-def test_add_condition(default_actor):
+def test_add_condition():
+    create_default_actor()
     apply_effects([
-        Effect(target=default_actor.id, field="conditions_add", delta="frightened",
+        Effect(target=get_actor().id, field="conditions_add", delta="frightened",
                description="test"),
     ])
     assert "frightened" in get_actor().conditions
 
 
-def test_add_duplicate_condition_is_idempotent(default_actor):
-    eff = Effect(target=default_actor.id, field="conditions_add", delta="poisoned",
+def test_add_duplicate_condition_is_idempotent():
+    create_default_actor()
+    eff = Effect(target=get_actor().id, field="conditions_add", delta="poisoned",
                  description="test")
     apply_effects([eff, eff])
     assert get_actor().conditions.count("poisoned") == 1
 
 
-def test_remove_condition(default_actor):
+def test_remove_condition():
+    create_default_actor()
     apply_effects([
-        Effect(target=default_actor.id, field="conditions_add", delta="stunned",
+        Effect(target=get_actor().id, field="conditions_add", delta="stunned",
                description="add"),
     ])
     assert "stunned" in get_actor().conditions
     apply_effects([
-        Effect(target=default_actor.id, field="conditions_remove", delta="stunned",
+        Effect(target=get_actor().id, field="conditions_remove", delta="stunned",
                description="remove"),
     ])
     assert "stunned" not in get_actor().conditions
 
 
-def test_remove_absent_condition_is_noop(default_actor):
+def test_remove_absent_condition_is_noop():
+    create_default_actor()
     apply_effects([
-        Effect(target=default_actor.id, field="conditions_remove", delta="invisible",
+        Effect(target=get_actor().id, field="conditions_remove", delta="invisible",
                description="noop"),
     ])
     assert get_actor().conditions == []
@@ -140,7 +120,7 @@ def test_remove_absent_condition_is_noop(default_actor):
 # Unit: scene time
 # ---------------------------------------------------------------------------
 
-def test_time_advances(default_actor):
+def test_time_advances():
     assert get_scene().time == 0
     apply_effects([
         Effect(target=get_scene().id, field="time", delta=1, description="tick"),
@@ -148,13 +128,12 @@ def test_time_advances(default_actor):
     assert get_scene().time == 1
 
 
-def test_time_accumulates(default_actor):
-    scene_id = get_scene().id
+def test_time_accumulates():
     apply_effects([
-        Effect(target=scene_id, field="time", delta=3, description="long"),
+        Effect(target=get_scene().id, field="time", delta=3, description="long"),
     ])
     apply_effects([
-        Effect(target=scene_id, field="time", delta=2, description="more"),
+        Effect(target=get_scene().id, field="time", delta=2, description="more"),
     ])
     assert get_scene().time == 5
 
@@ -163,33 +142,34 @@ def test_time_accumulates(default_actor):
 # Unit: unknown effects are silently skipped
 # ---------------------------------------------------------------------------
 
-def test_unknown_target_skipped(default_actor):
+def test_unknown_target_skipped():
+    create_default_actor()
     apply_effects([
         Effect(target="nobody", field="hp", delta=-1, description="ghost"),
     ])
-    assert get_actor().hp == default_actor.hp
+    assert get_actor().hp == 12
 
 
-def test_unknown_field_skipped(default_actor):
+def test_unknown_field_skipped():
+    create_default_actor()
     apply_effects([
-        Effect(target=default_actor.id, field="xp", delta=100, description="nope"),
+        Effect(target=get_actor().id, field="xp", delta=100, description="nope"),
     ])
     # No crash; actor unchanged
-    assert get_actor().hp == default_actor.hp
+    assert get_actor().hp == 12
 
 
 # ---------------------------------------------------------------------------
 # Unit: reset
 # ---------------------------------------------------------------------------
 
-def test_reset_restores_state(default_actor):
-    actor_id = default_actor.id
-    scene_id = get_scene().id
+def test_reset_restores_state():
+    create_default_actor()
     apply_effects([
-        Effect(target=actor_id, field="hp", delta=-5, description="dmg"),
-        Effect(target=actor_id, field="conditions_add", delta="poisoned",
+        Effect(target=get_actor().id, field="hp", delta=-5, description="dmg"),
+        Effect(target=get_actor().id, field="conditions_add", delta="poisoned",
                description="add"),
-        Effect(target=scene_id, field="time", delta=3, description="tick"),
+        Effect(target=get_scene().id, field="time", delta=3, description="tick"),
     ])
     append_narrative_history(NarrativeHistoryEntry(
         action_summary="Aldric forces a stuck chest",
@@ -197,13 +177,7 @@ def test_reset_restores_state(default_actor):
         narration_summary="The chest holds fast.",
     ))
     reset_state()
-    create_character(CharacterCreateRequest(
-        name="Aldric",
-        character_class=CharacterClass.WARRIOR,
-        ability_generation="standard_array",
-    ))
-    assert get_actor().hp == 12
-    assert get_actor().conditions == []
+    assert get_actor() is None
     assert get_scene().time == 0
     assert get_narrative_history() == []
 
@@ -212,24 +186,26 @@ def test_reset_restores_state(default_actor):
 # Integration: bootstrap reflects mutations
 # ---------------------------------------------------------------------------
 
-def test_bootstrap_reflects_hp_change(default_actor):
+def test_bootstrap_reflects_hp_change():
+    create_default_actor()
     apply_effects([
-        Effect(target=default_actor.id, field="hp", delta=-4, description="test"),
+        Effect(target=get_actor().id, field="hp", delta=-4, description="test"),
     ])
     state = get_bootstrap_state()
-    assert state.actor.hp == default_actor.hp - 4
+    assert state.actor.hp == 8
 
 
-def test_bootstrap_reflects_conditions(default_actor):
+def test_bootstrap_reflects_conditions():
+    create_default_actor()
     apply_effects([
-        Effect(target=default_actor.id, field="conditions_add", delta="poisoned",
+        Effect(target=get_actor().id, field="conditions_add", delta="poisoned",
                description="test"),
     ])
     state = get_bootstrap_state()
     assert "poisoned" in state.actor.conditions
 
 
-def test_bootstrap_reflects_time(default_actor):
+def test_bootstrap_reflects_time():
     apply_effects([
         Effect(target=get_scene().id, field="time", delta=2, description="test"),
     ])
@@ -238,6 +214,7 @@ def test_bootstrap_reflects_time(default_actor):
 
 
 def test_narrative_context_applies_entry_and_char_limits():
+    create_default_actor()
     for idx in range(6):
         append_narrative_history(NarrativeHistoryEntry(
             action_summary=f"Action {idx}",
@@ -259,81 +236,87 @@ def test_narrative_context_applies_entry_and_char_limits():
 @pytest.mark.asyncio
 async def test_action_check_advances_time(client):
     """Any check (not auto-success) should advance scene time by 1."""
-    from src.state import set_current_session, reset_current_session
+    from tests.conftest import create_session_and_character
     async with client as c:
-        session_id = await _create_character_via_api(c)
-        await c.post("/action", json={
-            "scene_id": "tavern-01",
-            "actor": "Aldric",
-            "intent": "arm wrestle the barkeep",
-            "approach": "use brute force",
-            "ability": "str",
-            "dc": 10,
-        }, headers={"X-Session-Id": session_id})
-    token = set_current_session(session_id)
-    try:
-        assert get_scene().time == 1
-    finally:
-        reset_current_session(token)
+        session_id = await create_session_and_character(c)
+        await c.post(
+            "/action",
+            json={
+                "scene_id": "tavern-01",
+                "actor": "Aldric",
+                "intent": "arm wrestle the barkeep",
+                "approach": "use brute force",
+                "ability": "str",
+                "dc": 10,
+            },
+            headers={"X-Session-Id": session_id},
+        )
+    assert get_scene(session_id=session_id).time == 1
 
 
 @pytest.mark.asyncio
 async def test_failed_physical_check_reduces_hp(client):
     """A failed STR/DEX/CON check should cost 1 HP."""
-    from src.state import set_current_session, reset_current_session
+    from tests.conftest import create_session_and_character
     async with client as c:
-        session_id = await _create_character_via_api(c)
+        session_id = await create_session_and_character(c)
         # Force failure with impossibly high DC
-        resp = await c.post("/action", json={
-            "scene_id": "tavern-01",
-            "actor": "Aldric",
-            "intent": "lift the immovable boulder",
-            "approach": "push with all strength",
-            "ability": "str",
-            "dc": 99,
-        }, headers={"X-Session-Id": session_id})
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "tavern-01",
+                "actor": "Aldric",
+                "intent": "lift the immovable boulder",
+                "approach": "push with all strength",
+                "ability": "str",
+                "dc": 99,
+            },
+            headers={"X-Session-Id": session_id},
+        )
     assert resp.json()["outcome"] == "failure"
-    token = set_current_session(session_id)
-    try:
-        assert get_actor().hp == 11  # 12 - 1
-    finally:
-        reset_current_session(token)
+    # HP reduced by 1 due to failed physical check
+    assert get_actor(session_id=session_id).hp == 11
 
 
 @pytest.mark.asyncio
 async def test_auto_success_does_not_mutate(client):
     """Auto-success actions should not change HP or time."""
-    from src.state import set_current_session, reset_current_session
+    from tests.conftest import create_session_and_character
     async with client as c:
-        session_id = await _create_character_via_api(c)
-        await c.post("/action", json={
-            "scene_id": "tavern-01",
-            "actor": "Aldric",
-            "intent": "look around the tavern",
-            "approach": "casually look at the patrons",
-        }, headers={"X-Session-Id": session_id})
-    token = set_current_session(session_id)
-    try:
-        assert get_actor().hp == 12
-        assert get_scene().time == 0
-    finally:
-        reset_current_session(token)
+        session_id = await create_session_and_character(c)
+        await c.post(
+            "/action",
+            json={
+                "scene_id": "tavern-01",
+                "actor": "Aldric",
+                "intent": "look around the tavern",
+                "approach": "casually look at the patrons",
+            },
+            headers={"X-Session-Id": session_id},
+        )
+    assert get_actor(session_id=session_id).hp == 12
+    assert get_scene(session_id=session_id).time == 0
 
 
 @pytest.mark.asyncio
 async def test_bootstrap_endpoint_shows_live_state(client):
     """GET /state/bootstrap should reflect mutations from prior actions."""
+    from tests.conftest import create_session_and_character
     async with client as c:
-        session_id = await _create_character_via_api(c)
+        session_id = await create_session_and_character(c)
         # Deal damage
-        await c.post("/action", json={
-            "scene_id": "tavern-01",
-            "actor": "Aldric",
-            "intent": "lift the immovable boulder",
-            "approach": "push with all strength",
-            "ability": "str",
-            "dc": 99,
-        }, headers={"X-Session-Id": session_id})
+        await c.post(
+            "/action",
+            json={
+                "scene_id": "tavern-01",
+                "actor": "Aldric",
+                "intent": "lift the immovable boulder",
+                "approach": "push with all strength",
+                "ability": "str",
+                "dc": 99,
+            },
+            headers={"X-Session-Id": session_id},
+        )
         # Fetch bootstrap
         resp = await c.get("/state/bootstrap", headers={"X-Session-Id": session_id})
     data = resp.json()
@@ -350,32 +333,30 @@ async def test_bootstrap_endpoint_shows_live_state(client):
 @pytest.mark.asyncio
 async def test_reset_endpoint_restores_initial_state(client):
     """POST /state/reset should restore actor and scene to initial values."""
-    from src.state import set_current_session, reset_current_session
+    from tests.conftest import create_session_and_character
     async with client as c:
-        session_id = await _create_character_via_api(c)
+        session_id = await create_session_and_character(c)
         # Mutate state: damage HP, add condition, advance time
-        await c.post("/action", json={
-            "scene_id": "tavern-01",
-            "actor": "Aldric",
-            "intent": "lift the immovable boulder",
-            "approach": "push with all strength",
-            "ability": "str",
-            "dc": 99,
-        }, headers={"X-Session-Id": session_id})
-        
-        token = set_current_session(session_id)
-        try:
-            actor_id = get_actor().id
-            apply_effects([
-                Effect(target=actor_id, field="conditions_add", delta="exhausted",
-                       description="test"),
-            ])
-            # Verify state is mutated
-            assert get_actor().hp == 11
-            assert "exhausted" in get_actor().conditions
-            assert get_scene().time == 1
-        finally:
-            reset_current_session(token)
+        await c.post(
+            "/action",
+            json={
+                "scene_id": "tavern-01",
+                "actor": "Aldric",
+                "intent": "lift the immovable boulder",
+                "approach": "push with all strength",
+                "ability": "str",
+                "dc": 99,
+            },
+            headers={"X-Session-Id": session_id},
+        )
+        apply_effects([
+            Effect(target=get_actor(session_id=session_id).id, field="conditions_add", delta="exhausted",
+                   description="test"),
+        ], session_id=session_id)
+        # Verify state is mutated
+        assert get_actor(session_id=session_id).hp == 11
+        assert "exhausted" in get_actor(session_id=session_id).conditions
+        assert get_scene(session_id=session_id).time == 1
 
         # Call reset endpoint
         resp = await c.post("/state/reset", headers={"X-Session-Id": session_id})
@@ -383,103 +364,81 @@ async def test_reset_endpoint_restores_initial_state(client):
         # Verify response status
         assert resp.status_code == 200
 
-        # Verify state is restored - need to recreate character since reset clears it
-        create_character(CharacterCreateRequest(
-            name="Aldric",
-            character_class=CharacterClass.WARRIOR,
-            ability_generation="standard_array",
-        ), session_id=session_id)
-        token = set_current_session(session_id)
-        try:
-            assert get_actor().hp == 12
-            assert get_actor().conditions == []
-            assert get_scene().time == 0
-            assert get_narrative_history() == []
-        finally:
-            reset_current_session(token)
+        # Verify state is restored (no actor after reset)
+        assert get_actor(session_id=session_id) is None
+        assert get_scene(session_id=session_id).time == 0
+        assert get_narrative_history(session_id=session_id) == []
 
 
 @pytest.mark.asyncio
 async def test_reset_endpoint_returns_fresh_bootstrap(client):
     """POST /state/reset should return the reset bootstrap state."""
-    from src.state import set_current_session, reset_current_session
+    from tests.conftest import create_session_and_character
     async with client as c:
-        session_id = await _create_character_via_api(c)
-        
-        token = set_current_session(session_id)
-        try:
-            # Mutate state
-            apply_effects([
-                Effect(target=get_actor().id, field="hp", delta=-7, description="dmg"),
-                Effect(target=get_scene().id, field="time", delta=5, description="tick"),
-            ])
-        finally:
-            reset_current_session(token)
+        session_id = await create_session_and_character(c)
+        actor_id = get_actor(session_id=session_id).id
+        # Mutate state
+        apply_effects([
+            Effect(target=actor_id, field="hp", delta=-7, description="dmg"),
+            Effect(target=get_scene(session_id=session_id).id, field="time", delta=5, description="tick"),
+        ], session_id=session_id)
 
         # Call reset and check response
         resp = await c.post("/state/reset", headers={"X-Session-Id": session_id})
         data = resp.json()
 
-        # Response should contain fresh initial state (no actor after reset)
-        # After reset, there is no actor until created again
+        # Response should contain fresh initial state (no actor)
         assert data["actor"] is None
         assert data["scene"]["time"] == 0
+        assert data["scene"]["id"] == "character-creation-01"
 
 
 @pytest.mark.asyncio
 async def test_reset_clears_accumulated_mutations(client):
     """Multiple mutations followed by reset should all be cleared."""
-    from src.state import set_current_session, reset_current_session
+    from tests.conftest import create_session_and_character
     async with client as c:
-        session_id = await _create_character_via_api(c)
+        session_id = await create_session_and_character(c)
         # Apply multiple mutations
-        await c.post("/action", json={
-            "scene_id": "tavern-01",
-            "actor": "Aldric",
-            "intent": "arm wrestle",
-            "approach": "use brute force",
-            "ability": "str",
-            "dc": 10,
-        }, headers={"X-Session-Id": session_id})
-        await c.post("/action", json={
-            "scene_id": "tavern-01",
-            "actor": "Aldric",
-            "intent": "another action",
-            "approach": "try hard",
-            "ability": "dex",
-            "dc": 99,
-        }, headers={"X-Session-Id": session_id})
-        
-        token = set_current_session(session_id)
-        try:
-            actor_id = get_actor().id
-            apply_effects([
-                Effect(target=actor_id, field="conditions_add", delta="stunned",
-                       description="test"),
-                Effect(target=actor_id, field="conditions_add", delta="poisoned",
-                       description="test"),
-            ])
+        await c.post(
+            "/action",
+            json={
+                "scene_id": "tavern-01",
+                "actor": "Aldric",
+                "intent": "arm wrestle",
+                "approach": "use brute force",
+                "ability": "str",
+                "dc": 10,
+            },
+            headers={"X-Session-Id": session_id},
+        )
+        await c.post(
+            "/action",
+            json={
+                "scene_id": "tavern-01",
+                "actor": "Aldric",
+                "intent": "another action",
+                "approach": "try hard",
+                "ability": "dex",
+                "dc": 99,
+            },
+            headers={"X-Session-Id": session_id},
+        )
+        apply_effects([
+            Effect(target=get_actor(session_id=session_id).id, field="conditions_add", delta="stunned",
+                   description="test"),
+            Effect(target=get_actor(session_id=session_id).id, field="conditions_add", delta="poisoned",
+                   description="test"),
+        ], session_id=session_id)
 
-            # Verify multiple mutations applied
-            assert get_actor().hp < 12  # Some damage from failed check
-            assert len(get_actor().conditions) == 2
-            assert get_scene().time >= 2
-        finally:
-            reset_current_session(token)
+        # Verify multiple mutations applied
+        assert get_actor(session_id=session_id).hp < 12  # Some damage from failed check
+        assert len(get_actor(session_id=session_id).conditions) == 2
+        assert get_scene(session_id=session_id).time >= 2
 
         # Reset
         await c.post("/state/reset", headers={"X-Session-Id": session_id})
 
-        # All cleared - recreate character for verification
-        create_character(CharacterCreateRequest(
-            name="Aldric",
-            character_class=CharacterClass.WARRIOR,
-            ability_generation="standard_array",
-        ), session_id=session_id)
-        token = set_current_session(session_id)
-        try:
-            assert get_actor().hp == 12
-            assert get_actor().conditions == []
-            assert get_scene().time == 0
-        finally:
-            reset_current_session(token)
+        # All cleared
+        assert get_actor(session_id=session_id) is None
+        assert get_scene(session_id=session_id).time == 0

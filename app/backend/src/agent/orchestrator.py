@@ -389,16 +389,15 @@ class GMAgent:
         # Determine check parameters
         ability = req.ability or self._infer_ability(req.approach)
         modifier = actor.abilities.modifier(ability)
-        prof = actor.proficiency_bonus
         dc = req.dc or self._pick_dc(req.intent)
         advantage = req.advantage
         
-        # Step 1: Roll d20
+        # Step 1: Roll d20 (generic ability checks do not add proficiency bonus)
         roll_result = self._call_roll_dice(
             dice_type=DiceType.D20,
             reason=f"{ability.upper()} check for {req.intent}",
             advantage=advantage,
-            modifier=modifier + prof,
+            modifier=modifier,
         )
         
         total = roll_result.total
@@ -408,7 +407,7 @@ class GMAgent:
         check = CheckDetail(
             ability=ability,
             modifier=modifier,
-            proficiency_bonus=prof,
+            proficiency_bonus=0,
             advantage=advantage,
             roll=roll_result.roll,
             total=total,

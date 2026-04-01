@@ -5,6 +5,7 @@ from httpx import ASGITransport, AsyncClient
 
 from src.main import app
 from src.state import get_actor, get_enemy, reset_state
+from tests.conftest import create_session_and_character
 
 
 @pytest.fixture(autouse=True)
@@ -19,21 +20,6 @@ def client():
     return AsyncClient(transport=transport, base_url="http://test")
 
 
-async def _create_character(client: AsyncClient, name: str = "Aldric") -> str:
-    """Create a character and return session_id."""
-    resp = await client.post("/character/create", json={
-        "name": name,
-        "character_class": "warrior",
-        "ability_generation": "standard_array",
-    })
-    assert resp.status_code == 200
-    session_id = resp.headers.get("x-session-id")
-    if not session_id:
-        bootstrap = await client.get("/state/bootstrap")
-        session_id = bootstrap.json()["session_id"]
-    return session_id
-
-
 # ---------------------------------------------------------------------------
 # Basic attack with weapon
 # ---------------------------------------------------------------------------
@@ -42,15 +28,19 @@ async def _create_character(client: AsyncClient, name: str = "Aldric") -> str:
 async def test_attack_requires_weapon_or_explicit_type(client):
     """An action with a weapon should be treated as an attack."""
     async with client as c:
-        session_id = await _create_character(c)
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the goblin",
-            "approach": "swing my longsword",
-            "weapon": "longsword",
-            "target": "goblin-01",
-        }, headers={"X-Session-Id": session_id})
+        session_id = await create_session_and_character(c)
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "attack the goblin",
+                "approach": "swing my longsword",
+                "weapon": "longsword",
+                "target": "goblin-01",
+            },
+            headers={"X-Session-Id": session_id},
+        )
     assert resp.status_code == 200
     data = resp.json()
     assert "attack" in data
@@ -63,16 +53,20 @@ async def test_attack_requires_weapon_or_explicit_type(client):
 async def test_attack_with_action_type_attack(client):
     """An explicit attack action type should trigger combat resolution."""
     async with client as c:
-        session_id = await _create_character(c)
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the goblin",
-            "approach": "charge forward with weapon raised",
-            "action_type": "attack",
-            "weapon": "longsword",
-            "target": "goblin-01",
-        }, headers={"X-Session-Id": session_id})
+        session_id = await create_session_and_character(c)
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "attack the goblin",
+                "approach": "charge forward with weapon raised",
+                "action_type": "attack",
+                "weapon": "longsword",
+                "target": "goblin-01",
+            },
+            headers={"X-Session-Id": session_id},
+        )
     assert resp.status_code == 200
     data = resp.json()
     assert data["attack"] is not None
@@ -86,27 +80,31 @@ async def test_attack_with_action_type_attack(client):
 async def test_attack_roll_structure(client):
     """Attack response should contain proper roll details."""
     async with client as c:
-        session_id = await _create_character(c)
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the goblin",
-            "approach": "swing my sword",
-            "weapon": "longsword",
-            "target": "goblin-01",
-        }, headers={"X-Session-Id": session_id})
+        session_id = await create_session_and_character(c)
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "attack the goblin",
+                "approach": "swing my sword",
+                "weapon": "longsword",
+                "target": "goblin-01",
+            },
+            headers={"X-Session-Id": session_id},
+        )
     assert resp.status_code == 200
     data = resp.json()
     attack = data["attack"]
-    
+
     assert "hit_roll" in attack
     assert "total_attack" in attack
     assert "target_ac" in attack
     assert attack["target_ac"] == 12  # Goblin AC
     assert 1 <= attack["hit_roll"] <= 20  # Valid d20 roll
-    
+
     # Verify total = roll + modifier + proficiency
-    # Aldric (warrior): STR 15 (+2), prof +2 = +4 total
+    # Warrior standard array: STR 15 (+2), prof +2 = +4 total
     expected_total = attack["hit_roll"] + 4
     assert attack["total_attack"] == expected_total
 
@@ -118,83 +116,80 @@ async def test_attack_roll_structure(client):
 @pytest.mark.asyncio
 async def test_hit_applies_damage_to_target(client):
     """A successful hit should deal damage and reduce target HP."""
-    from src.state import set_current_session, reset_current_session
+    from src.state import _get_session
+
     async with client as c:
-        session_id = await _create_character(c)
-        
-        token = set_current_session(session_id)
-        try:
-            initial_enemy_hp = get_enemy().hp  # 7
-        finally:
-            reset_current_session(token)
-        
-        # Force a hit with high roll by using advantage
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the goblin",
-            "approach": "swing my longsword",
-            "weapon": "longsword",
-            "target": "goblin-01",
-            "dc": 1,  # Low DC to ensure hit (not used for attack but for consistency)
-        }, headers={"X-Session-Id": session_id})
-    
+        session_id = await create_session_and_character(c)
+        initial_enemy_hp = _get_session(session_id, create_if_missing=True).enemy.hp
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "attack the goblin",
+                "approach": "swing my longsword",
+                "weapon": "longsword",
+                "target": "goblin-01",
+                "dc": 1,
+            },
+            headers={"X-Session-Id": session_id},
+        )
+
     data = resp.json()
-    
-    token = set_current_session(session_id)
-    try:
-        # Check if it was a hit
-        if data["outcome"] == "success":
-            # Damage should be applied
-            assert len(data["effects"]) > 0
-            damage_effects = [e for e in data["effects"] if e["field"] == "hp" and e["delta"] < 0]
-            assert len(damage_effects) > 0
-            
-            # Check enemy HP was reduced
-            current_enemy_hp = get_enemy().hp
-            assert current_enemy_hp < initial_enemy_hp
-            
-            # Check damage detail
-            assert data["attack"]["damage"] is not None
-            damage = data["attack"]["damage"]
-            assert "dice_expression" in damage
-            assert "rolls" in damage
-            assert "total" in damage
-            assert len(damage["rolls"]) > 0
-            assert damage["total"] > 0
-    finally:
-        reset_current_session(token)
+
+    # Check if it was a hit
+    if data["outcome"] == "success":
+        # Damage should be applied
+        assert len(data["effects"]) > 0
+        damage_effects = [e for e in data["effects"] if e["field"] == "hp" and e["delta"] < 0]
+        assert len(damage_effects) > 0
+
+        # Check enemy HP was reduced
+        current_enemy_hp = _get_session(session_id, create_if_missing=True).enemy.hp
+        assert current_enemy_hp < initial_enemy_hp
+
+        # Check damage detail
+        assert data["attack"]["damage"] is not None
+        damage = data["attack"]["damage"]
+        assert "dice_expression" in damage
+        assert "rolls" in damage
+        assert "total" in damage
+        assert len(damage["rolls"]) > 0
+        assert damage["total"] > 0
 
 
 @pytest.mark.asyncio
 async def test_miss_does_no_damage(client):
     """A miss should not deal damage."""
+    from src.state import _get_session
+
     async with client as c:
-        session_id = await _create_character(c)
-        initial_enemy_hp = get_enemy().hp
-        
-        # Force a miss with impossibly high target AC simulation
-        # We do this by using a disadvantage and hoping for low roll
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the goblin",
-            "approach": "swing blindly",
-            "weapon": "longsword",
-            "target": "goblin-01",
-            "advantage": False,  # Disadvantage
-        }, headers={"X-Session-Id": session_id})
-    
+        session_id = await create_session_and_character(c)
+        initial_enemy_hp = _get_session(session_id, create_if_missing=True).enemy.hp
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "attack the goblin",
+                "approach": "swing blindly",
+                "weapon": "longsword",
+                "target": "goblin-01",
+                "advantage": False,  # Disadvantage
+            },
+            headers={"X-Session-Id": session_id},
+        )
+
     data = resp.json()
-    
+
     if data["outcome"] == "failure":
         # No damage should be applied
         assert data["attack"]["damage"] is None
         damage_effects = [e for e in data["effects"] if e["field"] == "hp" and e["delta"] < 0]
         assert len(damage_effects) == 0
-        
+
         # Enemy HP should be unchanged
-        assert get_enemy().hp == initial_enemy_hp
+        assert _get_session(session_id, create_if_missing=True).enemy.hp == initial_enemy_hp
 
 
 # ---------------------------------------------------------------------------
@@ -204,35 +199,31 @@ async def test_miss_does_no_damage(client):
 @pytest.mark.asyncio
 async def test_enemy_defeated_at_zero_hp(client):
     """When enemy reaches 0 HP, they should get the defeated condition."""
-    # Pre-damage the enemy to make it easier to defeat
     from src.models.action import Effect
-    from src.state import apply_effects, set_current_session, reset_current_session
-    
+    from src.state import apply_effects, _get_session
+
     async with client as c:
-        session_id = await _create_character(c)
-        
-        token = set_current_session(session_id)
-        try:
-            # Reduce enemy HP to 2
-            apply_effects([Effect(target="goblin-01", field="hp", delta=-5, description="setup")])
-            assert get_enemy().hp == 2
-        finally:
-            reset_current_session(token)
-        
-        # Attack until hit (may need multiple tries)
-        # For test reliability, we'll just check the structure
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the goblin",
-            "approach": "deliver a finishing blow",
-            "weapon": "longsword",
-            "target": "goblin-01",
-            "dc": 1,  # Ensure we get to combat resolution
-        }, headers={"X-Session-Id": session_id})
-    
+        session_id = await create_session_and_character(c)
+        # Pre-damage the enemy in the created session to make it easier to defeat
+        apply_effects([Effect(target="goblin-01", field="hp", delta=-5, description="setup")], session_id=session_id)
+        assert _get_session(session_id, create_if_missing=True).enemy.hp == 2
+
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "attack the goblin",
+                "approach": "deliver a finishing blow",
+                "weapon": "longsword",
+                "target": "goblin-01",
+                "dc": 1,
+            },
+            headers={"X-Session-Id": session_id},
+        )
+
     data = resp.json()
-    
+
     # If we hit and the damage defeats the enemy
     if data["outcome"] == "success" and data["attack"]["damage"]:
         damage_dealt = abs(data["attack"]["damage"]["total"])
@@ -250,19 +241,23 @@ async def test_enemy_defeated_at_zero_hp(client):
 async def test_finesse_weapon_uses_dex(client):
     """Finesse weapons like rapier should use DEX for attack bonus."""
     async with client as c:
-        session_id = await _create_character(c)
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the goblin",
-            "approach": "thrust with precision",
-            "weapon": "rapier",  # Finesse weapon
-            "target": "goblin-01",
-        }, headers={"X-Session-Id": session_id})
-    
+        session_id = await create_session_and_character(c)
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "attack the goblin",
+                "approach": "thrust with precision",
+                "weapon": "rapier",  # Finesse weapon
+                "target": "goblin-01",
+            },
+            headers={"X-Session-Id": session_id},
+        )
+
     data = resp.json()
     attack = data["attack"]
-    
+
     # Rapier is finesse, should use DEX (+1 for warrior) + prof (+2) = +3
     expected_bonus = 3  # DEX mod +1, prof +2
     expected_total = attack["hit_roll"] + expected_bonus
@@ -273,20 +268,24 @@ async def test_finesse_weapon_uses_dex(client):
 async def test_ranged_weapon_uses_dex(client):
     """Ranged weapons like shortbow should use DEX for attack bonus."""
     async with client as c:
-        session_id = await _create_character(c)
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "shoot the goblin",
-            "approach": "draw and fire",
-            "weapon": "shortbow",
-            "target": "goblin-01",
-        }, headers={"X-Session-Id": session_id})
-    
+        session_id = await create_session_and_character(c)
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "shoot the goblin",
+                "approach": "draw and fire",
+                "weapon": "shortbow",
+                "target": "goblin-01",
+            },
+            headers={"X-Session-Id": session_id},
+        )
+
     data = resp.json()
     attack = data["attack"]
-    
-    # Shortbow is ranged, should use DEX (+1 for warrior) + prof (+2) = +3
+
+    # Shortbow is ranged, should use DEX (+1 for Aldric) + prof (+2) = +3
     expected_bonus = 3
     expected_total = attack["hit_roll"] + expected_bonus
     assert attack["total_attack"] == expected_total
@@ -296,19 +295,23 @@ async def test_ranged_weapon_uses_dex(client):
 async def test_melee_weapon_uses_str(client):
     """Melee weapons like longsword should use STR for attack bonus."""
     async with client as c:
-        session_id = await _create_character(c)
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the goblin",
-            "approach": "swing hard",
-            "weapon": "longsword",
-            "target": "goblin-01",
-        }, headers={"X-Session-Id": session_id})
-    
+        session_id = await create_session_and_character(c)
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "attack the goblin",
+                "approach": "swing hard",
+                "weapon": "longsword",
+                "target": "goblin-01",
+            },
+            headers={"X-Session-Id": session_id},
+        )
+
     data = resp.json()
     attack = data["attack"]
-    
+
     # Longsword uses STR (+2 for warrior) + prof (+2) = +4
     expected_bonus = 4
     expected_total = attack["hit_roll"] + expected_bonus
@@ -323,25 +326,28 @@ async def test_melee_weapon_uses_str(client):
 async def test_hit_narration_includes_details(client):
     """Hit narration should include roll, AC comparison, and damage."""
     async with client as c:
-        session_id = await _create_character(c)
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the goblin",
-            "approach": "swing my longsword",
-            "weapon": "longsword",
-            "target": "goblin-01",
-        }, headers={"X-Session-Id": session_id})
-    
+        session_id = await create_session_and_character(c)
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "attack the goblin",
+                "approach": "swing my longsword",
+                "weapon": "longsword",
+                "target": "goblin-01",
+            },
+            headers={"X-Session-Id": session_id},
+        )
+
     data = resp.json()
     narration = data["narration"]
-    
+
     # Should mention actor, target, and weapon
     assert "Aldric" in narration
-    # Target might be mentioned in Chinese (哥布林斥候) or English
-    assert "goblin" in narration.lower() or "斥候" in narration or "Goblin" in narration
+    assert "Goblin" in narration or "goblin" in narration or "斥候" in narration
     assert "longsword" in narration
-    
+
     if data["outcome"] == "success":
         # Hit narration should include damage info
         assert "damage" in narration.lower() or "hits" in narration.lower()
@@ -358,19 +364,23 @@ async def test_hit_narration_includes_details(client):
 async def test_custom_damage_dice_override(client):
     """Custom damage_dice should override weapon default."""
     async with client as c:
-        session_id = await _create_character(c)
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack with magical force",
-            "approach": "swing my glowing sword",
-            "weapon": "longsword",
-            "damage_dice": "1d8+2",  # Custom damage
-            "target": "goblin-01",
-        }, headers={"X-Session-Id": session_id})
-    
+        session_id = await create_session_and_character(c)
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "attack with magical force",
+                "approach": "swing my glowing sword",
+                "weapon": "longsword",
+                "damage_dice": "1d8+2",  # Custom damage
+                "target": "goblin-01",
+            },
+            headers={"X-Session-Id": session_id},
+        )
+
     data = resp.json()
-    
+
     if data["outcome"] == "success" and data["attack"]["damage"]:
         damage = data["attack"]["damage"]
         assert damage["dice_expression"] == "1d8+2"
@@ -384,16 +394,20 @@ async def test_custom_damage_dice_override(client):
 async def test_attack_unknown_target(client):
     """Attacking a non-existent target should return appropriate response."""
     async with client as c:
-        session_id = await _create_character(c)
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the dragon",
-            "approach": "swing my sword",
-            "weapon": "longsword",
-            "target": "ancient-dragon-999",
-        }, headers={"X-Session-Id": session_id})
-    
+        session_id = await create_session_and_character(c)
+        resp = await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "attack the dragon",
+                "approach": "swing my sword",
+                "weapon": "longsword",
+                "target": "ancient-dragon-999",
+            },
+            headers={"X-Session-Id": session_id},
+        )
+
     assert resp.status_code == 200
     data = resp.json()
     assert data["outcome"] == "failure"
@@ -407,27 +421,22 @@ async def test_attack_unknown_target(client):
 @pytest.mark.asyncio
 async def test_combat_advances_time(client):
     """Combat actions should advance scene time."""
-    from src.state import get_scene, set_current_session, reset_current_session
-    
+    from src.state import get_scene
+
     async with client as c:
-        session_id = await _create_character(c)
-        token = set_current_session(session_id)
-        try:
-            initial_time = get_scene().time
-        finally:
-            reset_current_session(token)
-        
-        await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the goblin",
-            "approach": "swing my sword",
-            "weapon": "longsword",
-            "target": "goblin-01",
-        }, headers={"X-Session-Id": session_id})
-        
-        token = set_current_session(session_id)
-        try:
-            assert get_scene().time == initial_time + 1
-        finally:
-            reset_current_session(token)
+        session_id = await create_session_and_character(c)
+        initial_time = get_scene(session_id=session_id).time
+        await c.post(
+            "/action",
+            json={
+                "scene_id": "combat-01",
+                "actor": "Aldric",
+                "intent": "attack the goblin",
+                "approach": "swing my sword",
+                "weapon": "longsword",
+                "target": "goblin-01",
+            },
+            headers={"X-Session-Id": session_id},
+        )
+
+    assert get_scene(session_id=session_id).time == initial_time + 1

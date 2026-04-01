@@ -16,6 +16,9 @@ from .models.state import (
     AbilityScores,
     Actor,
     BootstrapState,
+    CharacterClass,
+    CharacterCreateRequest,
+    GamePhase,
     NarrativeHistoryEntry,
     Scene,
 )
@@ -24,23 +27,67 @@ from .models.state import (
 # Initial data (used to build the first mutable copies)
 # ---------------------------------------------------------------------------
 
-_ACTOR_INIT = dict(
-    id="aldric-01",
-    name="Aldric",
-    abilities=AbilityScores(**{
-        "str": 16,
-        "dex": 12,
-        "con": 13,
-        "int": 10,
-        "wis": 12,
-        "cha": 8,
-    }),
-    proficiency_bonus=2,
-    hp=12,
-    hp_max=12,
-    ac=14,  # Chain shirt + DEX
-    description="A sturdy human sellsword with a practical outlook.",
+_CHARACTER_CREATION_SCENE_INIT = dict(
+    id="character-creation-01",
+    name="命运启程",
+    description=(
+        "你站在冒险开始前的门槛上。先决定自己的姓名、道路与天赋，"
+        "随后故事才会真正展开。"
+    ),
+    actors=[],
 )
+
+_ADVENTURE_SCENE_INIT = dict(
+    id="tavern-01",
+    name="The Rusty Lantern",
+    description=(
+        "A dimly-lit tavern at a crossroads village. The smell of stale ale "
+        "mixes with wood smoke. A few locals nurse their drinks in silence."
+    ),
+    actors=[],
+)
+
+_CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
+    CharacterClass.WARRIOR: {
+        "description": "A disciplined frontline warrior who trusts steel and grit.",
+        "abilities": AbilityScores(**{
+            "str": 15,
+            "dex": 13,
+            "con": 14,
+            "int": 8,
+            "wis": 12,
+            "cha": 10,
+        }),
+        "hp": 12,
+        "ac": 16,
+    },
+    CharacterClass.MAGE: {
+        "description": "A learned spellcaster who shapes danger with study and will.",
+        "abilities": AbilityScores(**{
+            "str": 8,
+            "dex": 13,
+            "con": 12,
+            "int": 15,
+            "wis": 14,
+            "cha": 10,
+        }),
+        "hp": 8,
+        "ac": 12,
+    },
+    CharacterClass.ROGUE: {
+        "description": "A quick-footed opportunist who survives by timing and nerve.",
+        "abilities": AbilityScores(**{
+            "str": 10,
+            "dex": 15,
+            "con": 13,
+            "int": 12,
+            "wis": 14,
+            "cha": 8,
+        }),
+        "hp": 10,
+        "ac": 14,
+    },
+}
 
 # A simple enemy for combat testing
 _ENEMY_INIT = dict(
@@ -61,31 +108,22 @@ _ENEMY_INIT = dict(
     description="A small, wiry goblin with a rusty dagger.",
 )
 
-_SCENE_INIT = dict(
-    id="tavern-01",
-    name="The Rusty Lantern",
-    description=(
-        "A dimly-lit tavern at a crossroads village. The smell of stale ale "
-        "mixes with wood smoke. A few locals nurse their drinks in silence."
-    ),
-    actors=["aldric-01"],
-)
-
 # Combat scene with enemy
 _COMBAT_SCENE_INIT = dict(
     id="combat-01",
     name="Forest Ambush",
     description="A narrow forest path. A goblin emerges from the underbrush.",
-    actors=["aldric-01", "goblin-01"],
+    actors=["goblin-01"],
 )
 
 # ---------------------------------------------------------------------------
 # Mutable singletons
 # ---------------------------------------------------------------------------
 
-_actor: Actor = Actor(**_ACTOR_INIT)
+_phase: GamePhase = GamePhase.CHARACTER_CREATION
+_actor: Actor | None = None
 _enemy: Actor = Actor(**_ENEMY_INIT)
-_scene: Scene = Scene(**_SCENE_INIT)
+_scene: Scene = Scene(**_CHARACTER_CREATION_SCENE_INIT)
 _narrative_history: list[NarrativeHistoryEntry] = []
 
 
@@ -97,13 +135,14 @@ DEFAULT_PROMPT_HISTORY_CHARS = 1800
 def get_bootstrap_state() -> BootstrapState:
     """Return the current (live) actor and scene."""
     return BootstrapState(
+        phase=_phase,
         actor=_actor,
         scene=_scene,
         narrative_history=list(_narrative_history),
     )
 
 
-def get_actor() -> Actor:
+def get_actor() -> Actor | None:
     return _actor
 
 
@@ -116,6 +155,8 @@ def get_actor_by_id_or_name(target: str) -> Optional[Actor]:
     """Find an actor by ID or name (case-insensitive)."""
     target_lower = target.lower()
     for actor in [_actor, _enemy]:
+        if actor is None:
+            continue
         if actor.id.lower() == target_lower or actor.name.lower() == target_lower:
             return actor
     return None
@@ -158,7 +199,39 @@ def get_narrative_context(
 def set_combat_scene() -> None:
     """Switch to combat scene with enemy present."""
     global _scene
-    _scene = Scene(**_COMBAT_SCENE_INIT)
+    actors = ["goblin-01"]
+    if _actor is not None:
+        actors.insert(0, _actor.id)
+    _scene = Scene(**{**_COMBAT_SCENE_INIT, "actors": actors})
+
+
+def has_character() -> bool:
+    return _actor is not None and _phase == GamePhase.ADVENTURE
+
+
+def create_character(req: CharacterCreateRequest) -> BootstrapState:
+    """Create the player's starting character and enter the opening scene."""
+    global _actor, _phase, _scene, _narrative_history
+
+    template = _CLASS_TEMPLATES[req.character_class]
+    hp = int(template["hp"])
+    actor_id = f"{req.character_class.value}-{req.name.strip().lower().replace(' ', '-')}"
+
+    _actor = Actor(
+        id=actor_id,
+        name=req.name.strip(),
+        character_class=req.character_class,
+        abilities=template["abilities"],
+        proficiency_bonus=2,
+        hp=hp,
+        hp_max=hp,
+        ac=int(template["ac"]),
+        description=str(template["description"]),
+    )
+    _phase = GamePhase.ADVENTURE
+    _scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [_actor.id]})
+    _narrative_history = []
+    return get_bootstrap_state()
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +253,7 @@ def _apply_one(eff: Effect) -> None:
     global _actor, _enemy, _scene
 
     # --- actor-targeted effects ---
-    if eff.target in (_actor.id, _actor.name):
+    if _actor is not None and eff.target in (_actor.id, _actor.name):
         if eff.field == "hp" and isinstance(eff.delta, int):
             _actor = _actor.model_copy(
                 update={"hp": max(0, min(_actor.hp_max, _actor.hp + eff.delta))}
@@ -231,8 +304,9 @@ def _apply_one(eff: Effect) -> None:
 
 def reset_state() -> None:
     """Restore mutable state to its initial values."""
-    global _actor, _enemy, _scene, _narrative_history
-    _actor = Actor(**_ACTOR_INIT)
+    global _phase, _actor, _enemy, _scene, _narrative_history
+    _phase = GamePhase.CHARACTER_CREATION
+    _actor = None
     _enemy = Actor(**_ENEMY_INIT)
-    _scene = Scene(**_SCENE_INIT)
+    _scene = Scene(**_CHARACTER_CREATION_SCENE_INIT)
     _narrative_history = []

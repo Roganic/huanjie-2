@@ -474,6 +474,12 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
 
     if eff.target == scene.id and eff.field == "time" and isinstance(eff.delta, int):
         session.scene = scene.model_copy(update={"time": scene.time + eff.delta})
+        return
+
+    if eff.target == scene.id and eff.field == "flags" and isinstance(eff.delta, str):
+        if eff.delta not in scene.flags:
+            session.scene = scene.model_copy(update={"flags": [*scene.flags, eff.delta]})
+        return
 
 
 def _bootstrap_from_session(session: SessionData) -> BootstrapState:

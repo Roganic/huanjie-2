@@ -81,6 +81,7 @@ class Scene(BaseModel):
     description: str
     actors: list[str] = Field(default_factory=list, description="Actor IDs present")
     time: int = Field(default=0, description="Abstract time ticks elapsed")
+    flags: list[str] = Field(default_factory=list, description="Mutable scene state flags")
 
 
 class NarrativeHistoryEntry(BaseModel):

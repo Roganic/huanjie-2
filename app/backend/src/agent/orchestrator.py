@@ -29,6 +29,7 @@ from ..models.action import (
     Outcome,
     ResolutionType,
     SavingThrowDetail,
+    SkillCheckDetail,
 )
 from ..models.state import Actor, NarrativeHistoryEntry
 from ..state import (
@@ -230,19 +231,31 @@ class GMAgent:
     # Resolution Paths
     # -----------------------------------------------------------------------
     
+    @staticmethod
+    def _build_skill_check(check: CheckDetail, outcome: Outcome) -> SkillCheckDetail:
+        """Build a simplified skill_check summary from CheckDetail."""
+        return SkillCheckDetail(
+            skill=check.skill_name,
+            roll=check.roll,
+            modifier=check.modifier + check.proficiency_bonus,
+            total=check.total,
+            dc=check.dc,
+            success=outcome == Outcome.SUCCESS,
+        )
+
     def _resolve_skill_check(
         self,
         req: ActionRequest,
         actor: Actor,
     ) -> ActionResponse:
         """Resolve a skill check action (proficiency-based).
-        
+
         Skill checks add proficiency bonus only if the character is proficient
         in that specific skill.
         """
         skill_name = req.skill or "athletics"
         action_summary = f"{req.actor} uses {skill_name} to {req.intent}"
-        
+
         # Determine governing ability
         skill_abilities = {
             "athletics": "str",
@@ -255,22 +268,22 @@ class GMAgent:
             "persuasion": "cha",
         }
         ability = req.ability or skill_abilities.get(skill_name.lower(), "str")
-        
+
         # Calculate modifiers
         ability_modifier = actor.abilities.modifier(ability)
-        
+
         # Check proficiency
         is_proficient = False
         for skill in actor.skills:
             if skill.name.lower() == skill_name.lower():
                 is_proficient = skill.proficient
                 break
-        
+
         prof_bonus = actor.proficiency_bonus if is_proficient else 0
-        
+
         dc = req.dc or self._pick_dc(req.intent)
         advantage = req.advantage
-        
+
         # Roll d20 + ability modifier + proficiency (if proficient)
         roll_result = self._call_roll_dice(
             dice_type=DiceType.D20,
@@ -278,10 +291,10 @@ class GMAgent:
             advantage=advantage,
             modifier=ability_modifier + prof_bonus,
         )
-        
+
         total = roll_result.total
         outcome = Outcome.SUCCESS if total >= dc else Outcome.FAILURE
-        
+
         # Build check detail
         check = CheckDetail(
             ability=ability,
@@ -293,10 +306,11 @@ class GMAgent:
             dc=dc,
             skill_name=skill_name,
         )
-        
+
         # Apply effects
         self._apply_check_effects(actor, ability, outcome)
-        
+        self._apply_skill_scene_flags(skill_name, outcome, req.intent)
+
         # Generate narrative
         check_result = {
             "ability": ability,
@@ -320,11 +334,12 @@ class GMAgent:
             narration_result=narrative_result,
             check_result=check_result,
         )
-        
+
         return ActionResponse(
             action_summary=action_summary,
             resolution_type=ResolutionType.CHECK,
             check=check,
+            skill_check=self._build_skill_check(check, outcome),
             attack=None,
             outcome=outcome,
             effects=self.effects,
@@ -333,14 +348,63 @@ class GMAgent:
             gm_prompt=narrative_result.gm_prompt,
         )
 
+    def _apply_skill_scene_flags(
+        self,
+        skill_name: str,
+        outcome: Outcome,
+        intent: str,
+    ) -> None:
+        """Apply persistent scene flags based on skill check outcome."""
+        if outcome != Outcome.SUCCESS:
+            return
+        scene = get_scene()
+        intent_lower = intent.lower()
+        skill_lower = skill_name.lower()
+
+        if skill_lower == "persuasion" or skill_lower == "intimidation":
+            self._call_apply_state_change(
+                target=scene.id,
+                field="flags",
+                delta="npc_persuaded",
+                description="NPC态度因社交检定成功而改变。",
+            )
+        elif skill_lower == "athletics" and any(k in intent_lower for k in ("door", "open", "break", "force", "lift", "push")):
+            self._call_apply_state_change(
+                target=scene.id,
+                field="flags",
+                delta="door_opened",
+                description="门被打开并保持开启状态。",
+            )
+        elif skill_lower == "stealth":
+            self._call_apply_state_change(
+                target=scene.id,
+                field="flags",
+                delta="player_hidden",
+                description="角色成功隐匿在场景中。",
+            )
+        elif skill_lower == "perception" and any(k in intent_lower for k in ("secret", "hidden", "trap", "door")):
+            self._call_apply_state_change(
+                target=scene.id,
+                field="flags",
+                delta="secrets_found",
+                description="察觉检定成功，发现了隐藏的事物。",
+            )
+        elif skill_lower == "arcana" and any(k in intent_lower for k in ("rune", "magic", "spell", "curse")):
+            self._call_apply_state_change(
+                target=scene.id,
+                field="flags",
+                delta="magic_identified",
+                description="奥秘检定成功，魔法特性被识别。",
+            )
+
     def _resolve_generic_action(self, req: ActionRequest, actor: Actor) -> ActionResponse:
         """Resolve a generic (non-attack) action."""
         action_summary = f"{req.actor} attempts to {req.intent} by {req.approach}"
-        
+
         # Check for auto-success
         if self._is_auto_success(req.intent, req.approach):
             return self._resolve_auto_success(req, actor, action_summary)
-        
+
         # Resolve as ability check
         return self._resolve_ability_check(req, actor, action_summary)
     
@@ -371,6 +435,7 @@ class GMAgent:
             action_summary=action_summary,
             resolution_type=ResolutionType.AUTO_SUCCESS,
             check=None,
+            skill_check=None,
             attack=None,
             outcome=Outcome.SUCCESS,
             effects=[],  # No effects for auto-success
@@ -438,11 +503,12 @@ class GMAgent:
             narration_result=narrative_result,
             check_result=check_result,
         )
-        
+
         return ActionResponse(
             action_summary=action_summary,
             resolution_type=ResolutionType.CHECK,
             check=check,
+            skill_check=self._build_skill_check(check, outcome),
             attack=None,
             outcome=outcome,
             effects=self.effects,
@@ -563,6 +629,7 @@ class GMAgent:
             action_summary=action_summary,
             resolution_type=ResolutionType.CHECK,
             check=None,
+            skill_check=None,
             attack=attack_detail,
             outcome=outcome,
             effects=self.effects,
@@ -589,6 +656,7 @@ class GMAgent:
             action_summary=action_summary,
             resolution_type=ResolutionType.CHECK,
             check=None,
+            skill_check=None,
             attack=None,
             outcome=Outcome.FAILURE,
             effects=self.effects,
@@ -746,6 +814,7 @@ class GMAgent:
             action_summary=action_summary,
             resolution_type=ResolutionType.CHECK,
             check=None,
+            skill_check=None,
             attack=attack_detail,
             saving_throw=saving_throw_detail,
             outcome=outcome,

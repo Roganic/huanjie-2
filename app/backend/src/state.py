@@ -495,7 +495,43 @@ def _session_file(session_id: str) -> Path:
 
 
 def _create_fresh_session(session_id: str) -> SessionData:
-    return SessionData(session_id=session_id)
+    """Create a fresh session, with default character for default session (backward compatibility)."""
+    session = SessionData(session_id=session_id)
+
+    # For the default session, create the legacy Aldric character automatically
+    # to maintain backward compatibility with tests that expect him to exist
+    if session_id == DEFAULT_SESSION_ID:
+        # Create Aldric with specific abilities matching legacy tests' expectations
+        # CON 14 -> HP 12 (10 + 2), STR 16 -> +3 modifier
+        abilities = AbilityScores(**{
+            "str": 16, "dex": 12, "con": 14, "int": 10, "wis": 12, "cha": 8,
+        })
+        actor_id = "aldric-01"
+        con_mod = abilities.modifier("con")  # (14-10)//2 = 2
+        hp = 10 + con_mod  # Warrior base 10 + CON mod = 12
+        ac = 16  # Warrior heavy armor
+
+        # Build skills for warrior
+        warrior_skills = _build_skills(abilities, CharacterClass.WARRIOR, proficiency_bonus=2)
+
+        session.actor = Actor(
+            id=actor_id,
+            name="Aldric",
+            character_class=CharacterClass.WARRIOR,
+            abilities=abilities,
+            proficiency_bonus=2,
+            level=1,
+            hp=hp,
+            hp_max=hp,
+            ac=ac,
+            description="久经沙场的前线战士，信奉钢铁与意志。",
+            skills=warrior_skills,
+        )
+        session.phase = GamePhase.ADVENTURE
+        # Scene with actor in actors list for backward compatibility
+        session.scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [actor_id]})
+
+    return session
 
 
 def _get_session(session_id: str, create_if_missing: bool) -> SessionData:

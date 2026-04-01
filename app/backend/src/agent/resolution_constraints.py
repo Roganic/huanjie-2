@@ -243,6 +243,15 @@ def build_narrative_prompt(
     lines.append(f"角色职业 / Character Class: {character_class_str}")
     lines.append(f"角色等级 / Level: 1 (熟练加值 / Proficiency: +{actor.proficiency_bonus})")
     lines.append(f"角色状态 / Character Status: HP {actor.hp}/{actor.hp_max}, AC {actor.ac}")
+    lines.append(
+        f"关键属性 / Key Abilities: "
+        f"STR {actor.abilities.str_} ({actor.abilities.modifier('str'):+d}), "
+        f"DEX {actor.abilities.dex} ({actor.abilities.modifier('dex'):+d}), "
+        f"CON {actor.abilities.con} ({actor.abilities.modifier('con'):+d}), "
+        f"INT {actor.abilities.int_} ({actor.abilities.modifier('int'):+d}), "
+        f"WIS {actor.abilities.wis} ({actor.abilities.modifier('wis'):+d}), "
+        f"CHA {actor.abilities.cha} ({actor.abilities.modifier('cha'):+d})"
+    )
     lines.append("")
 
     if context.target:

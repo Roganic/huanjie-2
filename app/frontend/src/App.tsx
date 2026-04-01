@@ -161,6 +161,27 @@ const EXTRA_SKILLS: Skill[] = [
   { name: "奥秘", ability: "int", proficient: false },
 ];
 
+const SKILL_LABELS: Record<string, string> = {
+  athletics: "运动",
+  acrobatics: "杂技",
+  sleight_of_hand: "巧手",
+  stealth: "隐匿",
+  arcana: "奥秘",
+  history: "历史",
+  investigation: "调查",
+  nature: "自然",
+  religion: "宗教",
+  animal_handling: "驯兽",
+  insight: "洞察",
+  medicine: "医药",
+  perception: "察觉",
+  survival: "生存",
+  deception: "欺骗",
+  intimidation: "威吓",
+  performance: "表演",
+  persuasion: "说服",
+};
+
 const ABILITY_LABELS: Record<string, string> = {
   str: "力量",
   dex: "敏捷",
@@ -485,7 +506,7 @@ function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolea
         <div className="skills-list-compact">
           {proficientSkills.map((skill) => (
             <div key={skill.name} className="skill-item-compact proficient">
-              <span className="skill-name">{ABILITY_LABELS[skill.name] ?? skill.name}</span>
+              <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
               <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
             </div>
           ))}
@@ -497,7 +518,7 @@ function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolea
         {backendSkills.map((skill) => (
           <div key={skill.name} className={`skill-item ${skill.proficient ? "proficient" : ""}`}>
             <span className="skill-dot">{skill.proficient ? "●" : "○"}</span>
-            <span className="skill-name">{ABILITY_LABELS[skill.name] ?? skill.name}</span>
+            <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
             <span className="skill-ability">({ABILITY_LABELS[skill.ability] ?? skill.ability})</span>
             <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
           </div>

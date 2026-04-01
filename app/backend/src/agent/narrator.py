@@ -1,28 +1,17 @@
-"""Narrative generation using Kimi API.
+"""Narrative generation using configurable AI providers.
 
 Provides immersive, GM-style narrative text for game actions.
-Falls back to template narratives when API is unavailable.
+Falls back to template narratives when no provider is available.
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import Optional
-
-import httpx
 
 from ..models.action import ActionRequest, ActionResponse, Outcome
 from ..models.state import Actor, Scene
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-KIMI_API_KEY = os.getenv("KIMI_API_KEY", "")
-KIMI_API_URL = os.getenv("KIMI_API_URL", "https://api.moonshot.cn/v1/chat/completions")
-KIMI_MODEL = os.getenv("KIMI_MODEL", "moonshot-v1-8k")
-KIMI_TIMEOUT_SECONDS = float(os.getenv("KIMI_TIMEOUT_SECONDS", "5"))
+from .providers import get_provider
 
 # ---------------------------------------------------------------------------
 # Prompt Templates
@@ -54,7 +43,7 @@ def _build_narrative_prompt(
     attack_result: Optional[dict] = None,
 ) -> str:
     """Build the user prompt for narrative generation."""
-    
+
     # Build context section
     context_lines = [
         f"Scene: {scene.name}",
@@ -68,7 +57,7 @@ def _build_narrative_prompt(
         f"Action Approach: {req.approach}",
         f"Outcome: {outcome.value.upper()}",
     ]
-    
+
     # Add check details if present (without game mechanics terminology)
     if check_result:
         ability = check_result.get("ability", "")
@@ -81,7 +70,7 @@ def _build_narrative_prompt(
             "cha": "force of personality",
         }.get(ability, ability)
         context_lines.append(f"This action relied on the character's {ability_desc}.")
-    
+
     # Add attack details if present
     if attack_result:
         weapon = attack_result.get("weapon", "weapon")
@@ -92,14 +81,13 @@ def _build_narrative_prompt(
         context_lines.append(f"- Weapon: {weapon}")
         context_lines.append(f"- Target: {target}")
         if damage and outcome == Outcome.SUCCESS:
-            damage_total = damage.get("total", 0)
             context_lines.append(f"- The attack landed a solid hit, dealing significant damage.")
         elif outcome == Outcome.FAILURE:
             context_lines.append(f"- The attack failed to connect.")
-    
+
     context_lines.append(f"")
     context_lines.append(f"Write an immersive narrative describing this moment.")
-    
+
     return "\n".join(context_lines)
 
 
@@ -115,14 +103,14 @@ def _fallback_narration(
     attack_result: Optional[dict] = None,
 ) -> str:
     """Generate a template fallback narrative when API is unavailable."""
-    
+
     action_desc = f"{req.actor} {req.intent}"
-    
+
     if attack_result:
         # Combat fallback
         weapon = attack_result.get("weapon", "weapon")
         target = attack_result.get("target", "enemy")
-        
+
         if outcome == Outcome.SUCCESS:
             damage = attack_result.get("damage")
             if damage:
@@ -141,7 +129,7 @@ def _fallback_narration(
                 f"{actor.name} attacks {target} with the {weapon}, "
                 f"but misses as the {target} dances aside at the last moment."
             )
-    
+
     # General action fallback
     if outcome == Outcome.SUCCESS:
         return (
@@ -153,56 +141,6 @@ def _fallback_narration(
             f"{actor.name} attempts to {req.intent}, but fortune does not favor them this time. "
             f"The effort falls short of success."
         )
-
-
-# ---------------------------------------------------------------------------
-# API Client
-# ---------------------------------------------------------------------------
-
-async def _call_kimi_api(prompt: str) -> Optional[str]:
-    """Call Kimi API to generate narrative text.
-    
-    Returns None if API call fails or times out.
-    """
-    if not KIMI_API_KEY:
-        return None
-    
-    headers = {
-        "Authorization": f"Bearer {KIMI_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    
-    payload = {
-        "model": KIMI_MODEL,
-        "messages": [
-            {"role": "system", "content": NARRATIVE_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.8,
-        "max_tokens": 500,
-    }
-    
-    try:
-        async with httpx.AsyncClient(timeout=KIMI_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                KIMI_API_URL,
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-            if "choices" in data and len(data["choices"]) > 0:
-                content = data["choices"][0].get("message", {}).get("content", "")
-                return content.strip() if content else None
-            return None
-            
-    except asyncio.TimeoutError:
-        return None
-    except httpx.HTTPError:
-        return None
-    except Exception:
-        return None
 
 
 # ---------------------------------------------------------------------------
@@ -218,37 +156,38 @@ def generate_narration(
     attack_result: Optional[dict] = None,
 ) -> str:
     """Generate narrative text for an action resolution.
-    
-    This is a synchronous wrapper around the async API call.
-    Falls back to template narrative if API is unavailable.
-    
+
+    Provider selection:
+      1. ``req.provider`` if explicitly requested and available
+      2. First available provider from environment configuration
+      3. Fallback template if no provider is configured
+
     Args:
-        req: The action request
+        req: The action request (may include ``provider`` override)
         actor: The acting character
         scene: The current scene
         outcome: Success or failure
         check_result: Optional check details
         attack_result: Optional attack details
-        
+
     Returns:
         Immersive narrative text (or fallback if API unavailable)
     """
-    # Build the prompt
     prompt = _build_narrative_prompt(req, actor, scene, outcome, check_result, attack_result)
-    
-    # Try to call Kimi API (only if key is configured)
-    if KIMI_API_KEY:
+
+    provider = get_provider(req.provider)
+    if provider is not None:
         try:
-            # Use a new event loop to avoid issues with existing loops
             loop = asyncio.new_event_loop()
             try:
-                narrative = loop.run_until_complete(_call_kimi_api(prompt))
+                narrative = loop.run_until_complete(
+                    provider.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
+                )
                 if narrative:
                     return narrative
             finally:
                 loop.close()
         except Exception:
             pass
-    
-    # Fall back to template
+
     return _fallback_narration(req, actor, scene, outcome, attack_result)

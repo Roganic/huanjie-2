@@ -1152,3 +1152,39 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-light);
 }
+
+/* ---- Model Selector ---- */
+
+.model-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.model-selector-label {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.model-selector select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.model-selector select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.15);
+}
+
+.model-selector select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

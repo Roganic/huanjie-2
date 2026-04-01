@@ -79,10 +79,26 @@ interface Scene {
   time?: number;
 }
 
+interface NarrativeHistoryEntry {
+  action_summary: string;
+  resolution_summary: {
+    resolution_type?: "auto_success" | "check";
+    outcome?: "success" | "failure";
+    check?: CheckDetail | null;
+  };
+  narration_summary: string;
+  narration: string;
+  scene_progression: string;
+  gm_prompt: string;
+  created_at: number;
+}
+
 interface BootstrapState {
+  session_id: string;
   phase: GamePhase;
   actor: Actor | null;
   scene: Scene;
+  narrative_history: NarrativeHistoryEntry[];
 }
 
 interface ProviderOption {
@@ -154,6 +170,8 @@ const CLASS_SUMMARIES: Record<CharacterClass, string> = {
 };
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+const SESSION_STORAGE_KEY = "huanjie.session_id";
+const MAX_RESTORED_HISTORY = 10;
 
 function apiUrl(path: string): string {
   if (!path.startsWith("/")) {
@@ -745,7 +763,113 @@ function parseStreamEvent(block: string): ParsedStreamEvent | null {
   }
 }
 
+function getStoredSessionId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(SESSION_STORAGE_KEY);
+}
+
+function storeSessionId(sessionId: string | null) {
+  if (typeof window === "undefined") return;
+
+  if (sessionId) {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+    return;
+  }
+
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function buildSessionHeaders(sessionId?: string | null, extraHeaders?: HeadersInit): HeadersInit {
+  const headers = new Headers(extraHeaders);
+  if (sessionId) {
+    headers.set("X-Session-Id", sessionId);
+  }
+  return headers;
+}
+
+function restoreMessagesFromHistory(history: NarrativeHistoryEntry[]): Message[] {
+  return history.slice(-MAX_RESTORED_HISTORY).flatMap((entry, index) => {
+    const baseId = entry.created_at || Date.now() + index * 10;
+    return [
+      {
+        id: baseId,
+        role: "player" as const,
+        text: entry.action_summary,
+        timestamp: baseId,
+      },
+      {
+        id: baseId + 1,
+        role: "gm" as const,
+        text: `${entry.narration}\n\n${entry.scene_progression}\n\n${entry.gm_prompt}`.trim(),
+        resolution: {
+          action_summary: entry.action_summary,
+          resolution_type: entry.resolution_summary.resolution_type ?? "auto_success",
+          check: entry.resolution_summary.check ?? null,
+          outcome: entry.resolution_summary.outcome ?? "success",
+          effects: [],
+          narration: entry.narration,
+          scene_progression: entry.scene_progression,
+          gm_prompt: entry.gm_prompt,
+        },
+        timestamp: baseId + 1,
+      },
+    ];
+  });
+}
+
+function restoreTimelineFromHistory(history: NarrativeHistoryEntry[]): TimelineEntry[] {
+  return history
+    .slice(-MAX_RESTORED_HISTORY)
+    .flatMap((entry, index) => {
+      const baseId = entry.created_at || Date.now() + index * 10;
+      const items: TimelineEntry[] = [
+        {
+          id: baseId,
+          type: "action",
+          title: entry.action_summary,
+          outcome: entry.resolution_summary.outcome,
+          timestamp: baseId,
+        },
+      ];
+
+      if (entry.resolution_summary.resolution_type === "check" && entry.resolution_summary.check) {
+        const check = entry.resolution_summary.check;
+        items.push({
+          id: baseId + 1,
+          type: "check",
+          title: `${ABILITY_LABELS[check.ability] ?? check.ability}检定 DC${check.dc}`,
+          outcome: entry.resolution_summary.outcome,
+          details: `掷骰: d20=${check.roll} 调整值:${check.modifier >= 0 ? "+" : ""}${check.modifier}${
+            check.proficiency_bonus > 0 ? `+${check.proficiency_bonus}` : ""
+          } = ${check.total}`,
+          timestamp: baseId + 1,
+        });
+      }
+
+      items.push(
+        {
+          id: baseId + 2,
+          type: "scene",
+          title: "场景推进",
+          details: entry.scene_progression,
+          timestamp: baseId + 2,
+        },
+        {
+          id: baseId + 3,
+          type: "scene",
+          title: "GM 提示",
+          details: entry.gm_prompt,
+          timestamp: baseId + 3,
+        },
+      );
+
+      return items;
+    })
+    .sort((left, right) => right.timestamp - left.timestamp);
+}
+
 function App() {
+  const [sessionId, setSessionId] = useState<string | null>(() => getStoredSessionId());
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [health, setHealth] = useState<HealthStatus>("loading");
@@ -798,10 +922,38 @@ function App() {
 
     (async () => {
       try {
-        const response = await fetch(apiUrl("/state"));
-        if (!response.ok) return;
+        const storedSessionId = getStoredSessionId();
+        const response = await fetch(apiUrl("/state/bootstrap"), {
+          headers: buildSessionHeaders(storedSessionId),
+        });
+
+        if (!response.ok) {
+          if (response.status === 404 && storedSessionId) {
+            storeSessionId(null);
+            setSessionId(null);
+
+            const fallbackResponse = await fetch(apiUrl("/state/bootstrap"));
+            if (!fallbackResponse.ok) return;
+            const fallbackData: BootstrapState = await fallbackResponse.json();
+            if (!cancelled) {
+              setSessionId(fallbackData.session_id);
+              storeSessionId(fallbackData.session_id);
+              setBootstrap(fallbackData);
+              setMessages([]);
+              setTimeline([]);
+            }
+          }
+          return;
+        }
+
         const data: BootstrapState = await response.json();
-        if (!cancelled) setBootstrap(data);
+        if (!cancelled) {
+          setSessionId(data.session_id);
+          storeSessionId(data.session_id);
+          setBootstrap(data);
+          setMessages(restoreMessagesFromHistory(data.narrative_history));
+          setTimeline(restoreTimelineFromHistory(data.narrative_history));
+        }
       } catch {
         // Keep loading placeholder.
       }
@@ -825,13 +977,46 @@ function App() {
     );
   };
 
-  const refreshState = async () => {
-    const response = await fetch(apiUrl("/state"));
+  const recoverExpiredSession = async (message?: string) => {
+    const response = await fetch(apiUrl("/state/bootstrap"));
     if (!response.ok) {
+      throw new Error(`会话恢复失败 (${response.status})`);
+    }
+
+    const state: BootstrapState = await response.json();
+    setSessionId(state.session_id);
+    storeSessionId(state.session_id);
+    setPreviousBootstrap(null);
+    setBootstrap(state);
+    setTimeline([]);
+    setInput("");
+    setStreamingPreview(null);
+    setMessages(
+      message
+        ? [{ id: Date.now(), role: "system", text: message, timestamp: Date.now() }]
+        : [],
+    );
+    return state;
+  };
+
+  const refreshState = async () => {
+    const response = await fetch(apiUrl("/state"), {
+      headers: buildSessionHeaders(sessionId),
+    });
+    if (!response.ok) {
+      if (response.status === 404) {
+        storeSessionId(null);
+        setSessionId(null);
+        return recoverExpiredSession("上一次会话已失效，已为你创建新会话。请重新创建角色。");
+      }
       throw new Error(`状态同步失败 (${response.status})`);
     }
     const state: BootstrapState = await response.json();
+    setSessionId(state.session_id);
+    storeSessionId(state.session_id);
     setBootstrap(state);
+    setMessages(restoreMessagesFromHistory(state.narrative_history));
+    setTimeline(restoreTimelineFromHistory(state.narrative_history));
     return state;
   };
 
@@ -842,12 +1027,23 @@ function App() {
     setCreationError(null);
 
     try {
-      const response = await fetch(apiUrl("/state/reset"), { method: "POST" });
+      const response = await fetch(apiUrl("/reset"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId),
+      });
       if (!response.ok) {
+        if (response.status === 404) {
+          storeSessionId(null);
+          setSessionId(null);
+          await recoverExpiredSession("会话已过期，已进入新的建角流程。");
+          return;
+        }
         throw new Error(await response.text());
       }
       const state: BootstrapState = await response.json();
       setPreviousBootstrap(null);
+      setSessionId(state.session_id);
+      storeSessionId(state.session_id);
       setBootstrap(state);
       setMessages([]);
       setTimeline([]);
@@ -878,7 +1074,7 @@ function App() {
     try {
       const response = await fetch(apiUrl("/character/create"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: buildSessionHeaders(sessionId, { "Content-Type": "application/json" }),
         body: JSON.stringify({
           name,
           character_class: creationDraft.characterClass,
@@ -887,11 +1083,20 @@ function App() {
       });
 
       if (!response.ok) {
+        if (response.status === 404) {
+          storeSessionId(null);
+          setSessionId(null);
+          await recoverExpiredSession("会话已过期，已进入新的建角流程。");
+          setCreationError("原会话已失效，请重新确认角色后开始。");
+          return;
+        }
         throw new Error(await response.text());
       }
 
       const state: BootstrapState = await response.json();
       setPreviousBootstrap(null);
+      setSessionId(state.session_id);
+      storeSessionId(state.session_id);
       setBootstrap(state);
       setMessages([
         {
@@ -942,10 +1147,10 @@ function App() {
     try {
       const response = await fetch(apiUrl("/action"), {
         method: "POST",
-        headers: {
+        headers: buildSessionHeaders(sessionId, {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
-        },
+        }),
         body: JSON.stringify({
           scene_id: bootstrap.scene.id,
           actor: bootstrap.actor.name,
@@ -957,6 +1162,12 @@ function App() {
 
       if (!response.ok) {
         const errorText = await response.text();
+        if (response.status === 404) {
+          storeSessionId(null);
+          setSessionId(null);
+          await recoverExpiredSession("会话已过期，已进入新的建角流程。");
+          return;
+        }
         setStreamingPreview(null);
         setMessages((previous) => [
           ...previous,

@@ -1,27 +1,59 @@
-"""Bootstrap state endpoint — read-only."""
+"""Bootstrap state endpoints."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 
 from ..models.state import BootstrapState
-from ..state import get_bootstrap_state, reset_state
+from ..state import (
+    create_session,
+    get_bootstrap_state,
+    require_bootstrap_state,
+    reset_current_session,
+    reset_state,
+    set_current_session,
+)
 
 router = APIRouter(tags=["state"])
 
 
+def _request_session_id(request: Request) -> str | None:
+    return request.headers.get("X-Session-Id") or request.query_params.get("session_id")
+
+
+def _resolve_session(request: Request, create_if_missing: bool) -> tuple[str, object]:
+    provided_session_id = _request_session_id(request)
+    if provided_session_id is None:
+        bootstrap = create_session() if create_if_missing else None
+        if bootstrap is None:
+            raise HTTPException(status_code=400, detail="Missing session_id.")
+        return bootstrap.session_id, bootstrap
+
+    try:
+        return provided_session_id, require_bootstrap_state(provided_session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
+
+
 @router.get("/state", response_model=BootstrapState)
-async def state():
+async def state(request: Request):
     """Return the current game state for clients."""
-    return get_bootstrap_state()
+    _, bootstrap = _resolve_session(request, create_if_missing=True)
+    return bootstrap
 
 
 @router.get("/state/bootstrap", response_model=BootstrapState)
-async def bootstrap():
+async def bootstrap(request: Request):
     """Return the current fixed actor and scene for client initialisation."""
-    return get_bootstrap_state()
+    _, bootstrap_state = _resolve_session(request, create_if_missing=True)
+    return bootstrap_state
 
 
 @router.post("/state/reset", response_model=BootstrapState)
-async def reset():
+@router.post("/reset", response_model=BootstrapState)
+async def reset(request: Request):
     """Reset actor and scene to initial values, return fresh bootstrap state."""
-    reset_state()
-    return get_bootstrap_state()
+    session_id, _ = _resolve_session(request, create_if_missing=True)
+    token = set_current_session(session_id)
+    try:
+        return reset_state(session_id=session_id)
+    finally:
+        reset_current_session(token)

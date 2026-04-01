@@ -1,4 +1,4 @@
-"""Narrative generation using Kimi API.
+"""Narrative generation for game actions.
 
 Provides immersive, GM-style narrative text for game actions.
 Falls back to template narratives when API is unavailable.
@@ -11,12 +11,10 @@ Hard Constraint Principle:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 from typing import Optional
 
-import httpx
 from pydantic import BaseModel
 
 from ..models.action import (
@@ -25,15 +23,10 @@ from ..models.action import (
     Outcome,
 )
 from ..models.state import Actor, NarrativeHistoryEntry, Scene
+from .providers import get_provider
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
+# Backward-compatible export for existing scripts/tests.
 KIMI_API_KEY = os.getenv("KIMI_API_KEY", "")
-KIMI_API_URL = os.getenv("KIMI_API_URL", "https://api.moonshot.cn/v1/chat/completions")
-KIMI_MODEL = os.getenv("KIMI_MODEL", "moonshot-v1-8k")
-KIMI_TIMEOUT_SECONDS = float(os.getenv("KIMI_TIMEOUT_SECONDS", "5"))
 
 # ---------------------------------------------------------------------------
 # Prompt Templates
@@ -431,56 +424,20 @@ def _narration_respects_constraints(
 
 
 async def _call_kimi_api(prompt: str) -> Optional[NarrationBundle]:
-    """Call Kimi API to generate structured narrative text.
-    
-    Returns None if API call fails or times out.
-    """
-    if not KIMI_API_KEY:
+    provider = get_provider("kimi")
+    if provider is None:
         return None
-    
-    headers = {
-        "Authorization": f"Bearer {KIMI_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    
-    payload = {
-        "model": KIMI_MODEL,
-        "messages": [
-            {"role": "system", "content": NARRATIVE_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.8,
-        "max_tokens": 500,
-    }
-    
-    try:
-        async with httpx.AsyncClient(timeout=KIMI_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                KIMI_API_URL,
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-            if "choices" in data and len(data["choices"]) > 0:
-                content = data["choices"][0].get("message", {}).get("content", "")
-                if not content:
-                    return None
-                return _parse_narration_bundle(content.strip())
-            return None
-            
-    except asyncio.TimeoutError:
-        return None
-    except httpx.HTTPError:
-        return None
-    except Exception:
-        return None
+    generated = await provider.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
+    return _parse_narration_bundle(generated) if generated else None
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+async def _call_openai_api(prompt: str) -> Optional[NarrationBundle]:
+    provider = get_provider("openai")
+    if provider is None:
+        return None
+    generated = await provider.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
+    return _parse_narration_bundle(generated) if generated else None
+
 
 def generate_narration(
     req: ActionRequest,
@@ -526,25 +483,30 @@ def generate_narration(
         target=target,
         narrative_history=narrative_history,
     )
-    
-    # Try to call Kimi API (only if key is configured)
-    if KIMI_API_KEY:
-        try:
-            # Use a new event loop to avoid issues with existing loops
-            loop = asyncio.new_event_loop()
-            try:
-                narrative = loop.run_until_complete(_call_kimi_api(prompt))
-                if narrative and _narration_respects_constraints(
-                    narration=narrative,
-                    outcome=outcome,
-                    attack_result=attack_result,
-                    target=target,
-                ):
-                    return narrative
-            finally:
-                loop.close()
-        except Exception:
-            pass
-    
+
+    narrative: Optional[NarrationBundle] = None
+    try:
+        import asyncio
+
+        if req.provider == "openai":
+            narrative = asyncio.run(_call_openai_api(prompt))
+        elif req.provider == "kimi" or KIMI_API_KEY:
+            narrative = asyncio.run(_call_kimi_api(prompt))
+        else:
+            provider = get_provider(req.provider)
+            if provider is not None:
+                generated = asyncio.run(provider.generate(NARRATIVE_SYSTEM_PROMPT, prompt))
+                narrative = _parse_narration_bundle(generated) if generated else None
+    except Exception:
+        narrative = None
+
+    if narrative and _narration_respects_constraints(
+        narration=narrative,
+        outcome=outcome,
+        attack_result=attack_result,
+        target=target,
+    ):
+        return narrative
+
     # Fall back to template
     return _fallback_narration_bundle(req, actor, scene, outcome, attack_result)

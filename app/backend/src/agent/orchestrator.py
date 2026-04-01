@@ -180,6 +180,7 @@ class GMAgent:
             check_result=check_result,
             attack_result=attack_result,
             saving_throw_result=saving_throw_result,
+            effects=self.effects,
             narrative_history=get_narrative_context(),
         )
         self.tool_results.append(result)

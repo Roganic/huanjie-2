@@ -279,6 +279,7 @@ def tool_generate_narrative(
     check_result: Optional[dict] = None,
     attack_result: Optional[dict] = None,
     saving_throw_result: Optional[dict] = None,
+    effects: Optional[list[Effect]] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
 ) -> NarrativeResult:
     """Generate narrative text for the action resolution.
@@ -309,6 +310,7 @@ def tool_generate_narrative(
         outcome=outcome,
         check_result=check_result,
         attack_result=attack_result,
+        effects=effects,
         narrative_history=narrative_history or get_narrative_context(),
     )
     

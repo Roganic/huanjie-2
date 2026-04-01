@@ -105,7 +105,8 @@ async def test_resolver_uses_bootstrap_actor_modifier(client):
     assert data["resolution_type"] == "check"
     # STR 15 -> modifier +2
     assert data["check"]["modifier"] == 2
-    assert data["check"]["proficiency_bonus"] == 2
+    assert data["check"]["proficiency_bonus"] == 0  # Generic ability checks do not add proficiency
+    assert data["check"]["total"] == data["check"]["roll"] + 2
 
 
 def actor_id_in_scene(actor_id: str, actors: list[str]) -> bool:

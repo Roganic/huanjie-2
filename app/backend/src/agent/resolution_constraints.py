@@ -241,7 +241,7 @@ def build_narrative_prompt(
     lines.append(f"角色描述 / Character Description: {actor.description}")
     character_class_str = actor.character_class.value if actor.character_class else "adventurer"
     lines.append(f"角色职业 / Character Class: {character_class_str}")
-    lines.append(f"角色等级 / Level: 1 (熟练加值 / Proficiency: +{actor.proficiency_bonus})")
+    lines.append(f"角色等级 / Level: {actor.level} (熟练加值 / Proficiency: +{actor.proficiency_bonus})")
     lines.append(f"角色状态 / Character Status: HP {actor.hp}/{actor.hp_max}, AC {actor.ac}")
     lines.append(
         f"关键属性 / Key Abilities: "

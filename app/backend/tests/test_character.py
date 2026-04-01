@@ -299,8 +299,8 @@ async def test_action_without_character_returns_400(client):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_action_check_uses_correct_skill_modifier(client):
-    """The check modifier returned by /action should equal ability_mod + proficiency_bonus."""
+async def test_action_check_uses_correct_ability_modifier(client):
+    """Generic ability checks should use only the ability modifier (no proficiency)."""
     async with client as c:
         create_resp = await c.post("/character/create", json={
             "name": "Checker",
@@ -326,7 +326,8 @@ async def test_action_check_uses_correct_skill_modifier(client):
     data = action_resp.json()
     assert data["resolution_type"] == "check"
     assert data["check"]["modifier"] == 3          # (16 - 10) // 2
-    assert data["check"]["proficiency_bonus"] == 2
+    assert data["check"]["proficiency_bonus"] == 0  # Generic checks do not add proficiency
+    assert data["check"]["total"] == data["check"]["roll"] + 3
 
 
 # ---------------------------------------------------------------------------

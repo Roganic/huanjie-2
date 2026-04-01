@@ -31,10 +31,11 @@ def client():
 @pytest.mark.asyncio
 async def test_spell_attack_triggers_multi_step_resolution(client):
     """A spell attack should trigger attack roll + saving throw (two checks)."""
-    initial_enemy_hp = get_enemy().hp
+    from src.state import _get_session
 
     async with client as c:
         session_id = await create_session_and_character(c)
+        initial_enemy_hp = _get_session(session_id, create_if_missing=True).enemy.hp
         resp = await c.post(
             "/action",
             json={
@@ -78,7 +79,7 @@ async def test_spell_attack_triggers_multi_step_resolution(client):
         assert len(damage_effects) > 0
 
         # Enemy HP should be reduced
-        assert get_enemy().hp < initial_enemy_hp
+        assert _get_session(session_id, create_if_missing=True).enemy.hp < initial_enemy_hp
 
         # Damage roll should be in attack detail
         assert attack["damage"] is not None
@@ -90,7 +91,7 @@ async def test_spell_attack_triggers_multi_step_resolution(client):
         # Miss - no saving throw, no damage
         assert data["saving_throw"] is None
         assert attack["damage"] is None
-        assert get_enemy().hp == initial_enemy_hp
+        assert _get_session(session_id, create_if_missing=True).enemy.hp == initial_enemy_hp
 
 
 @pytest.mark.asyncio

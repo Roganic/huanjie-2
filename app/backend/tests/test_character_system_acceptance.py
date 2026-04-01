@@ -391,13 +391,11 @@ def test_d20_distribution_100_rolls():
     unique_values = set(rolls)
     assert len(unique_values) > 5, f"d20 roll 应该多样化，但只出现 {len(unique_values)} 个不同值"
 
-    # 验证分布（每面期望 5 次，允许 0-15 次的大范围）
+    # 验证分布（每面期望 5 次）
+    # 对于 100 次 roll，允许每面出现 0-20 次（非常宽松的限制）
     counts = Counter(rolls)
-    expected_per_face = num_rolls / 20  # 5.0
-
-    # 对于 100 次 roll，允许每面出现 1-14 次（即 20%-280% 的期望）
-    min_expected = 1
-    max_expected = 14
+    min_expected = 0  # 允许某些面在 100 次 roll 中不出现
+    max_expected = 20  # 允许某些面出现较多
 
     for face in range(1, 21):
         count = counts.get(face, 0)

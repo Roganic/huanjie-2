@@ -103,6 +103,57 @@ interface BootstrapState {
   narrative_history: NarrativeHistoryEntry[];
 }
 
+// ---------------------------------------------------------------------------
+// Combat Types
+// ---------------------------------------------------------------------------
+
+type CombatStatus = "active" | "victory" | "defeat" | "escaped";
+type CombatActionType = "attack" | "defend" | "skill" | "flee";
+
+interface CombatParticipant {
+  id: string;
+  name: string;
+  hp: number;
+  hp_max: number;
+  ac: number;
+  initiative: number;
+  is_player: boolean;
+  conditions: string[];
+}
+
+interface CombatLogEntry {
+  actor_id: string;
+  action_type: string;
+  target_id?: string;
+  hit?: boolean;
+  damage?: number;
+  narrative: string;
+  timestamp: number;
+}
+
+interface CombatState {
+  combat_id: string;
+  round_number: number;
+  turn_index: number;
+  participants: CombatParticipant[];
+  initiative_order: string[];
+  current_actor_id: string;
+  scene: Scene;
+  status: CombatStatus;
+  log: CombatLogEntry[];
+}
+
+interface CombatActionResult {
+  action_type: CombatActionType;
+  actor_id: string;
+  target_id?: string;
+  hit?: boolean;
+  damage?: number;
+  effects: Effect[];
+  narrative: string;
+  combat_state: CombatState;
+}
+
 interface ProviderOption {
   id: string;
   label: string;
@@ -743,6 +794,192 @@ function Timeline({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Combat Screen Components
+// ---------------------------------------------------------------------------
+
+interface CombatScreenProps {
+  combat: CombatState;
+  combatNarrative: string;
+  isNarrativeStreaming: boolean;
+  selectedTarget: string | null;
+  onTargetChange: (targetId: string) => void;
+  selectedWeapon: string;
+  onWeaponChange: (weapon: string) => void;
+  onAction: (actionType: CombatActionType) => void;
+  onFlee: () => void;
+  loading: boolean;
+}
+
+function CombatScreen({
+  combat,
+  combatNarrative,
+  isNarrativeStreaming,
+  selectedTarget,
+  onTargetChange,
+  selectedWeapon,
+  onWeaponChange,
+  onAction,
+  onFlee,
+  loading,
+}: CombatScreenProps) {
+  const currentParticipant = combat.participants.find((p) => p.id === combat.current_actor_id);
+  const isPlayerTurn = currentParticipant?.is_player ?? false;
+  const enemies = combat.participants.filter((p) => !p.is_player);
+  const weapons = ["longsword", "shortsword", "dagger", "shortbow"];
+
+  return (
+    <div className="combat-screen">
+      <div className="combat-header">
+        <div className="combat-round">第 {combat.round_number} 轮</div>
+        <div className="combat-turn">
+          {isPlayerTurn ? "你的回合" : `${currentParticipant?.name} 的回合`}
+        </div>
+      </div>
+
+      <div className="combat-arena">
+        {combat.participants.map((participant) => (
+          <div
+            key={participant.id}
+            className={`combat-actor ${participant.is_player ? "player" : "enemy"} ${
+              participant.id === combat.current_actor_id ? "current" : ""
+            } ${participant.hp <= 0 ? "defeated" : ""}`}
+          >
+            <div className="combat-actor-avatar">{participant.is_player ? "🧙" : "👹"}</div>
+            <div className="combat-actor-info">
+              <div className="combat-actor-name">{participant.name}</div>
+              <div className="combat-actor-hp-bar">
+                <div
+                  className="combat-actor-hp-fill"
+                  style={{ width: `${(participant.hp / participant.hp_max) * 100}%` }}
+                />
+              </div>
+              <div className="combat-actor-hp-text">
+                {participant.hp}/{participant.hp_max} HP
+              </div>
+            </div>
+            {participant.conditions.length > 0 && (
+              <div className="combat-actor-conditions">
+                {participant.conditions.map((c) => (
+                  <span key={c} className="condition-tag">
+                    {c}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="combat-narrative">
+        {isNarrativeStreaming || combatNarrative ? (
+          <div className="narration-block">
+            <div className="narration-header">
+              <span className="narration-icon">⚔️</span>
+              <span className="narration-label">战斗叙事</span>
+            </div>
+            <div className="narration-content">
+              <p className="narration-paragraph">{combatNarrative}</p>
+              {isNarrativeStreaming && <span className="streaming-cursor">▌</span>}
+            </div>
+          </div>
+        ) : (
+          <div className="combat-hint">选择行动并点击执行</div>
+        )}
+      </div>
+
+      {isPlayerTurn && (
+        <div className="combat-actions">
+          <div className="combat-action-row">
+            <label>目标:</label>
+            <select
+              value={selectedTarget || ""}
+              onChange={(e) => onTargetChange(e.target.value)}
+              disabled={loading}
+            >
+              {enemies.map((enemy) => (
+                <option key={enemy.id} value={enemy.id}>
+                  {enemy.name} (HP: {enemy.hp}/{enemy.hp_max})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="combat-action-row">
+            <label>武器:</label>
+            <select
+              value={selectedWeapon}
+              onChange={(e) => onWeaponChange(e.target.value)}
+              disabled={loading}
+            >
+              {weapons.map((w) => (
+                <option key={w} value={w}>
+                  {w}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="combat-action-buttons">
+            <button
+              className="combat-btn attack"
+              onClick={() => onAction("attack")}
+              disabled={loading}
+            >
+              {loading ? "执行中…" : "⚔️ 攻击"}
+            </button>
+            <button
+              className="combat-btn defend"
+              onClick={() => onAction("defend")}
+              disabled={loading}
+            >
+              🛡️ 防御
+            </button>
+            <button className="combat-btn flee" onClick={onFlee} disabled={loading}>
+              🏃 逃跑
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface CombatEndScreenProps {
+  combat: CombatState;
+  onReturn: () => void;
+}
+
+function CombatEndScreen({ combat, onReturn }: CombatEndScreenProps) {
+  const isVictory = combat.status === "victory";
+  const isEscape = combat.status === "escaped";
+
+  return (
+    <div className="combat-end-screen">
+      <div className={`combat-result ${combat.status}`}>
+        <div className="combat-result-icon">{isVictory ? "🏆" : isEscape ? "🏃" : "💀"}</div>
+        <h2>
+          {isVictory ? "战斗胜利！" : isEscape ? "成功逃脱" : "战斗失败"}
+        </h2>
+        <p>
+          战斗持续了 {combat.round_number} 轮
+        </p>
+        <div className="combat-result-participants">
+          {combat.participants.map((p) => (
+            <div key={p.id} className={`result-participant ${p.is_player ? "player" : "enemy"}`}>
+              <span>{p.name}</span>
+              <span className={p.hp <= 0 ? "defeated" : "survived"}>
+                {p.hp <= 0 ? "倒下" : `${p.hp}/${p.hp_max} HP`}
+              </span>
+            </div>
+          ))}
+        </div>
+        <button className="return-btn" onClick={onReturn}>
+          返回冒险
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CharacterCreationScreen({
   draft,
   actorPreview,
@@ -1153,6 +1390,14 @@ function App() {
   });
   const [creationError, setCreationError] = useState<string | null>(null);
   const messagesEnd = useRef<HTMLDivElement>(null);
+
+  // Combat state
+  const [combat, setCombat] = useState<CombatState | null>(null);
+  const [combatLoading, setCombatLoading] = useState(false);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+  const [selectedWeapon, setSelectedWeapon] = useState<string>("longsword");
+  const [combatNarrative, setCombatNarrative] = useState<string>("");
+  const [isCombatNarrativeStreaming, setIsCombatNarrativeStreaming] = useState(false);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
@@ -1687,6 +1932,172 @@ function App() {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Combat Functions
+  // ---------------------------------------------------------------------------
+
+  const startCombat = async () => {
+    if (!sessionId || combatLoading) return;
+    setCombatLoading(true);
+    try {
+      const response = await fetch(apiUrl("/combat/start"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId, { "Content-Type": "application/json" }),
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      const data = await response.json();
+      setCombat(data);
+      setSelectedTarget(data.participants.find((p: CombatParticipant) => !p.is_player)?.id || null);
+      addToTimeline({
+        type: "system",
+        title: "战斗开始",
+        details: `遭遇战开始，${data.participants.length} 名参与者`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "system", text: `战斗启动失败: ${message}`, timestamp: Date.now() },
+      ]);
+    } finally {
+      setCombatLoading(false);
+    }
+  };
+
+  const executeCombatAction = async (actionType: CombatActionType) => {
+    if (!sessionId || !combat || combatLoading) return;
+    if (combat.current_actor_id !== combat.participants.find((p) => p.is_player)?.id) {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "system", text: "还不是你的回合", timestamp: Date.now() },
+      ]);
+      return;
+    }
+    setCombatLoading(true);
+    setCombatNarrative("");
+    setIsCombatNarrativeStreaming(true);
+    try {
+      const response = await fetch(apiUrl("/combat/action"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId, {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        }),
+        body: JSON.stringify({
+          action_type: actionType,
+          target_id: selectedTarget,
+          weapon: selectedWeapon,
+        }),
+      });
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      if (!response.body) {
+        throw new Error("后端未返回可读流");
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalResult: CombatActionResult | null = null;
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop() ?? "";
+        for (const block of blocks) {
+          const parsed = parseStreamEvent(block);
+          if (!parsed) continue;
+          if (parsed.event === "chunk") {
+            const payload = parsed.data as { field?: string; delta?: string };
+            if (payload.field === "narrative" && payload.delta) {
+              setCombatNarrative((prev) => prev + payload.delta);
+            }
+          } else if (parsed.event === "complete") {
+            finalResult = parsed.data as CombatActionResult;
+          }
+        }
+      }
+      if (buffer.trim()) {
+        const parsed = parseStreamEvent(buffer);
+        if (parsed?.event === "complete") {
+          finalResult = parsed.data as CombatActionResult;
+        }
+      }
+      if (finalResult) {
+        setCombat(finalResult.combat_state);
+        addToTimeline({
+          type: "action",
+          title: `战斗: ${actionType}`,
+          outcome: finalResult.hit ? "success" : "failure",
+          details: finalResult.hit
+            ? `命中，造成 ${finalResult.damage} 点伤害`
+            : "未命中",
+        });
+        // If combat ended, show result
+        if (finalResult.combat_state.status !== "active") {
+          addToTimeline({
+            type: "system",
+            title: finalResult.combat_state.status === "victory" ? "战斗胜利" : "战斗结束",
+            details: `战斗在 ${finalResult.combat_state.round_number} 轮后结束`,
+          });
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "system", text: `战斗行动失败: ${message}`, timestamp: Date.now() },
+      ]);
+    } finally {
+      setCombatLoading(false);
+      setIsCombatNarrativeStreaming(false);
+    }
+  };
+
+  const endCombat = async (reason: "flee" | "surrender" | "victory" | "defeat") => {
+    if (!sessionId || !combat) return;
+    try {
+      const response = await fetch(apiUrl("/combat/end"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId, { "Content-Type": "application/json" }),
+        body: JSON.stringify({ reason }),
+      });
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      const data = await response.json();
+      setCombat(null);
+      addToTimeline({
+        type: "system",
+        title: "战斗结束",
+        details: `结果: ${data.status}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "system", text: `结束战斗失败: ${message}`, timestamp: Date.now() },
+      ]);
+    }
+  };
+
+  const returnToAdventure = () => {
+    setCombat(null);
+    setCombatNarrative("");
+    setSelectedTarget(null);
+    refreshState();
+  };
+
+  const inCombat = combat?.status === "active";
+  const combatEnded = combat && combat.status !== "active";
+
   return (
     <div className="app">
       <header className="header">
@@ -1715,9 +2126,10 @@ function App() {
           <button className="header-button" onClick={resetSession} disabled={resetting || sending || creatingCharacter}>
             {resetting ? "重置中…" : "重置"}
           </button>
+          {inCombat && <span className="combat-badge">⚔️ 战斗中</span>}
           <HealthDot status={health} />
           <span className="subtitle">
-            {inAdventure ? "AI 跑团原型" : "角色创建阶段"}
+            {inCombat ? `第 ${combat?.round_number} 轮` : inAdventure ? "AI 跑团原型" : "角色创建阶段"}
           </span>
         </div>
       </header>
@@ -1736,8 +2148,33 @@ function App() {
           )}
         </section>
         <section>
-          <h2>{inAdventure ? "角色" : "职业预览"}</h2>
-          {inAdventure && bootstrap?.actor ? (
+          <h2>{inCombat ? "战斗参与者" : inAdventure ? "角色" : "职业预览"}</h2>
+          {inCombat && combat ? (
+            <div className="combat-participants">
+              {combat.initiative_order.map((participantId) => {
+                const participant = combat.participants.find((p) => p.id === participantId);
+                if (!participant) return null;
+                const isCurrentTurn = participantId === combat.current_actor_id;
+                const isPlayer = participant.is_player;
+                return (
+                  <div
+                    key={participantId}
+                    className={`combat-participant ${isCurrentTurn ? "current" : ""} ${isPlayer ? "player" : "enemy"}`}
+                  >
+                    <div className="combat-participant-initiative">{participant.initiative}</div>
+                    <div className="combat-participant-info">
+                      <div className="combat-participant-name">
+                        {participant.name} {isCurrentTurn && "▶"}
+                      </div>
+                      <div className="combat-participant-hp">
+                        HP: {participant.hp}/{participant.hp_max}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : inAdventure && bootstrap?.actor ? (
             <ul>
               <li className="active">{bootstrap.actor.name}</li>
             </ul>
@@ -1752,7 +2189,25 @@ function App() {
       </aside>
 
       <main className="chat">
-        {inAdventure ? (
+        {inCombat && combat ? (
+          <CombatScreen
+            combat={combat}
+            combatNarrative={combatNarrative}
+            isNarrativeStreaming={isCombatNarrativeStreaming}
+            selectedTarget={selectedTarget}
+            onTargetChange={setSelectedTarget}
+            selectedWeapon={selectedWeapon}
+            onWeaponChange={setSelectedWeapon}
+            onAction={executeCombatAction}
+            onFlee={() => endCombat("flee")}
+            loading={combatLoading}
+          />
+        ) : combatEnded ? (
+          <CombatEndScreen
+            combat={combat}
+            onReturn={returnToAdventure}
+          />
+        ) : inAdventure ? (
           <>
             <div className="messages">
               {messages.length === 0 && <div className="empty-hint">输入一个行动开始冒险…</div>}
@@ -1788,6 +2243,14 @@ function App() {
               />
               <button onClick={send} disabled={sending}>
                 {sending ? "…" : "发送"}
+              </button>
+              <button
+                className="combat-start-btn"
+                onClick={startCombat}
+                disabled={combatLoading || sending}
+                title="开始战斗"
+              >
+                ⚔️ 战斗
               </button>
             </div>
           </>

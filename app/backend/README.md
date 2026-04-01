@@ -1,8 +1,8 @@
 # 幻界 2.0 后端
 
-Python + FastAPI 单体服务。
+Python 3.10+ + FastAPI 单体服务。
 
-## 快速启动
+## 本地启动
 
 ```bash
 cd app/backend
@@ -14,86 +14,57 @@ uvicorn src.main:app --reload
 
 服务启动后访问：
 
-- 根路径：http://localhost:8000/
-- 健康检查：http://localhost:8000/health
-- API 文档：http://localhost:8000/docs
+- 根路径：`http://localhost:8000/`
+- 健康检查：`http://localhost:8000/health`
+- API 文档：`http://localhost:8000/docs`
 
-## 目录结构
+## 关键环境变量
 
-```text
-app/backend/
-├── pyproject.toml
-├── README.md
-├── src/
-│   ├── main.py              # FastAPI 入口
-│   ├── routers/
-│   │   ├── health.py        # GET /health
-│   │   └── action.py        # POST /action
-│   ├── engine/
-│   │   ├── dice.py          # d20 投骰（优势/劣势）
-│   │   └── resolver.py      # 行动裁定引擎
-│   └── models/
-│       └── action.py        # 请求/响应数据模型
-└── tests/
-    └── test_action.py       # 行动 API 测试
+- `PORT`：服务监听端口，云平台通常自动注入
+- `CORS_ALLOW_ORIGINS`：允许跨域的前端 origin，使用逗号分隔
+- `KIMI_API_KEY`：Kimi 叙事模型 key
+- `KIMI_API_URL` / `KIMI_MODEL` / `KIMI_TIMEOUT_SECONDS`：Kimi 可选覆盖项
+- `OPENAI_API_KEY`：OpenAI 叙事模型 key
+- `OPENAI_API_URL` / `OPENAI_MODEL` / `OPENAI_TIMEOUT_SECONDS`：OpenAI 可选覆盖项
+
+本地开发默认允许：
+
+- `http://localhost:5173`
+- `http://127.0.0.1:5173`
+
+部署到 GitHub Pages 时，需要把 `CORS_ALLOW_ORIGINS` 设置为实际前端 origin，例如：
+
+```bash
+CORS_ALLOW_ORIGINS=https://your-user.github.io
+```
+
+## 容器部署
+
+后端目录自带 `Dockerfile`，可直接用于 Railway 或 Render。
+
+本地构建与运行：
+
+```bash
+cd app/backend
+docker build -t huanjie-backend .
+docker run --rm -p 8000:8000 \
+  -e CORS_ALLOW_ORIGINS=http://localhost:5173 \
+  -e KIMI_API_KEY=your-key \
+  huanjie-backend
 ```
 
 ## API
 
-### GET /health
-
-健康检查。返回 `{"status": "ok"}`。
-
-### POST /action
-
-提交玩家行动，返回结构化裁定结果。
-
-请求体示例：
-
-```json
-{
-  "scene_id": "dungeon-03",
-  "actor": "Bree",
-  "intent": "pick the lock on the chest",
-  "approach": "carefully pick the lock with thieves tools",
-  "dc": 15
-}
-```
-
-可选字段：`ability`（str/dex/con/int/wis/cha）、`dc`、`advantage`（true/false）。
-
-响应体示例：
-
-```json
-{
-  "action_summary": "Bree attempts to pick the lock on the chest by carefully pick the lock with thieves tools",
-  "resolution_type": "check",
-  "check": {
-    "ability": "dex",
-    "modifier": 1,
-    "proficiency_bonus": 2,
-    "advantage": null,
-    "roll": 14,
-    "total": 17,
-    "dc": 15
-  },
-  "outcome": "success",
-  "effects": [],
-  "narration": "Bree attempts to pick the lock on the chest by carefully pick the lock with thieves tools — and it works."
-}
-```
+- `GET /health`：健康检查
+- `GET /state/bootstrap`：获取当前角色、场景和叙事上下文
+- `POST /state/character`：创建新角色并重置场景
+- `POST /state/reset`：重置到初始状态
+- `POST /action`：提交玩家行动并获取裁定与叙事
 
 ## 测试
 
 ```bash
 cd app/backend
 source .venv/bin/activate
-python3 -m pytest tests/ -v
+python -m pytest tests -v
 ```
-
-## 后续扩展方向
-
-按需新增，不提前建目录：
-
-- `src/agent/` — GM agent 编排（LLM 调用）
-- `src/memory/` — 会话状态与记忆/RAG

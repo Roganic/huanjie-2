@@ -43,7 +43,16 @@ async def state(request: Request):
 @router.get("/state/bootstrap", response_model=BootstrapState)
 async def bootstrap(request: Request):
     """Return the current fixed actor and scene for client initialisation."""
-    _, bootstrap_state = _resolve_session(request, create_if_missing=True)
+    provided_session_id = _request_session_id(request)
+    if provided_session_id is None:
+        # Create a new session for each bootstrap request without explicit session_id
+        # This ensures proper isolation between different clients/tests
+        bootstrap_state = create_session()
+    else:
+        try:
+            _, bootstrap_state = provided_session_id, require_bootstrap_state(provided_session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
     return bootstrap_state
 
 

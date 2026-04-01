@@ -269,6 +269,7 @@ async def test_auto_success_does_not_mutate(client):
 async def test_bootstrap_endpoint_shows_live_state(client):
     """GET /state/bootstrap should reflect mutations from prior actions."""
     async with client as c:
+        # Use default session for backward compatibility
         # Deal damage
         await c.post("/action", json={
             "scene_id": "tavern-01",
@@ -278,8 +279,8 @@ async def test_bootstrap_endpoint_shows_live_state(client):
             "ability": "str",
             "dc": 99,
         })
-        # Fetch bootstrap
-        resp = await c.get("/state/bootstrap")
+        # Fetch bootstrap from default session
+        resp = await c.get("/state/bootstrap?session_id=default-session")
     data = resp.json()
     assert data["actor"]["hp"] == 11
     assert data["scene"]["time"] == 1
@@ -295,6 +296,7 @@ async def test_bootstrap_endpoint_shows_live_state(client):
 async def test_reset_endpoint_restores_initial_state(client):
     """POST /state/reset should restore actor and scene to initial values."""
     async with client as c:
+        # Use default session for backward compatibility
         # Mutate state: damage HP, add condition, advance time
         await c.post("/action", json={
             "scene_id": "tavern-01",
@@ -313,8 +315,8 @@ async def test_reset_endpoint_restores_initial_state(client):
         assert "exhausted" in get_actor().conditions
         assert get_scene().time == 1
 
-        # Call reset endpoint
-        resp = await c.post("/state/reset")
+        # Call reset endpoint on default session
+        resp = await c.post("/state/reset?session_id=default-session")
 
         # Verify response status
         assert resp.status_code == 200
@@ -352,6 +354,7 @@ async def test_reset_endpoint_returns_fresh_bootstrap(client):
 async def test_reset_clears_accumulated_mutations(client):
     """Multiple mutations followed by reset should all be cleared."""
     async with client as c:
+        # Use default session for backward compatibility
         # Apply multiple mutations
         await c.post("/action", json={
             "scene_id": "tavern-01",
@@ -381,8 +384,8 @@ async def test_reset_clears_accumulated_mutations(client):
         assert len(get_actor().conditions) == 2
         assert get_scene().time >= 2
 
-        # Reset
-        await c.post("/state/reset")
+        # Reset on default session
+        await c.post("/state/reset?session_id=default-session")
 
         # All cleared
         assert get_actor().hp == 12

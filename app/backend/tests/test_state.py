@@ -37,7 +37,8 @@ async def test_bootstrap_returns_actor_and_scene(client):
 @pytest.mark.asyncio
 async def test_bootstrap_actor_has_abilities(client):
     async with client as c:
-        resp = await c.get("/state/bootstrap")
+        # Use default session for backward compatibility with legacy tests
+        resp = await c.get("/state/bootstrap?session_id=default-session")
     actor = resp.json()["actor"]
     assert actor["name"] == "Aldric"
     assert actor["id"] == "aldric-01"
@@ -52,7 +53,8 @@ async def test_bootstrap_actor_has_abilities(client):
 @pytest.mark.asyncio
 async def test_bootstrap_scene_has_required_fields(client):
     async with client as c:
-        resp = await c.get("/state/bootstrap")
+        # Use default session for backward compatibility with legacy tests
+        resp = await c.get("/state/bootstrap?session_id=default-session")
     scene = resp.json()["scene"]
     assert scene["id"] == "tavern-01"
     assert len(scene["name"]) > 0

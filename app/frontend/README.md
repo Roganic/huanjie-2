@@ -26,7 +26,7 @@ VITE_API_BASE_URL=https://your-backend.example.com npm run build
 - `VITE_API_BASE_URL`：生产环境后端 HTTPS 根地址，例如 `https://your-backend.example.com`
 - `VITE_BASE_PATH`：静态资源部署基础路径；GitHub Pages 场景通常为 `/<repo-name>/`
 
-示例配置见 `app/frontend/env.production.example`。实际使用时请在本地创建 `.env.production` 或直接通过 CI 环境变量注入。
+示例配置见 `app/frontend/.env.example`（开发环境）和 `env.production.example`（生产构建参考）。实际使用时请在本地创建 `.env` / `.env.production` 或直接通过 CI 环境变量注入。
 
 ## GitHub Pages
 

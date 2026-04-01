@@ -45,6 +45,8 @@ python -m src.main
 - `KIMI_API_URL` / `OPENAI_API_URL`：可选自定义 API 地址
 - `KIMI_MODEL` / `OPENAI_MODEL`：可选模型名
 
+完整环境变量示例见 `env.example`。
+
 应用默认允许 `http://localhost:5173`，并额外放行 `https://*.github.io`，便于与 GitHub Pages 前端联调。
 
 ## 容器部署

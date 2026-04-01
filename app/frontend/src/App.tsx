@@ -76,6 +76,11 @@ interface BootstrapState {
   scene: Scene;
 }
 
+interface ProviderOption {
+  id: string;
+  label: string;
+}
+
 interface TimelineEntry {
   id: number;
   type: "action" | "check" | "system";
@@ -119,6 +124,12 @@ const STATUS_ICONS: Record<string, string> = {
   激励: "⭐",
   掩护: "🛡️",
 };
+
+const PROVIDERS: ProviderOption[] = [
+  { id: "", label: "自动" },
+  { id: "kimi", label: "Kimi" },
+  { id: "openai", label: "OpenAI" },
+];
 
 // ---------------------------------------------------------------------------
 // Utility Functions
@@ -534,6 +545,7 @@ function App() {
   const [bootstrap, setBootstrap] = useState<BootstrapState | null>(null);
   const [previousBootstrap, setPreviousBootstrap] = useState<BootstrapState | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<string>(PROVIDERS[0].id);
   const messagesEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -629,6 +641,7 @@ function App() {
           actor: bootstrap?.actor.name ?? "Aldric",
           intent: text,
           approach: text,
+          provider: selectedProvider || undefined,
         }),
       });
 
@@ -725,6 +738,21 @@ function App() {
       <header className="header">
         <h1>幻界</h1>
         <div className="header-right">
+          <div className="model-selector">
+            <span className="model-selector-label">🧠 模型</span>
+            <select
+              value={selectedProvider}
+              onChange={(e) => setSelectedProvider(e.target.value)}
+              disabled={sending}
+              title="选择叙事生成模型"
+            >
+              {PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <HealthDot status={health} />
           <span className="subtitle">AI 跑团原型</span>
         </div>

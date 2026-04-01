@@ -120,6 +120,7 @@ class NarrativeResult(ToolResult):
     tool: ToolType = ToolType.GENERATE_NARRATIVE
     narrative: str
     scene_progression: str
+    gm_prompt: str
 
 
 # Union type for all tool results
@@ -320,6 +321,7 @@ def tool_generate_narrative(
         success=True,
         narrative=narrative.action_result,
         scene_progression=narrative.scene_progression,
+        gm_prompt=narrative.gm_prompt,
     )
 
 

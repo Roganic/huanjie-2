@@ -1048,6 +1048,16 @@
   background: linear-gradient(90deg, #6e5330, #c7a86d, #f1d39b);
 }
 
+.narration-block.gm_prompt {
+  background: linear-gradient(135deg, rgba(20, 62, 54, 0.76), rgba(14, 30, 31, 0.96));
+  border-color: rgba(98, 190, 173, 0.38);
+  box-shadow: inset 0 0 0 1px rgba(98, 190, 173, 0.08);
+}
+
+.narration-block.gm_prompt::before {
+  background: linear-gradient(90deg, #2f7f72, #62bead, #a6f0e3);
+}
+
 .narration-header {
   display: flex;
   align-items: center;

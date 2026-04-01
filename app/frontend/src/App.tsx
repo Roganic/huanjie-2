@@ -39,11 +39,13 @@ interface ActionResponse {
   effects: Effect[];
   narration: string;
   scene_progression: string;
+  gm_prompt: string;
 }
 
 interface StreamingPreview {
   narration: string;
   scene_progression: string;
+  gm_prompt: string;
   interrupted?: boolean;
 }
 
@@ -190,14 +192,14 @@ function NarrationBlock({
   variant = "result",
 }: {
   text: string;
-  variant?: "result" | "progression";
+  variant?: "result" | "progression" | "gm_prompt";
 }) {
   const paragraphs = text.split("\n").filter((paragraph) => paragraph.trim() !== "");
-  const icon = variant === "progression" ? "🕯️" : "📖";
-  const label = variant === "progression" ? "场景推进" : "行动结果";
+  const icon = variant === "progression" ? "🕯️" : variant === "gm_prompt" ? "🎯" : "📖";
+  const label = variant === "progression" ? "场景波动" : variant === "gm_prompt" ? "GM 提示" : "行动结果";
 
   return (
-    <div className={`narration-block ${variant === "progression" ? "progression" : "result"}`}>
+    <div className={`narration-block ${variant}`}>
       <div className="narration-header">
         <span className="narration-icon">{icon}</span>
         <span className="narration-label">{label}</span>
@@ -236,12 +238,14 @@ function StreamingNarrationCard({
 }) {
   const hasNarration = preview.narration.trim().length > 0;
   const hasProgression = preview.scene_progression.trim().length > 0;
+  const hasPrompt = preview.gm_prompt.trim().length > 0;
 
   return (
     <div className="resolution-card">
-      {!hasNarration && !hasProgression && <LoadingNarration />}
+      {!hasNarration && !hasProgression && !hasPrompt && <LoadingNarration />}
       {hasNarration && <NarrationBlock text={preview.narration} variant="result" />}
       {hasProgression && <NarrationBlock text={preview.scene_progression} variant="progression" />}
+      {hasPrompt && <NarrationBlock text={preview.gm_prompt} variant="gm_prompt" />}
       {preview.interrupted && (
         <div className="effects-list">
           <div className="effect-item negative">叙事流已中断，已保留收到的片段。可以重试本次行动。</div>
@@ -303,6 +307,7 @@ function ResolutionCard({ res }: { res: ActionResponse }) {
 
       <NarrationBlock text={res.narration} variant="result" />
       <NarrationBlock text={res.scene_progression} variant="progression" />
+      <NarrationBlock text={res.gm_prompt} variant="gm_prompt" />
     </div>
   );
 }
@@ -925,8 +930,8 @@ function App() {
     setMessages((previous) => [...previous, playerMessage]);
     setInput("");
     setSending(true);
-    setStreamingPreview({ narration: "", scene_progression: "" });
-    let partialPreview: StreamingPreview = { narration: "", scene_progression: "" };
+    setStreamingPreview({ narration: "", scene_progression: "", gm_prompt: "" });
+    let partialPreview: StreamingPreview = { narration: "", scene_progression: "", gm_prompt: "" };
 
     addToTimeline({
       type: "action",
@@ -1003,15 +1008,23 @@ function App() {
                 ...partialPreview,
                 scene_progression: partialPreview.scene_progression + payload.delta,
               };
+            } else if (payload.field === "gm_prompt") {
+              partialPreview = {
+                ...partialPreview,
+                gm_prompt: partialPreview.gm_prompt + payload.delta,
+              };
             }
 
             setStreamingPreview((previous) => {
-              const next = previous ?? { narration: "", scene_progression: "" };
+              const next = previous ?? { narration: "", scene_progression: "", gm_prompt: "" };
               if (payload.field === "narration") {
                 return { ...next, narration: next.narration + payload.delta };
               }
               if (payload.field === "scene_progression") {
                 return { ...next, scene_progression: next.scene_progression + payload.delta };
+              }
+              if (payload.field === "gm_prompt") {
+                return { ...next, gm_prompt: next.gm_prompt + payload.delta };
               }
               return next;
             });
@@ -1047,7 +1060,7 @@ function App() {
         {
           id: Date.now(),
           role: "gm",
-          text: `${data.narration}\n\n${data.scene_progression}`,
+          text: `${data.narration}\n\n${data.scene_progression}\n\n${data.gm_prompt}`,
           resolution: data,
           timestamp: Date.now(),
         },
@@ -1078,17 +1091,23 @@ function App() {
         details: data.scene_progression,
       });
 
+      addToTimeline({
+        type: "scene",
+        title: "GM 提示",
+        details: data.gm_prompt,
+      });
+
       setPreviousBootstrap(bootstrap);
       await refreshState();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setMessages((previous) => {
         const nextMessages = [...previous];
-        if (partialPreview.narration || partialPreview.scene_progression) {
+        if (partialPreview.narration || partialPreview.scene_progression || partialPreview.gm_prompt) {
           nextMessages.push({
             id: Date.now(),
             role: "gm",
-            text: `${partialPreview.narration}\n\n${partialPreview.scene_progression}`.trim(),
+            text: `${partialPreview.narration}\n\n${partialPreview.scene_progression}\n\n${partialPreview.gm_prompt}`.trim(),
             streamingPreview: { ...partialPreview, interrupted: true },
             timestamp: Date.now(),
           });

@@ -15,6 +15,7 @@
 - 后端通过 `Dockerfile` + `render.yaml` 支持云部署，CORS 与 AI provider key 均通过环境变量注入
 - 新增后端 `env.example` 与完整流程烟测，覆盖“创建角色 → 行动 → 叙事 → 重置”
 - `docs/deployment.md` 已整理为可执行的 GitHub Pages / Render / Railway 发布步骤
+- 本次重试已撤销 `docs/tech-choices.md` 的会话差异，避免继续触碰 integrator-only 文件
 
 ## 验证
 
@@ -22,6 +23,8 @@
 - `python3 -m pytest app/backend/tests/test_deployment_flow.py -q` 通过
 - `cd app/frontend && VITE_BACKEND_URL=https://api.example.com VITE_APP_BASE=/demo/ npm run build:pages` 通过
 - 前端默认 `npm run build:pages` 也通过，说明未破坏本地 `/api` 代理模式
+- 重试会话再次执行 `cd app/backend && python3 -m pytest tests/test_deployment_flow.py -q`，结果 `1 passed`
+- 重试会话再次执行 `cd app/frontend && npm run build:pages`，构建通过
 
 ## 未决问题
 

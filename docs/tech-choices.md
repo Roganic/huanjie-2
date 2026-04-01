@@ -22,15 +22,9 @@
 
 ### 后端：Python + FastAPI
 
-- **后端语言**：Python（>=3.10）— AI/LLM 生态最成熟，适合快速原型
+- **后端语言**：Python（>=3.9）— AI/LLM 生态最成熟，适合快速原型
 - **后端框架**：FastAPI — 轻量、异步、自带 OpenAPI 文档，便于调试
 - **包管理**：pyproject.toml + pip，暂不引入 Poetry / PDM 等额外工具
-
-### 部署：GitHub Pages + 容器化云后端
-
-- **前端部署**：GitHub Pages，保留纯静态托管的低成本路径
-- **后端部署**：Render 或 Railway，统一使用 `app/backend/Dockerfile`
-- **环境注入**：前端使用 `VITE_BACKEND_URL`，后端使用平台环境变量注入 AI key 与 CORS
 
 ## 待决定
 

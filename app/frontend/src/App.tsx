@@ -131,34 +131,55 @@ type Skill = {
   proficient: boolean;
 };
 
+const SKILL_LABELS: Record<string, string> = {
+  athletics: "运动",
+  acrobatics: "杂技",
+  sleight_of_hand: "巧手",
+  stealth: "隐匿",
+  arcana: "奥秘",
+  history: "历史",
+  investigation: "调查",
+  nature: "自然",
+  religion: "宗教",
+  animal_handling: "驯兽",
+  insight: "洞察",
+  medicine: "医药",
+  perception: "察觉",
+  survival: "生存",
+  deception: "欺骗",
+  intimidation: "威吓",
+  performance: "表演",
+  persuasion: "说服",
+};
+
 const SKILLS: Skill[] = [
-  { name: "杂技", ability: "dex", proficient: false },
-  { name: "运动", ability: "str", proficient: false },
-  { name: "欺骗", ability: "cha", proficient: false },
-  { name: "历史", ability: "int", proficient: false },
-  { name: "威吓", ability: "cha", proficient: false },
-  { name: "洞察", ability: "wis", proficient: true },
-  { name: "调查", ability: "int", proficient: false },
-  { name: "医药", ability: "wis", proficient: false },
-  { name: "自然", ability: "int", proficient: false },
-  { name: "察觉", ability: "wis", proficient: true },
-  { name: "表演", ability: "cha", proficient: false },
-  { name: "说服", ability: "cha", proficient: false },
-  { name: "宗教", ability: "int", proficient: false },
-  { name: "巧手", ability: "dex", proficient: true },
-  { name: "隐匿", ability: "dex", proficient: true },
-  { name: "生存", ability: "wis", proficient: false },
+  { name: "acrobatics", ability: "dex", proficient: false },
+  { name: "animal_handling", ability: "wis", proficient: false },
+  { name: "athletics", ability: "str", proficient: false },
+  { name: "deception", ability: "cha", proficient: false },
+  { name: "history", ability: "int", proficient: false },
+  { name: "insight", ability: "wis", proficient: false },
+  { name: "intimidation", ability: "cha", proficient: false },
+  { name: "investigation", ability: "int", proficient: false },
+  { name: "medicine", ability: "wis", proficient: false },
+  { name: "nature", ability: "int", proficient: false },
+  { name: "perception", ability: "wis", proficient: false },
+  { name: "performance", ability: "cha", proficient: false },
+  { name: "persuasion", ability: "cha", proficient: false },
+  { name: "religion", ability: "int", proficient: false },
+  { name: "sleight_of_hand", ability: "dex", proficient: false },
+  { name: "stealth", ability: "dex", proficient: false },
+  { name: "survival", ability: "wis", proficient: false },
 ];
 
 const CLASS_SKILLS: Record<CharacterClass, string[]> = {
-  warrior: ["运动", "威吓", "察觉", "生存"],
-  mage: ["历史", "调查", "奥秘", "宗教"],
-  rogue: ["杂技", "欺骗", "洞察", "巧手", "隐匿"],
+  warrior: ["athletics", "intimidation", "perception", "survival"],
+  mage: ["arcana", "history", "investigation", "insight"],
+  rogue: ["acrobatics", "sleight_of_hand", "stealth", "deception", "persuasion"],
 };
 
-// Arcana skill for mage class proficiency
 const EXTRA_SKILLS: Skill[] = [
-  { name: "奥秘", ability: "int", proficient: false },
+  { name: "arcana", ability: "int", proficient: false },
 ];
 
 const ABILITY_LABELS: Record<string, string> = {
@@ -494,7 +515,7 @@ function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolea
           const total = abilityMod + profBonus;
           return (
             <div key={skill.name} className="skill-item-compact proficient">
-              <span className="skill-name">{skill.name}</span>
+              <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
               <span className="skill-bonus">{formatModifier(total)}</span>
             </div>
           );
@@ -512,7 +533,7 @@ function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolea
         return (
           <div key={skill.name} className={`skill-item ${isProficient ? "proficient" : ""}`}>
             <span className="skill-dot">{isProficient ? "●" : "○"}</span>
-            <span className="skill-name">{skill.name}</span>
+            <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
             <span className="skill-ability">({ABILITY_LABELS[skill.ability]})</span>
             <span className="skill-bonus">{formatModifier(total)}</span>
           </div>
@@ -921,6 +942,10 @@ function CharacterCreationScreen({
                   <AbilityScore key={key} ability={key} score={actorPreview.abilities[key]} />
                 ))}
               </div>
+            </div>
+            <div className="creation-preview-section">
+              <h3>技能熟练</h3>
+              <SkillsList actor={actorPreview} compact />
             </div>
           </>
         ) : (

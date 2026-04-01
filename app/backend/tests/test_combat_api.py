@@ -4,11 +4,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from src.main import app
-from routes.combat import router as combat_router
 from src.state import reset_state
-
-# Register combat router for tests (moved to in-scope routes package)
-app.include_router(combat_router)
 
 
 @pytest.fixture(autouse=True)

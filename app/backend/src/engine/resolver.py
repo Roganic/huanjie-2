@@ -166,7 +166,8 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
             attack=None,
             outcome=Outcome.SUCCESS,
             effects=[],
-            narration=narration,
+            narration=narration.action_result,
+            scene_progression=narration.scene_progression,
         )
 
     # --- check path ---
@@ -221,7 +222,8 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
         attack=None,
         outcome=outcome,
         effects=effects,
-        narration=narration,
+        narration=narration.action_result,
+        scene_progression=narration.scene_progression,
     )
 
 
@@ -245,6 +247,7 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
             outcome=Outcome.FAILURE,
             effects=[],
             narration=f"{action_summary} — but the target cannot be found.",
+            scene_progression="The confusion breaks the flow of the moment. You can identify a clear target, study the scene, or shift your approach before acting again.",
         )
 
     # Determine weapon and damage dice
@@ -348,7 +351,8 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
         attack=attack_detail,
         outcome=outcome,
         effects=effects,
-        narration=narration,
+        narration=narration.action_result,
+        scene_progression=narration.scene_progression,
     )
 
 

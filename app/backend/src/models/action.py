@@ -149,3 +149,4 @@ class ActionResponse(BaseModel):
     outcome: Outcome
     effects: list[Effect] = Field(default_factory=list)
     narration: str
+    scene_progression: str

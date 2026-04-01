@@ -216,6 +216,7 @@ class GMAgent:
             outcome=Outcome.SUCCESS,
             effects=[],  # No effects for auto-success
             narration=narrative_result.narrative,
+            scene_progression=narrative_result.scene_progression,
         )
     
     def _resolve_ability_check(
@@ -279,6 +280,7 @@ class GMAgent:
             outcome=outcome,
             effects=self.effects,
             narration=narrative_result.narrative,
+            scene_progression=narrative_result.scene_progression,
         )
     
     def _resolve_attack(self, req: ActionRequest, actor: Actor) -> ActionResponse:
@@ -387,6 +389,7 @@ class GMAgent:
             outcome=outcome,
             effects=self.effects,
             narration=narrative_result.narrative,
+            scene_progression=narrative_result.scene_progression,
         )
     
     def _resolve_attack_no_target(
@@ -411,6 +414,7 @@ class GMAgent:
             outcome=Outcome.FAILURE,
             effects=self.effects,
             narration=f"{action_summary} — but the target cannot be found.",
+            scene_progression="The confusion stalls the moment. You can pick a clear target, read the room for reactions, or reposition before the next move.",
         )
     
     def _resolve_spell_attack(self, req: ActionRequest, actor: Actor) -> ActionResponse:
@@ -558,6 +562,7 @@ class GMAgent:
             outcome=outcome,
             effects=self.effects,
             narration=narrative_result.narrative,
+            scene_progression=narrative_result.scene_progression,
         )
     
     # -----------------------------------------------------------------------

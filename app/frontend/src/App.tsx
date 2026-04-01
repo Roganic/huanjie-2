@@ -476,17 +476,43 @@ function StatusEffect({ name, isNew }: { name: string; isNew?: boolean }) {
 }
 
 function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolean }) {
+  // Use backend-provided skills when available; fallback to local computation for previews
+  const backendSkills = actor.skills;
+  if (backendSkills && backendSkills.length > 0) {
+    if (compact) {
+      const proficientSkills = backendSkills.filter((s) => s.proficient);
+      return (
+        <div className="skills-list-compact">
+          {proficientSkills.map((skill) => (
+            <div key={skill.name} className="skill-item-compact proficient">
+              <span className="skill-name">{ABILITY_LABELS[skill.name] ?? skill.name}</span>
+              <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return (
+      <div className="skills-list">
+        {backendSkills.map((skill) => (
+          <div key={skill.name} className={`skill-item ${skill.proficient ? "proficient" : ""}`}>
+            <span className="skill-dot">{skill.proficient ? "●" : "○"}</span>
+            <span className="skill-name">{ABILITY_LABELS[skill.name] ?? skill.name}</span>
+            <span className="skill-ability">({ABILITY_LABELS[skill.ability] ?? skill.ability})</span>
+            <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Fallback for preview actors without backend skills
   const profBonus = actor.proficiency_bonus;
   const classProfSkills = CLASS_SKILLS[actor.character_class ?? "warrior"] ?? [];
-  
-  // Merge standard skills with extra skills (e.g., Arcana for mages)
   const allSkills = [...SKILLS, ...EXTRA_SKILLS];
 
   if (compact) {
-    // Show only proficient skills (class proficiencies)
-    const proficientSkills = allSkills.filter(
-      (s) => classProfSkills.includes(s.name)
-    );
+    const proficientSkills = allSkills.filter((s) => classProfSkills.includes(s.name));
     return (
       <div className="skills-list-compact">
         {proficientSkills.map((skill) => {

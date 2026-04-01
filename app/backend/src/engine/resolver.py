@@ -59,6 +59,31 @@ AUTO_SUCCESS_DISQUALIFIERS = [
 ]
 
 # ---------------------------------------------------------------------------
+# Skill to ability mapping (D&D 5e standard)
+# ---------------------------------------------------------------------------
+
+SKILL_ABILITIES: dict[str, str] = {
+    "athletics": "str",
+    "acrobatics": "dex",
+    "sleight_of_hand": "dex",
+    "stealth": "dex",
+    "arcana": "int",
+    "history": "int",
+    "investigation": "int",
+    "nature": "int",
+    "religion": "int",
+    "animal_handling": "wis",
+    "insight": "wis",
+    "medicine": "wis",
+    "perception": "wis",
+    "survival": "wis",
+    "deception": "cha",
+    "intimidation": "cha",
+    "performance": "cha",
+    "persuasion": "cha",
+}
+
+# ---------------------------------------------------------------------------
 # Simple ability inference from approach text
 # ---------------------------------------------------------------------------
 
@@ -127,9 +152,105 @@ def _pick_dc(intent: str) -> int:
 
 
 
+def _resolve_skill_check(req: ActionRequest) -> ActionResponse:
+    """Resolve a skill check action (d20 + ability mod + prof if proficient).
+    
+    Skill checks differ from generic ability checks in that proficiency bonus
+    is only added if the character is proficient in that specific skill.
+    """
+    actor = get_actor()
+    scene = get_scene()
+
+    action_summary = f"{req.actor} attempts to use {req.skill} to {req.intent}"
+
+    # Determine skill and governing ability
+    skill_name = req.skill or "athletics"
+    ability = req.ability or _get_skill_ability(skill_name)
+    
+    # Calculate modifiers
+    ability_modifier = actor.abilities.modifier(ability)
+    is_proficient = _is_skill_proficient(actor, skill_name)
+    prof_bonus = actor.proficiency_bonus if is_proficient else 0
+    
+    dc = req.dc or _pick_dc(req.intent)
+    advantage = req.advantage
+
+    # Roll d20 + ability modifier + proficiency (if proficient)
+    roll = roll_d20(advantage)
+    total = roll + ability_modifier + prof_bonus
+    outcome = Outcome.SUCCESS if total >= dc else Outcome.FAILURE
+
+    check = CheckDetail(
+        ability=ability,
+        modifier=ability_modifier,
+        proficiency_bonus=prof_bonus,
+        advantage=advantage,
+        roll=roll,
+        total=total,
+        dc=dc,
+        skill_name=skill_name,
+    )
+
+    effects: list[Effect] = _build_effects(
+        actor_id=actor.id,
+        scene_id=scene.id,
+        ability=ability,
+        outcome=outcome,
+    )
+
+    # Build check result for narrative generation
+    check_result = {
+        "ability": ability,
+        "skill": skill_name,
+        "proficient": is_proficient,
+        "modifier": ability_modifier,
+        "proficiency_bonus": prof_bonus,
+        "dc": dc,
+        "roll": roll,
+        "total": total,
+    }
+    
+    narration = generate_narration(
+        req=req,
+        actor=actor,
+        scene=scene,
+        outcome=outcome,
+        check_result=check_result,
+        effects=effects,
+    )
+
+    return ActionResponse(
+        action_summary=action_summary,
+        resolution_type=ResolutionType.CHECK,
+        check=check,
+        attack=None,
+        outcome=outcome,
+        effects=effects,
+        narration=narration.action_result,
+        scene_progression=narration.scene_progression,
+        gm_prompt=narration.gm_prompt,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+def _is_skill_proficient(actor, skill_name: str) -> bool:
+    """Check if actor is proficient in a given skill."""
+    if not skill_name:
+        return False
+    skill_name_lower = skill_name.lower()
+    for skill in actor.skills:
+        if skill.name.lower() == skill_name_lower:
+            return skill.proficient
+    return False
+
+
+def _get_skill_ability(skill_name: str) -> str:
+    """Get the governing ability for a skill."""
+    return SKILL_ABILITIES.get(skill_name.lower(), "str")
+
 
 def resolve_action(req: ActionRequest) -> ActionResponse:
     """Resolve a player action into a structured result.
@@ -142,6 +263,10 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
     # Route attack actions to combat resolver
     if req.action_type == ActionType.ATTACK or req.weapon is not None:
         return _resolve_attack(req)
+
+    # Route skill check actions to skill resolver
+    if req.action_type == ActionType.SKILL_CHECK or req.skill is not None:
+        return _resolve_skill_check(req)
 
     action_summary = f"{req.actor} attempts to {req.intent} by {req.approach}"
     
@@ -171,10 +296,10 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
             gm_prompt=narration.gm_prompt,
         )
 
-    # --- check path ---
+    # --- generic ability check path ---
     ability = req.ability or _infer_ability(req.approach)
     modifier = actor.abilities.modifier(ability)
-    prof = actor.proficiency_bonus
+    prof = actor.proficiency_bonus  # Generic checks add full prof for simplicity
     dc = req.dc or _pick_dc(req.intent)
     advantage = req.advantage
 
@@ -190,6 +315,7 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
         roll=roll,
         total=total,
         dc=dc,
+        skill_name=None,
     )
 
     effects: list[Effect] = _build_effects(
@@ -286,11 +412,14 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
     damage_rolls: Optional[list[int]] = None
 
     if outcome == Outcome.SUCCESS:
-        # Hit! Roll damage
-        damage_total, damage_rolls = roll_damage(damage_dice)
+        # Hit! Roll damage: weapon dice + ability modifier
+        damage_rolls_total, damage_rolls = roll_damage(damage_dice)
+        damage_modifier = modifier  # Add ability modifier to damage
+        damage_total = max(1, damage_rolls_total + damage_modifier)  # Minimum 1 damage on hit
         damage_detail = DamageDetail(
             dice_expression=damage_dice,
             rolls=damage_rolls,
+            modifier=damage_modifier,
             total=damage_total,
         )
         attack_detail.damage = damage_detail

@@ -16,6 +16,7 @@ class ActionType(str, Enum):
     """Type of action being performed."""
     GENERIC = "generic"
     ATTACK = "attack"
+    SPELL_ATTACK = "spell_attack"  # Attack that may require saving throw
 
 
 class ActionRequest(BaseModel):
@@ -27,7 +28,7 @@ class ActionRequest(BaseModel):
     approach: str = Field(..., description="How they attempt it")
     action_type: ActionType = Field(
         default=ActionType.GENERIC,
-        description="Type of action (generic or attack)",
+        description="Type of action (generic, attack, or spell_attack)",
     )
     ability: Optional[str] = Field(
         None,
@@ -64,9 +65,18 @@ class ActionRequest(BaseModel):
         None,
         description="Override damage dice expression (e.g., 1d8, 2d6+1)",
     )
-    provider: Optional[str] = Field(
+    # Multi-step action fields
+    requires_saving_throw: bool = Field(
+        default=False,
+        description="If true, target must make a saving throw (for spell attacks)",
+    )
+    saving_throw_ability: Optional[str] = Field(
         None,
-        description="AI narration provider to use (e.g., kimi, openai)",
+        description="Ability for saving throw (str/dex/con/int/wis/cha)",
+    )
+    saving_throw_dc: Optional[int] = Field(
+        None,
+        description="DC for saving throw; uses spell DC if omitted",
     )
 
 
@@ -112,6 +122,17 @@ class AttackDetail(BaseModel):
     damage: Optional[DamageDetail] = None
 
 
+class SavingThrowDetail(BaseModel):
+    """Details of a saving throw (for multi-step actions)."""
+    target: str
+    ability: str
+    dc: int
+    roll: int
+    modifier: int
+    total: int
+    outcome: Outcome
+
+
 class Effect(BaseModel):
     target: str
     field: str
@@ -124,6 +145,7 @@ class ActionResponse(BaseModel):
     resolution_type: ResolutionType
     check: Optional[CheckDetail] = None
     attack: Optional[AttackDetail] = None
+    saving_throw: Optional[SavingThrowDetail] = None
     outcome: Outcome
     effects: list[Effect] = Field(default_factory=list)
     narration: str

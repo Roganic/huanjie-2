@@ -47,3 +47,12 @@ async def create_session_and_character(
     assert resp.status_code == 200
     
     return session_id
+
+
+def create_default_actor():
+    """Create a default actor directly in the current session for unit tests."""
+    from src.state import create_character
+    from src.models.state import CharacterCreateRequest, CharacterClass
+    create_character(
+        CharacterCreateRequest(name="Aldric", character_class=CharacterClass.WARRIOR)
+    )

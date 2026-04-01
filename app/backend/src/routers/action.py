@@ -1,16 +1,32 @@
-"""Player action endpoint."""
+"""Player action endpoint.
+
+This endpoint is orchestrated by the GM Agent, which:
+1. Analyzes the action request and current state
+2. Decides what checks/rolls are needed
+3. Executes tools in sequence (dice rolls, state changes)
+4. Generates narrative after all mechanical resolution
+5. Returns a consistent ActionResponse with all state changes applied
+"""
 
 from fastapi import APIRouter
 
-from ..engine.resolver import resolve_action
+from ..agent.orchestrator import resolve_action_with_agent
 from ..models.action import ActionRequest, ActionResponse
-from ..state import apply_effects
 
 router = APIRouter(tags=["game"])
 
 
 @router.post("/action", response_model=ActionResponse)
 async def submit_action(req: ActionRequest) -> ActionResponse:
-    result = resolve_action(req)
-    apply_effects(result.effects)
-    return result
+    """Submit a player action for GM Agent resolution.
+    
+    The GM Agent will orchestrate the entire resolution:
+    - Determine required rolls (attack, damage, saving throws, etc.)
+    - Execute dice rolls
+    - Apply state changes
+    - Generate narrative
+    
+    All state changes are applied atomically during orchestration,
+    ensuring consistent game state in the response.
+    """
+    return resolve_action_with_agent(req)

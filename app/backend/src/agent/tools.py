@@ -15,8 +15,14 @@ from pydantic import BaseModel, Field
 
 from ..engine.dice import roll_d20, roll_damage
 from ..models.action import ActionRequest, Effect, Outcome
-from ..models.state import Actor, Scene
-from ..state import apply_effects, get_actor, get_actor_by_id_or_name, get_scene
+from ..models.state import Actor, NarrativeHistoryEntry, Scene
+from ..state import (
+    apply_effects,
+    get_actor,
+    get_actor_by_id_or_name,
+    get_narrative_context,
+    get_scene,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +279,7 @@ def tool_generate_narrative(
     check_result: Optional[dict] = None,
     attack_result: Optional[dict] = None,
     saving_throw_result: Optional[dict] = None,
+    narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
 ) -> NarrativeResult:
     """Generate narrative text for the action resolution.
     
@@ -302,6 +309,7 @@ def tool_generate_narrative(
         outcome=outcome,
         check_result=check_result,
         attack_result=attack_result,
+        narrative_history=narrative_history or get_narrative_context(),
     )
     
     return NarrativeResult(

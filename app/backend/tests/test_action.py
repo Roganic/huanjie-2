@@ -18,6 +18,21 @@ def client():
     return AsyncClient(transport=transport, base_url="http://test")
 
 
+async def _create_character(client: AsyncClient, name: str = "Aldric") -> str:
+    """Create a character and return session_id."""
+    resp = await client.post("/character/create", json={
+        "name": name,
+        "character_class": "warrior",
+        "ability_generation": "standard_array",
+    })
+    assert resp.status_code == 200
+    session_id = resp.headers.get("x-session-id")
+    if not session_id:
+        bootstrap = await client.get("/state/bootstrap")
+        session_id = bootstrap.json()["session_id"]
+    return session_id
+
+
 # ---------------------------------------------------------------------------
 # Health check still works
 # ---------------------------------------------------------------------------
@@ -37,12 +52,13 @@ async def test_health(client):
 @pytest.mark.asyncio
 async def test_auto_success(client):
     async with client as c:
+        session_id = await _create_character(c)
         resp = await c.post("/action", json={
             "scene_id": "tavern-01",
             "actor": "Aldric",
             "intent": "look around the tavern",
             "approach": "casually look at the patrons",
-        })
+        }, headers={"X-Session-Id": session_id})
     assert resp.status_code == 200
     data = resp.json()
     assert data["resolution_type"] == "auto_success"
@@ -58,13 +74,14 @@ async def test_auto_success(client):
 @pytest.mark.asyncio
 async def test_check_resolution(client):
     async with client as c:
+        session_id = await _create_character(c, "Bree")
         resp = await c.post("/action", json={
             "scene_id": "dungeon-03",
             "actor": "Bree",
             "intent": "pick the lock on the chest",
             "approach": "carefully pick the lock with thieves tools",
             "dc": 15,
-        })
+        }, headers={"X-Session-Id": session_id})
     assert resp.status_code == 200
     data = resp.json()
     assert data["resolution_type"] == "check"
@@ -86,13 +103,14 @@ async def test_check_resolution(client):
 @pytest.mark.asyncio
 async def test_explicit_ability(client):
     async with client as c:
+        session_id = await _create_character(c, "Cara")
         resp = await c.post("/action", json={
             "scene_id": "forest-01",
             "actor": "Cara",
             "intent": "intimidate the bandit leader",
             "approach": "flex muscles menacingly",
             "ability": "str",
-        })
+        }, headers={"X-Session-Id": session_id})
     assert resp.status_code == 200
     data = resp.json()
     assert data["check"]["ability"] == "str"
@@ -105,13 +123,14 @@ async def test_explicit_ability(client):
 @pytest.mark.asyncio
 async def test_advantage(client):
     async with client as c:
+        session_id = await _create_character(c, "Dex")
         resp = await c.post("/action", json={
             "scene_id": "ruins-02",
             "actor": "Dex",
             "intent": "sneak past the guards",
             "approach": "sneak through the shadows",
             "advantage": True,
-        })
+        }, headers={"X-Session-Id": session_id})
     assert resp.status_code == 200
     data = resp.json()
     assert data["check"]["advantage"] is True
@@ -124,12 +143,13 @@ async def test_advantage(client):
 @pytest.mark.asyncio
 async def test_open_locked_chest_requires_check(client):
     async with client as c:
+        session_id = await _create_character(c)
         resp = await c.post("/action", json={
             "scene_id": "dungeon-01",
             "actor": "Aldric",
             "intent": "open the locked chest",
             "approach": "try to force it open",
-        })
+        }, headers={"X-Session-Id": session_id})
     assert resp.status_code == 200
     data = resp.json()
     assert data["resolution_type"] == "check", (
@@ -144,12 +164,13 @@ async def test_open_locked_chest_requires_check(client):
 @pytest.mark.asyncio
 async def test_talk_guard_requires_check(client):
     async with client as c:
+        session_id = await _create_character(c, "Bree")
         resp = await c.post("/action", json={
             "scene_id": "gate-01",
             "actor": "Bree",
             "intent": "talk the guard into letting us pass",
             "approach": "convince him we are merchants",
-        })
+        }, headers={"X-Session-Id": session_id})
     assert resp.status_code == 200
     data = resp.json()
     assert data["resolution_type"] == "check", (
@@ -160,12 +181,13 @@ async def test_talk_guard_requires_check(client):
 @pytest.mark.asyncio
 async def test_say_convincing_lie_requires_check(client):
     async with client as c:
+        session_id = await _create_character(c, "Cara")
         resp = await c.post("/action", json={
             "scene_id": "court-01",
             "actor": "Cara",
             "intent": "say a convincing lie to the magistrate",
             "approach": "deceive him about our origins",
-        })
+        }, headers={"X-Session-Id": session_id})
     assert resp.status_code == 200
     data = resp.json()
     assert data["resolution_type"] == "check", (

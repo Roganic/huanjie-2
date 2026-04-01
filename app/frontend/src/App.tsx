@@ -22,6 +22,17 @@ interface CheckDetail {
   roll: number;
   total: number;
   dc: number;
+  skill_name?: string;
+  skill?: string;
+}
+
+interface SkillCheckDetail {
+  skill: string | null;
+  roll: number;
+  modifier: number;
+  total: number;
+  dc: number;
+  success: boolean;
 }
 
 interface Effect {
@@ -35,6 +46,7 @@ interface ActionResponse {
   action_summary: string;
   resolution_type: "auto_success" | "check";
   check: CheckDetail | null;
+  skill_check: SkillCheckDetail | null;
   outcome: "success" | "failure";
   effects: Effect[];
   narration: string;
@@ -79,6 +91,7 @@ interface Scene {
   description: string;
   actors: string[];
   time?: number;
+  flags?: string[];
 }
 
 interface NarrativeHistoryEntry {
@@ -87,6 +100,7 @@ interface NarrativeHistoryEntry {
     resolution_type?: "auto_success" | "check";
     outcome?: "success" | "failure";
     check?: CheckDetail | null;
+    skill_check?: SkillCheckDetail | null;
   };
   narration_summary: string;
   narration: string;
@@ -373,6 +387,44 @@ function ResolutionCard({ res }: { res: ActionResponse }) {
   const outcomeClass = res.outcome === "success" ? "outcome-success" : "outcome-failure";
   const outcomeLabel = res.outcome === "success" ? "成功" : "失败";
 
+  const checkDisplay = (() => {
+    if (!isCheck) return null;
+    // Prefer skill_check for the unified modifier display
+    const sc = res.skill_check;
+    const cd = res.check;
+    if (sc) {
+      const modLabel = sc.modifier >= 0 ? `+${sc.modifier}` : `${sc.modifier}`;
+      return (
+        <div className="check-details">
+          {sc.skill && <span className="check-skill">{SKILL_NAME_MAP[sc.skill] ?? sc.skill}</span>}
+          <span className="check-roll">
+            骰子:{sc.roll} + 修正:{modLabel} = <strong>{sc.total}</strong> vs DC:{sc.dc} → {sc.success ? "成功" : "失败"}
+          </span>
+        </div>
+      );
+    }
+    if (cd) {
+      return (
+        <div className="check-details">
+          <span className="check-ability">{ABILITY_LABELS[cd.ability] ?? cd.ability}</span>
+          <span className="check-roll">
+            d20={cd.roll}
+            {cd.modifier >= 0 ? "+" : ""}
+            {cd.modifier}
+            {cd.proficiency_bonus > 0 && `+${cd.proficiency_bonus}`}
+            {" = "}
+            <strong>{cd.total}</strong>
+          </span>
+          <span className="check-dc">DC {cd.dc}</span>
+          {cd.advantage !== null && (
+            <span className="check-adv">{cd.advantage ? "优势" : "劣势"}</span>
+          )}
+        </div>
+      );
+    }
+    return null;
+  })();
+
   return (
     <div className="resolution-card">
       <div className="system-info-section">
@@ -380,23 +432,7 @@ function ResolutionCard({ res }: { res: ActionResponse }) {
           {isCheck ? "检定" : "自动成功"} - {outcomeLabel}
         </div>
 
-        {isCheck && res.check && (
-          <div className="check-details">
-            <span className="check-ability">{ABILITY_LABELS[res.check.ability] ?? res.check.ability}</span>
-            <span className="check-roll">
-              d20={res.check.roll}
-              {res.check.modifier >= 0 ? "+" : ""}
-              {res.check.modifier}
-              {res.check.proficiency_bonus > 0 && `+${res.check.proficiency_bonus}`}
-              {" = "}
-              <strong>{res.check.total}</strong>
-            </span>
-            <span className="check-dc">DC {res.check.dc}</span>
-            {res.check.advantage !== null && (
-              <span className="check-adv">{res.check.advantage ? "优势" : "劣势"}</span>
-            )}
-          </div>
-        )}
+        {checkDisplay}
 
         {res.effects.length > 0 && (
           <div className="effects-list">
@@ -654,6 +690,13 @@ function CharacterCard({
 
 function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerName?: string; previousScene?: Scene | null }) {
   const timeChanged = previousScene !== undefined && previousScene !== null && previousScene.time !== scene.time;
+  const flagLabels: Record<string, string> = {
+    npc_persuaded: "NPC态度已改变",
+    door_opened: "门已开启",
+    player_hidden: "角色处于隐匿",
+    secrets_found: "已发现秘密",
+    magic_identified: "魔法已识别",
+  };
 
   return (
     <div className="scene-card">
@@ -664,6 +707,19 @@ function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerN
         <div className={`scene-time ${timeChanged ? "changed" : ""}`}>
           <span className="scene-time-label">⏱️ 场景时间</span>
           <span className="scene-time-value">{scene.time}</span>
+        </div>
+      )}
+
+      {scene.flags && scene.flags.length > 0 && (
+        <div className="scene-flags">
+          <div className="scene-flags-label">场景状态</div>
+          <div className="flag-tags">
+            {scene.flags.map((flag, index) => (
+              <span key={index} className="flag-tag">
+                {flagLabels[flag] ?? flag}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1124,6 +1180,7 @@ function restoreMessagesFromHistory(history: NarrativeHistoryEntry[]): Message[]
           action_summary: entry.action_summary,
           resolution_type: entry.resolution_summary.resolution_type ?? "auto_success",
           check: entry.resolution_summary.check ?? null,
+          skill_check: entry.resolution_summary.skill_check ?? null,
           outcome: entry.resolution_summary.outcome ?? "success",
           effects: [],
           narration: entry.narration,
@@ -1153,14 +1210,15 @@ function restoreTimelineFromHistory(history: NarrativeHistoryEntry[]): TimelineE
 
       if (entry.resolution_summary.resolution_type === "check" && entry.resolution_summary.check) {
         const check = entry.resolution_summary.check;
+        const skillName = check.skill ? (SKILL_NAME_MAP[check.skill] ?? check.skill) : (ABILITY_LABELS[check.ability] ?? check.ability);
+        const mod = (check.modifier ?? 0) + (check.proficiency_bonus ?? 0);
+        const modLabel = mod >= 0 ? `+${mod}` : `${mod}`;
         items.push({
           id: baseId + 1,
           type: "check",
-          title: `${ABILITY_LABELS[check.ability] ?? check.ability}检定 DC${check.dc}`,
+          title: `${skillName}检定 DC${check.dc}`,
           outcome: entry.resolution_summary.outcome,
-          details: `掷骰: d20=${check.roll} 调整值:${check.modifier >= 0 ? "+" : ""}${check.modifier}${
-            check.proficiency_bonus > 0 ? `+${check.proficiency_bonus}` : ""
-          } = ${check.total}`,
+          details: `骰子:${check.roll} + 修正:${modLabel} = ${check.total} vs DC:${check.dc} → ${entry.resolution_summary.outcome === "success" ? "成功" : "失败"}`,
           timestamp: baseId + 1,
         });
       }
@@ -1676,7 +1734,17 @@ function App() {
         },
       ]);
 
-      if (data.resolution_type === "check" && data.check) {
+      if (data.resolution_type === "check" && data.skill_check) {
+        const sc = data.skill_check;
+        const skillName = sc.skill ? (SKILL_NAME_MAP[sc.skill] ?? sc.skill) : "检定";
+        const modLabel = sc.modifier >= 0 ? `+${sc.modifier}` : `${sc.modifier}`;
+        addToTimeline({
+          type: "check",
+          title: `${skillName}检定 DC${sc.dc}`,
+          outcome: data.outcome,
+          details: `骰子:${sc.roll} + 修正:${modLabel} = ${sc.total} vs DC:${sc.dc} → ${sc.success ? "成功" : "失败"}`,
+        });
+      } else if (data.resolution_type === "check" && data.check) {
         const check = data.check;
         const abilityName = ABILITY_LABELS[check.ability] ?? check.ability;
         addToTimeline({

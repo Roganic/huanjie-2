@@ -12,6 +12,9 @@ from httpx import ASGITransport, AsyncClient
 from src.agent.narrator import (
     _build_hard_constraints,
     _build_narrative_prompt,
+    _narration_respects_constraints,
+    generate_narration,
+    NarrationBundle,
 )
 from src.models.action import ActionRequest, ActionType, Effect, Outcome
 from src.models.state import AbilityScores, Actor, Scene
@@ -278,6 +281,57 @@ class TestBuildNarrativePrompt:
         assert "硬约束" in prompt
 
 
+class TestNarrationConstraintValidation:
+    """Test the lightweight post-generation contradiction checks."""
+
+    def test_failed_attack_hit_language_rejected(self, sample_target):
+        narration = NarrationBundle(
+            action_result="Aldric hits the goblin and wounds it badly.",
+            scene_progression="The goblin staggers back.",
+        )
+
+        assert not _narration_respects_constraints(
+            narration=narration,
+            outcome=Outcome.FAILURE,
+            attack_result={"weapon": "longsword", "target": "Goblin Scout", "damage": None},
+            target=sample_target,
+        )
+
+    def test_nonlethal_damage_cannot_describe_target_as_defeated(self, sample_target):
+        narration = NarrationBundle(
+            action_result="Aldric hits the goblin, leaving it defeated on the cave floor.",
+            scene_progression="Its allies freeze for a moment.",
+        )
+
+        assert not _narration_respects_constraints(
+            narration=narration,
+            outcome=Outcome.SUCCESS,
+            attack_result={
+                "weapon": "longsword",
+                "target": "Goblin Scout",
+                "damage": {"total": 3, "rolls": [2, 1], "dice_expression": "1d8"},
+            },
+            target=sample_target,
+        )
+
+    def test_consistent_successful_hit_is_allowed(self, sample_target):
+        narration = NarrationBundle(
+            action_result="Aldric hits the goblin with a sharp slash across the shoulder.",
+            scene_progression="The goblin stumbles back and raises its dagger in panic.",
+        )
+
+        assert _narration_respects_constraints(
+            narration=narration,
+            outcome=Outcome.SUCCESS,
+            attack_result={
+                "weapon": "longsword",
+                "target": "Goblin Scout",
+                "damage": {"total": 3, "rolls": [2, 1], "dice_expression": "1d8"},
+            },
+            target=sample_target,
+        )
+
+
 # -----------------------------------------------------------------------------
 # End-to-end tests for narrative consistency
 # -----------------------------------------------------------------------------
@@ -363,8 +417,9 @@ class TestNarrativeConsistency:
         for attempt in range(max_attempts):
             reset_state()
             set_combat_scene()
-            
-            async with client as c:
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as c:
                 resp = await c.post("/action", json={
                     "scene_id": "combat-01",
                     "actor": "Aldric",
@@ -444,6 +499,47 @@ class TestNarrativeConsistency:
             # Damage should match (negative delta)
             hp_delta = hp_effects[0]["delta"]
             assert hp_delta == -damage, f"HP delta {hp_delta} should match damage {-damage}"
+
+
+class TestGenerateNarrationGuardrails:
+    """Verify contradictory AI output is rejected before returning to callers."""
+
+    def test_generate_narration_falls_back_when_ai_contradicts_failure(
+        self,
+        monkeypatch,
+        sample_actor,
+        sample_scene,
+        sample_target,
+    ):
+        req = ActionRequest(
+            scene_id="combat-01",
+            actor="Aldric",
+            intent="attack the goblin",
+            approach="swing my longsword",
+            action_type=ActionType.ATTACK,
+            weapon="longsword",
+            target="goblin-01",
+        )
+
+        async def fake_call(_prompt: str):
+            return NarrationBundle(
+                action_result="Aldric hits the goblin cleanly and drives it back.",
+                scene_progression="The goblin reels from the successful strike.",
+            )
+
+        monkeypatch.setattr("src.agent.narrator.KIMI_API_KEY", "test-key")
+        monkeypatch.setattr("src.agent.narrator._call_kimi_api", fake_call)
+
+        narration = generate_narration(
+            req=req,
+            actor=sample_actor,
+            scene=sample_scene,
+            outcome=Outcome.FAILURE,
+            attack_result={"weapon": "longsword", "target": "Goblin Scout", "damage": None},
+            target=sample_target,
+        )
+
+        assert "miss" in narration.action_result.lower()
 
 
 # -----------------------------------------------------------------------------

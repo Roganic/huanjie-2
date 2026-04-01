@@ -78,6 +78,31 @@ class NarrationBundle(BaseModel):
     scene_progression: str
 
 
+FAILURE_HIT_INDICATORS = (
+    " hits ",
+    " hit ",
+    " strikes ",
+    " strike ",
+    " struck ",
+    " connected ",
+    " lands cleanly",
+    " landed cleanly",
+    " wounds ",
+    " wounded ",
+    " slashes ",
+    " pierces ",
+)
+
+DEFEAT_INDICATORS = (
+    " defeated",
+    " defeat ",
+    " slain",
+    " kills ",
+    " killed ",
+    " dead",
+)
+
+
 def _build_hard_constraints(
     outcome: Outcome,
     check_result: Optional[dict] = None,
@@ -264,13 +289,13 @@ def _fallback_action_result(
             damage = attack_result.get("damage")
             if damage:
                 return (
-                    f"{actor.name} lunges forward with {weapon} in hand, striking at the {target}. "
+                    f"{actor.name} lunges forward with {weapon} in hand and hits the {target}. "
                     f"The blow lands cleanly, and the impact echoes through the scene."
                 )
             else:
                 return (
-                    f"{actor.name} swings the {weapon} in a wide arc, catching the {target} "
-                    f"off-guard. The attack hits its mark."
+                    f"{actor.name} swings the {weapon} in a wide arc and hits the {target}, "
+                    f"catching them off-guard for a brief instant."
                 )
         else:
             # Miss - include "miss" for test compatibility
@@ -362,6 +387,31 @@ def _parse_narration_bundle(content: str) -> Optional[NarrationBundle]:
         action_result=action_result,
         scene_progression=scene_progression,
     )
+
+
+def _narration_respects_constraints(
+    narration: NarrationBundle,
+    outcome: Outcome,
+    attack_result: Optional[dict] = None,
+    target: Optional[Actor] = None,
+) -> bool:
+    """Lightweight guardrail for obvious contradictions against rule results."""
+    combined = f" {narration.action_result.lower()} {narration.scene_progression.lower()} "
+
+    if attack_result:
+        damage = attack_result.get("damage") or {}
+        damage_total = int(damage.get("total", 0) or 0)
+
+        if outcome == Outcome.FAILURE or damage_total <= 0:
+            if any(indicator in combined for indicator in FAILURE_HIT_INDICATORS):
+                return False
+
+        if target and damage_total > 0:
+            new_hp = max(0, target.hp - damage_total)
+            if new_hp > 0 and any(indicator in combined for indicator in DEFEAT_INDICATORS):
+                return False
+
+    return True
 
 
 async def _call_kimi_api(prompt: str) -> Optional[NarrationBundle]:
@@ -466,7 +516,12 @@ def generate_narration(
             loop = asyncio.new_event_loop()
             try:
                 narrative = loop.run_until_complete(_call_kimi_api(prompt))
-                if narrative:
+                if narrative and _narration_respects_constraints(
+                    narration=narrative,
+                    outcome=outcome,
+                    attack_result=attack_result,
+                    target=target,
+                ):
                     return narrative
             finally:
                 loop.close()

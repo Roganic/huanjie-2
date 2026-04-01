@@ -7,19 +7,17 @@
 - 任务描述保持短句，细节写入对应 `docs/sessions/`
 - 如果一个任务将进入独立 worktree，建议在任务后加 `wt`
 
-## Now
+## Now (AI 实时叙事阶段)
 
-- 明确项目目录和协作规则 `coordination`
-- 收敛第一版产品定义 `product`
-- 明确第一版规则内核范围 `rules-core`
-- 明确本地 Web 原型的技术栈 `tech`
+- 接入 Kimi API 实现 AI 叙事生成 `backend`
+- 设计叙事提示词模板与上下文管理 `backend`
+- 前端展示 AI 生成的叙事文本 `frontend`
 
 ## Next
 
-- 建立 `app/frontend` 和 `app/backend` 的最小骨架 `app`
-- 梳理 DND 5e、OSE、灵魂迷雾的可提炼规则点 `research`
-- 定义 GM agent、规则引擎、记忆/RAG 的职责边界 `ai-architecture`
-- 定义首批 worktree 任务切分方式 `coordination`
+- 战斗系统完整闭环 `backend`
+- 角色系统数据持久化 `backend`
+- 记忆/RAG 初步探索 `backend`
 
 ## Later
 

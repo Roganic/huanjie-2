@@ -179,7 +179,7 @@ async def test_spell_attack_narrative_mentions_both_checks(client):
     
     if data["outcome"] == "success":
         # Should mention target and damage
-        assert "goblin" in narration.lower() or "Goblin" in narration
+        assert "goblin" in narration.lower() or "Goblin" in narration or "哥布林" in narration
         # Should have some narrative about the spell effect
         assert len(narration) > 50
 

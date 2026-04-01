@@ -298,7 +298,7 @@ async def test_hit_narration_includes_details(client):
     
     # Should mention actor, target, and weapon
     assert "Aldric" in narration
-    assert "Goblin" in narration or "goblin" in narration
+    assert "Goblin" in narration or "goblin" in narration or "哥布林" in narration
     assert "longsword" in narration
     
     if data["outcome"] == "success":

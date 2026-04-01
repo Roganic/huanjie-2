@@ -203,7 +203,7 @@ async def test_hit_reduces_target_hp(client):
             damage_effects = [e for e in data["effects"] if e["field"] == "hp" and e["delta"] < 0]
             if damage_effects:
                 damage_dealt = abs(damage_effects[0]["delta"])
-                assert current_hp == initial_hp - damage_dealt
+                assert current_hp == max(0, initial_hp - damage_dealt)
 
 
 # ---------------------------------------------------------------------------

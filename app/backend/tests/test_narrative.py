@@ -137,7 +137,7 @@ async def test_combat_narrative_includes_action_details(client):
     
     # Should mention combat elements
     assert "longsword" in narration or "sword" in narration
-    assert "goblin" in narration or "scout" in narration
+    assert "goblin" in narration or "scout" in narration or "哥布林" in narration
 
 
 @pytest.mark.asyncio

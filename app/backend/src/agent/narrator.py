@@ -578,13 +578,17 @@ def generate_opening_narration(
         "- Give the player a clear immediate vector without dictating their choice.\n"
     )
 
-    try:
-        import asyncio
+    # Try to call AI provider for opening narration
+    # Skip API call if no provider is configured to avoid async context issues
+    provider_instance = get_provider(provider)
+    if provider_instance is not None:
+        try:
+            import asyncio
 
-        generated = asyncio.run(_call_opening_provider(prompt, provider))
-        if generated:
-            return generated
-    except Exception:
-        pass
+            generated = asyncio.run(_call_opening_provider(prompt, provider))
+            if generated:
+                return generated
+        except Exception:
+            pass
 
     return _fallback_opening_bundle(actor, scene, scenario)

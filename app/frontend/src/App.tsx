@@ -159,8 +159,6 @@ const EXTRA_SKILLS: Skill[] = [
   { name: "奥秘", ability: "int", proficient: false },
 ];
 
-const DEFAULT_ABILITIES: AbilityScores = { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 };
-
 const ABILITY_LABELS: Record<string, string> = {
   str: "力量",
   dex: "敏捷",

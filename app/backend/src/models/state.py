@@ -1,6 +1,8 @@
-"""Bootstrap state models: actor and scene."""
+"""Bootstrap state models: actor, scene, and session narrative memory."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -52,6 +54,13 @@ class Scene(BaseModel):
     time: int = Field(default=0, description="Abstract time ticks elapsed")
 
 
+class NarrativeHistoryEntry(BaseModel):
+    action_summary: str
+    resolution_summary: dict[str, Any] = Field(default_factory=dict)
+    narration_summary: str
+
+
 class BootstrapState(BaseModel):
     actor: Actor
     scene: Scene
+    narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)

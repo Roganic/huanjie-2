@@ -119,7 +119,45 @@ interface TimelineEntry {
 interface CharacterDraft {
   name: string;
   characterClass: CharacterClass;
+  abilities: AbilityScores;
+  abilityGeneration: "standard_array" | "random_4d6" | "manual";
 }
+
+type Skill = {
+  name: string;
+  ability: keyof AbilityScores;
+  proficient: boolean;
+};
+
+const SKILLS: Skill[] = [
+  { name: "杂技", ability: "dex", proficient: false },
+  { name: "运动", ability: "str", proficient: false },
+  { name: "欺骗", ability: "cha", proficient: false },
+  { name: "历史", ability: "int", proficient: false },
+  { name: "威吓", ability: "cha", proficient: false },
+  { name: "洞察", ability: "wis", proficient: true },
+  { name: "调查", ability: "int", proficient: false },
+  { name: "医药", ability: "wis", proficient: false },
+  { name: "自然", ability: "int", proficient: false },
+  { name: "察觉", ability: "wis", proficient: true },
+  { name: "表演", ability: "cha", proficient: false },
+  { name: "说服", ability: "cha", proficient: false },
+  { name: "宗教", ability: "int", proficient: false },
+  { name: "巧手", ability: "dex", proficient: true },
+  { name: "隐匿", ability: "dex", proficient: true },
+  { name: "生存", ability: "wis", proficient: false },
+];
+
+const CLASS_SKILLS: Record<CharacterClass, string[]> = {
+  warrior: ["运动", "威吓", "察觉", "生存"],
+  mage: ["历史", "调查", "奥秘", "宗教"],
+  rogue: ["杂技", "欺骗", "洞察", "巧手", "隐匿"],
+};
+
+// Arcana skill for mage class proficiency
+const EXTRA_SKILLS: Skill[] = [
+  { name: "奥秘", ability: "int", proficient: false },
+];
 
 const ABILITY_LABELS: Record<string, string> = {
   str: "力量",
@@ -184,6 +222,35 @@ function apiUrl(path: string): string {
 function getModifier(score: number): number {
   return Math.floor((score - 10) / 2);
 }
+
+function roll4d6DropLowest(): number {
+  const rolls = Array.from({ length: 4 }, () => Math.floor(Math.random() * 6) + 1);
+  rolls.sort((a, b) => a - b);
+  return rolls[1] + rolls[2] + rolls[3]; // Sum top 3 (drop lowest)
+}
+
+function rollRandomAbilities(): AbilityScores {
+  return {
+    str: roll4d6DropLowest(),
+    dex: roll4d6DropLowest(),
+    con: roll4d6DropLowest(),
+    int: roll4d6DropLowest(),
+    wis: roll4d6DropLowest(),
+    cha: roll4d6DropLowest(),
+  };
+}
+
+function getClassAbilities(characterClass: CharacterClass): AbilityScores {
+  const templates: Record<CharacterClass, AbilityScores> = {
+    warrior: { str: 15, dex: 13, con: 14, int: 8, wis: 12, cha: 10 },
+    mage: { str: 8, dex: 13, con: 12, int: 15, wis: 14, cha: 10 },
+    rogue: { str: 10, dex: 15, con: 13, int: 12, wis: 14, cha: 8 },
+  };
+  return templates[characterClass];
+}
+
+// Alias for compatibility with existing code
+const getDefaultAbilities = getClassAbilities;
 
 function formatModifier(mod: number): string {
   return mod >= 0 ? `+${mod}` : `${mod}`;
@@ -404,6 +471,86 @@ function StatusEffect({ name, isNew }: { name: string; isNew?: boolean }) {
   );
 }
 
+function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolean }) {
+  const profBonus = actor.proficiency_bonus;
+  const classProfSkills = CLASS_SKILLS[actor.character_class ?? "warrior"] ?? [];
+  
+  // Merge standard skills with extra skills (e.g., Arcana for mages)
+  const allSkills = [...SKILLS, ...EXTRA_SKILLS];
+
+  if (compact) {
+    // Show only proficient skills (class proficiencies)
+    const proficientSkills = allSkills.filter(
+      (s) => classProfSkills.includes(s.name)
+    );
+    return (
+      <div className="skills-list-compact">
+        {proficientSkills.map((skill) => {
+          const abilityMod = getModifier(actor.abilities[skill.ability]);
+          const total = abilityMod + profBonus;
+          return (
+            <div key={skill.name} className="skill-item-compact proficient">
+              <span className="skill-name">{skill.name}</span>
+              <span className="skill-bonus">{formatModifier(total)}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div className="skills-list">
+      {allSkills.map((skill) => {
+        const abilityMod = getModifier(actor.abilities[skill.ability]);
+        const isProficient = classProfSkills.includes(skill.name);
+        const total = abilityMod + (isProficient ? profBonus : 0);
+        return (
+          <div key={skill.name} className={`skill-item ${isProficient ? "proficient" : ""}`}>
+            <span className="skill-dot">{isProficient ? "●" : "○"}</span>
+            <span className="skill-name">{skill.name}</span>
+            <span className="skill-ability">({ABILITY_LABELS[skill.ability]})</span>
+            <span className="skill-bonus">{formatModifier(total)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MiniCharacterCard({ actor }: { actor: Actor }) {
+  const hpPercent = Math.round((actor.hp / actor.hp_max) * 100);
+  let hpStatus: "high" | "medium" | "low" = "high";
+  if (hpPercent <= 30) hpStatus = "low";
+  else if (hpPercent <= 60) hpStatus = "medium";
+
+  return (
+    <div className="mini-character-card">
+      <div className="mini-char-main">
+        <div className="mini-char-avatar">{actor.character_class === "warrior" ? "⚔️" : actor.character_class === "mage" ? "🔮" : "🗡️"}</div>
+        <div className="mini-char-info">
+          <div className="mini-char-name">{actor.name}</div>
+          <div className="mini-char-class">{actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"}</div>
+        </div>
+      </div>
+      <div className="mini-char-stats">
+        <div className="mini-stat" title="生命值">
+          <span className="mini-stat-icon">❤️</span>
+          <span className={`mini-stat-value hp-${hpStatus}`}>{actor.hp}/{actor.hp_max}</span>
+        </div>
+        <div className="mini-stat" title="护甲等级">
+          <span className="mini-stat-icon">🛡️</span>
+          <span className="mini-stat-value">{actor.ac}</span>
+        </div>
+        <div className="mini-stat" title="熟练加值">
+          <span className="mini-stat-icon">⭐</span>
+          <span className="mini-stat-value">+{actor.proficiency_bonus}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CharacterCard({
   actor,
   previousActor,
@@ -416,7 +563,9 @@ function CharacterCard({
   return (
     <div className="character-card">
       <div className="character-header">
-        <div className="character-avatar">🧙</div>
+        <div className="character-avatar">
+          {actor.character_class === "warrior" ? "⚔️" : actor.character_class === "mage" ? "🔮" : "🗡️"}
+        </div>
         <div className="character-info">
           <div className="character-name">{actor.name}</div>
           <div className="character-level">
@@ -597,6 +746,9 @@ function CharacterCreationScreen({
   error,
   onNameChange,
   onClassChange,
+  onAbilityChange,
+  onAbilityGenerationChange,
+  onRollAbilities,
   onSubmit,
 }: {
   draft: CharacterDraft;
@@ -605,6 +757,9 @@ function CharacterCreationScreen({
   error: string | null;
   onNameChange: (value: string) => void;
   onClassChange: (value: CharacterClass) => void;
+  onAbilityChange: (ability: keyof AbilityScores, value: number) => void;
+  onAbilityGenerationChange: (method: "standard_array" | "random_4d6" | "manual") => void;
+  onRollAbilities: () => void;
   onSubmit: () => void;
 }) {
   return (
@@ -614,7 +769,7 @@ function CharacterCreationScreen({
           <span className="creation-eyebrow">角色创建</span>
           <h2>先决定你是谁，再让故事开始。</h2>
           <p>
-            当前原型提供三个起始模板，并统一使用 5e 标准数组。创建完成后，后端会立刻初始化角色状态与开场场景。
+            选择职业，输入角色名，然后选择属性生成方式。可以使用标准数组、随机 4d6 取三规则，或手动输入。
           </p>
         </div>
 
@@ -647,14 +802,80 @@ function CharacterCreationScreen({
             </div>
           </div>
 
-          <div className="creation-method">
-            <div className="creation-method-label">属性生成</div>
-            <div className="creation-method-value">标准数组 15 / 14 / 13 / 12 / 10 / 8</div>
+          <div className="creation-field">
+            <span>属性生成方式</span>
+            <div className="ability-generation-options">
+              <button
+                type="button"
+                className={`ability-gen-btn ${draft.abilityGeneration === "standard_array" ? "selected" : ""}`}
+                onClick={() => onAbilityGenerationChange("standard_array")}
+                disabled={pending}
+              >
+                <div className="ability-gen-title">标准数组</div>
+                <div className="ability-gen-desc">15 / 14 / 13 / 12 / 10 / 8</div>
+              </button>
+              <button
+                type="button"
+                className={`ability-gen-btn ${draft.abilityGeneration === "random_4d6" ? "selected" : ""}`}
+                onClick={() => onAbilityGenerationChange("random_4d6")}
+                disabled={pending}
+              >
+                <div className="ability-gen-title">4d6 取三</div>
+                <div className="ability-gen-desc">掷骰随机生成</div>
+              </button>
+              <button
+                type="button"
+                className={`ability-gen-btn ${draft.abilityGeneration === "manual" ? "selected" : ""}`}
+                onClick={() => onAbilityGenerationChange("manual")}
+                disabled={pending}
+              >
+                <div className="ability-gen-title">手动输入</div>
+                <div className="ability-gen-desc">自定义数值</div>
+              </button>
+            </div>
+          </div>
+
+          <div className="creation-field">
+            <div className="ability-inputs-header">
+              <span>属性值</span>
+              {draft.abilityGeneration === "random_4d6" && (
+                <button
+                  type="button"
+                  className="roll-abilities-btn"
+                  onClick={onRollAbilities}
+                  disabled={pending}
+                  title="重新掷骰"
+                >
+                  🎲 重新掷骰
+                </button>
+              )}
+            </div>
+            <div className="ability-inputs-grid">
+              {ABILITY_KEYS.map((key) => (
+                <div key={key} className="ability-input-box">
+                  <label className="ability-input-label">
+                    {ABILITY_LABELS[key]} {ABILITY_ICONS[key]}
+                  </label>
+                  <input
+                    type="number"
+                    min={3}
+                    max={18}
+                    value={draft.abilities[key]}
+                    onChange={(e) => onAbilityChange(key, parseInt(e.target.value) || 10)}
+                    disabled={pending || draft.abilityGeneration === "standard_array"}
+                    className="ability-input"
+                  />
+                  <span className="ability-modifier">
+                    {formatModifier(getModifier(draft.abilities[key]))}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
 
           {error && <div className="creation-error">{error}</div>}
 
-          <button className="creation-submit" onClick={onSubmit} disabled={pending}>
+          <button className="creation-submit" onClick={onSubmit} disabled={pending || !draft.name.trim()}>
             {pending ? "创建中…" : "开始冒险"}
           </button>
         </div>
@@ -664,10 +885,13 @@ function CharacterCreationScreen({
         {actorPreview ? (
           <>
             <CharacterCard actor={actorPreview} />
-            <div className="stats-grid">
-              {ABILITY_KEYS.map((key) => (
-                <AbilityScore key={key} ability={key} score={actorPreview.abilities[key]} />
-              ))}
+            <div className="creation-preview-section">
+              <h3>属性值</h3>
+              <div className="stats-grid">
+                {ABILITY_KEYS.map((key) => (
+                  <AbilityScore key={key} ability={key} score={actorPreview.abilities[key]} />
+                ))}
+              </div>
             </div>
           </>
         ) : (
@@ -682,46 +906,30 @@ function createPreviewActor(draft: CharacterDraft): Actor | null {
   const trimmedName = draft.name.trim();
   if (!trimmedName) return null;
 
-  const previews: Record<CharacterClass, Actor> = {
-    warrior: {
-      id: "preview-warrior",
-      name: trimmedName,
-      character_class: "warrior",
-      abilities: { str: 15, dex: 13, con: 14, int: 8, wis: 12, cha: 10 },
-      proficiency_bonus: 2,
-      hp: 12,
-      hp_max: 12,
-      ac: 16,
-      description: CLASS_SUMMARIES.warrior,
-      conditions: [],
-    },
-    mage: {
-      id: "preview-mage",
-      name: trimmedName,
-      character_class: "mage",
-      abilities: { str: 8, dex: 13, con: 12, int: 15, wis: 14, cha: 10 },
-      proficiency_bonus: 2,
-      hp: 8,
-      hp_max: 8,
-      ac: 12,
-      description: CLASS_SUMMARIES.mage,
-      conditions: [],
-    },
-    rogue: {
-      id: "preview-rogue",
-      name: trimmedName,
-      character_class: "rogue",
-      abilities: { str: 10, dex: 15, con: 13, int: 12, wis: 14, cha: 8 },
-      proficiency_bonus: 2,
-      hp: 10,
-      hp_max: 10,
-      ac: 14,
-      description: CLASS_SUMMARIES.rogue,
-      conditions: [],
-    },
-  };
+  const classHp: Record<CharacterClass, number> = { warrior: 12, mage: 8, rogue: 10 };
+  const baseAc: Record<CharacterClass, number> = { warrior: 16, mage: 12, rogue: 14 };
 
-  return previews[draft.characterClass];
+  // Calculate AC based on abilities
+  const dexMod = getModifier(draft.abilities.dex);
+  let ac = baseAc[draft.characterClass];
+  if (draft.characterClass === "mage") {
+    ac = 10 + dexMod;
+  } else if (draft.characterClass === "rogue") {
+    ac = 11 + dexMod;
+  }
+
+  return {
+    id: `preview-${draft.characterClass}`,
+    name: trimmedName,
+    character_class: draft.characterClass,
+    abilities: draft.abilities,
+    proficiency_bonus: 2,
+    hp: classHp[draft.characterClass],
+    hp_max: classHp[draft.characterClass],
+    ac,
+    description: CLASS_SUMMARIES[draft.characterClass],
+    conditions: [],
+  };
 }
 
 interface ParsedStreamEvent {
@@ -884,6 +1092,8 @@ function App() {
   const [creationDraft, setCreationDraft] = useState<CharacterDraft>({
     name: "",
     characterClass: "warrior",
+    abilities: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 },
+    abilityGeneration: "standard_array",
   });
   const [creationError, setCreationError] = useState<string | null>(null);
   const messagesEnd = useRef<HTMLDivElement>(null);
@@ -1072,14 +1282,21 @@ function App() {
     setCreationError(null);
 
     try {
+      const body: Record<string, unknown> = {
+        name,
+        character_class: creationDraft.characterClass,
+        ability_generation: creationDraft.abilityGeneration,
+      };
+
+      // Include custom abilities for manual or random generation
+      if (creationDraft.abilityGeneration !== "standard_array") {
+        body.abilities = creationDraft.abilities;
+      }
+
       const response = await fetch(apiUrl("/character/create"), {
         method: "POST",
         headers: buildSessionHeaders(sessionId, { "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          name,
-          character_class: creationDraft.characterClass,
-          ability_generation: "standard_array",
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -1106,12 +1323,19 @@ function App() {
           timestamp: Date.now(),
         },
       ]);
+
+      const genMethodLabel = {
+        standard_array: "标准数组",
+        random_4d6: "4d6 取三",
+        manual: "手动输入",
+      }[creationDraft.abilityGeneration];
+
       setTimeline([
         {
           id: Date.now(),
           type: "system",
           title: `创建角色：${name}`,
-          details: `${CLASS_LABELS[creationDraft.characterClass]} · 标准数组`,
+          details: `${CLASS_LABELS[creationDraft.characterClass]} · ${genMethodLabel}`,
           timestamp: Date.now(),
         },
       ]);
@@ -1120,6 +1344,43 @@ function App() {
     } finally {
       setCreatingCharacter(false);
     }
+  };
+
+  const handleClassChange = (characterClass: CharacterClass) => {
+    setCreationDraft((prev) => {
+      const newAbilities =
+        prev.abilityGeneration === "standard_array"
+          ? getDefaultAbilities(characterClass)
+          : prev.abilities;
+      return { ...prev, characterClass, abilities: newAbilities };
+    });
+  };
+
+  const handleAbilityGenerationChange = (method: "standard_array" | "random_4d6" | "manual") => {
+    setCreationDraft((prev) => {
+      let newAbilities = prev.abilities;
+      if (method === "standard_array") {
+        newAbilities = getDefaultAbilities(prev.characterClass);
+      } else if (method === "random_4d6") {
+        newAbilities = rollRandomAbilities();
+      }
+      return { ...prev, abilityGeneration: method, abilities: newAbilities };
+    });
+  };
+
+  const handleAbilityChange = (ability: keyof AbilityScores, value: number) => {
+    const clamped = Math.max(3, Math.min(18, value));
+    setCreationDraft((prev) => ({
+      ...prev,
+      abilities: { ...prev.abilities, [ability]: clamped },
+    }));
+  };
+
+  const handleRollAbilities = () => {
+    setCreationDraft((prev) => ({
+      ...prev,
+      abilities: rollRandomAbilities(),
+    }));
   };
 
   const send = async () => {
@@ -1346,7 +1607,12 @@ function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1>幻界</h1>
+        <div className="header-left">
+          <h1>幻界</h1>
+          {inAdventure && bootstrap?.actor && (
+            <MiniCharacterCard actor={bootstrap.actor} />
+          )}
+        </div>
         <div className="header-right">
           <div className="model-selector">
             <span className="model-selector-label">🧠 模型</span>
@@ -1449,7 +1715,10 @@ function App() {
             pending={creatingCharacter}
             error={creationError}
             onNameChange={(value) => setCreationDraft((previous) => ({ ...previous, name: value }))}
-            onClassChange={(value) => setCreationDraft((previous) => ({ ...previous, characterClass: value }))}
+            onClassChange={handleClassChange}
+            onAbilityChange={handleAbilityChange}
+            onAbilityGenerationChange={handleAbilityGenerationChange}
+            onRollAbilities={handleRollAbilities}
             onSubmit={createCharacter}
           />
         )}
@@ -1481,6 +1750,11 @@ function App() {
               </div>
             </section>
 
+            <section>
+              <h2>技能</h2>
+              <SkillsList actor={bootstrap.actor} compact />
+            </section>
+
             {bootstrap.actor.conditions && bootstrap.actor.conditions.length > 0 && (
               <section>
                 <h2>状态效果</h2>
@@ -1508,9 +1782,13 @@ function App() {
             {actorPreview ? (
               <>
                 <CharacterCard actor={actorPreview} />
-                <div className="creation-summary-card">
-                  <div className="creation-summary-title">模板说明</div>
-                  <p>{CLASS_SUMMARIES[creationDraft.characterClass]}</p>
+                <div className="creation-preview-section">
+                  <h3>属性值</h3>
+                  <div className="stats-grid">
+                    {ABILITY_KEYS.map((key) => (
+                      <AbilityScore key={key} ability={key} score={actorPreview.abilities[key]} />
+                    ))}
+                  </div>
                 </div>
               </>
             ) : (

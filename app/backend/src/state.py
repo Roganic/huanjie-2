@@ -250,6 +250,24 @@ def has_character(session_id: str | None = None) -> bool:
     return session.actor is not None and session.phase == GamePhase.ADVENTURE
 
 
+def _roll_4d6_drop_lowest() -> AbilityScores:
+    """Roll 4d6, drop the lowest, repeat 6 times for ability scores."""
+    import random
+
+    def roll_one() -> int:
+        rolls = sorted([random.randint(1, 6) for _ in range(4)])
+        return sum(rolls[1:])  # Drop lowest
+
+    return AbilityScores(**{
+        "str": roll_one(),
+        "dex": roll_one(),
+        "con": roll_one(),
+        "int": roll_one(),
+        "wis": roll_one(),
+        "cha": roll_one(),
+    })
+
+
 def create_character(
     req: CharacterCreateRequest,
     session_id: str | None = None,
@@ -259,17 +277,35 @@ def create_character(
         session = _get_session(resolved_session_id, create_if_missing=True)
         template = _CLASS_TEMPLATES[req.character_class]
         hp = int(template["hp"])
+        base_ac = int(template["ac"])
         actor_id = f"{req.character_class.value}-{req.name.strip().lower().replace(' ', '-')}"
+
+        # Determine ability scores based on generation method
+        if req.ability_generation == "manual" and req.abilities is not None:
+            abilities = req.abilities
+        elif req.ability_generation == "random_4d6":
+            abilities = _roll_4d6_drop_lowest()
+        else:  # standard_array (default)
+            abilities = template["abilities"]
+
+        # Calculate AC based on DEX modifier (for light armor classes)
+        dex_mod = abilities.modifier("dex")
+        if req.character_class == CharacterClass.MAGE:
+            ac = 10 + dex_mod  # Unarmored
+        elif req.character_class == CharacterClass.ROGUE:
+            ac = 11 + dex_mod  # Leather armor
+        else:  # WARRIOR
+            ac = base_ac  # Chain mail (no DEX bonus)
 
         session.actor = Actor(
             id=actor_id,
             name=req.name.strip(),
             character_class=req.character_class,
-            abilities=template["abilities"],
+            abilities=abilities,
             proficiency_bonus=2,
             hp=hp,
             hp_max=hp,
-            ac=int(template["ac"]),
+            ac=ac,
             description=str(template["description"]),
         )
         session.phase = GamePhase.ADVENTURE

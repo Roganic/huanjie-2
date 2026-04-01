@@ -38,17 +38,14 @@ _CHARACTER_CREATION_SCENE_INIT = dict(
 
 _ADVENTURE_SCENE_INIT = dict(
     id="tavern-01",
-    name="The Rusty Lantern",
-    description=(
-        "A dimly-lit tavern at a crossroads village. The smell of stale ale "
-        "mixes with wood smoke. A few locals nurse their drinks in silence."
-    ),
+    name="锈迹斑斑的灯笼酒馆",
+    description="十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒。",
     actors=[],
 )
 
 _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
     CharacterClass.WARRIOR: {
-        "description": "A disciplined frontline warrior who trusts steel and grit.",
+        "description": "久经沙场的前线战士，信奉钢铁与意志。",
         "abilities": AbilityScores(**{
             "str": 15,
             "dex": 13,
@@ -61,7 +58,7 @@ _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
         "ac": 16,
     },
     CharacterClass.MAGE: {
-        "description": "A learned spellcaster who shapes danger with study and will.",
+        "description": "博学的施法者，以知识和意志驾驭危险。",
         "abilities": AbilityScores(**{
             "str": 8,
             "dex": 13,
@@ -74,7 +71,7 @@ _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
         "ac": 12,
     },
     CharacterClass.ROGUE: {
-        "description": "A quick-footed opportunist who survives by timing and nerve.",
+        "description": "身手敏捷的机会主义者，靠时机与神经存活。",
         "abilities": AbilityScores(**{
             "str": 10,
             "dex": 15,
@@ -90,7 +87,7 @@ _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
 
 _ENEMY_INIT = dict(
     id="goblin-01",
-    name="Goblin Scout",
+    name="哥布林斥候",
     abilities=AbilityScores(**{
         "str": 8,
         "dex": 14,
@@ -103,13 +100,13 @@ _ENEMY_INIT = dict(
     hp=7,
     hp_max=7,
     ac=12,
-    description="A small, wiry goblin with a rusty dagger.",
+    description="一只瘦小的哥布林，手持锈迹斑斑的匕首。",
 )
 
 _COMBAT_SCENE_INIT = dict(
     id="combat-01",
-    name="Forest Ambush",
-    description="A narrow forest path. A goblin emerges from the underbrush.",
+    name="森林伏击",
+    description="狭窄的林间小道，一只哥布林从灌木丛中窜出。",
     actors=["goblin-01"],
 )
 

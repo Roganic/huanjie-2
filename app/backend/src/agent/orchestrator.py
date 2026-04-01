@@ -428,7 +428,7 @@ class GMAgent:
             target=scene.id,
             field="time",
             delta=1,
-            description="Combat time passes.",
+            description="战斗时间流逝。",
         )
         
         # Step 4: Generate narrative
@@ -484,8 +484,8 @@ class GMAgent:
             outcome=Outcome.FAILURE,
             effects=self.effects,
             narration=f"{action_summary} — but the target cannot be found.",
-            scene_progression="The confusion stalls the moment. You can pick a clear target, read the room for reactions, or reposition before the next move.",
-            gm_prompt="A beat of uncertainty hangs in the air. Clarify who you are actually engaging before the scene moves against you.",
+            scene_progression="局面陷入混乱，时机短暂停滞。你可以选定明确目标、观察周围反应，或趁机重新布位。",
+            gm_prompt="不确定感弥漫在空气中。在局势对你不利之前，先确认你真正要对付的目标。",
         )
     
     def _resolve_spell_attack(self, req: ActionRequest, actor: Actor) -> ActionResponse:
@@ -608,7 +608,7 @@ class GMAgent:
             target=scene.id,
             field="time",
             delta=1,
-            description="Combat time passes.",
+            description="战斗时间流逝。",
         )
         
         # Step 6: Generate narrative
@@ -664,7 +664,7 @@ class GMAgent:
             target=scene.id,
             field="time",
             delta=1,
-            description="Time passes.",
+            description="时间流逝。",
         )
         
         # Apply failure effects for physical abilities
@@ -675,14 +675,14 @@ class GMAgent:
                     target=actor.id,
                     field="hp",
                     delta=-1,
-                    description="The failed physical effort causes minor harm.",
+                    description="体力消耗造成轻微伤害。",
                 )
             else:
                 self._call_apply_state_change(
                     target=actor.id,
                     field="narrative_state",
                     delta="setback",
-                    description="The failed attempt may attract attention or waste time.",
+                    description="失败的尝试可能引起注意或浪费时间。",
                 )
     
     @staticmethod

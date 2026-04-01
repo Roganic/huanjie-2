@@ -64,6 +64,10 @@ class ActionRequest(BaseModel):
         None,
         description="Override damage dice expression (e.g., 1d8, 2d6+1)",
     )
+    provider: Optional[str] = Field(
+        None,
+        description="AI narration provider to use (e.g., kimi, openai)",
+    )
 
 
 # ---------------------------------------------------------------------------

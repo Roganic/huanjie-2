@@ -27,6 +27,12 @@ uvicorn src.main:app --reload
 - `OPENAI_API_KEY`：OpenAI 叙事模型 key
 - `OPENAI_API_URL` / `OPENAI_MODEL` / `OPENAI_TIMEOUT_SECONDS`：OpenAI 可选覆盖项
 
+可从 `env.example` 复制本地样例：
+
+```bash
+cp env.example .env.local
+```
+
 本地开发默认允许：
 
 - `http://localhost:5173`
@@ -41,6 +47,7 @@ CORS_ALLOW_ORIGINS=https://your-user.github.io
 ## 容器部署
 
 后端目录自带 `Dockerfile`，可直接用于 Railway 或 Render。
+如果使用 Render Blueprint，可直接复用 `render.yaml`。
 
 本地构建与运行：
 
@@ -52,6 +59,18 @@ docker run --rm -p 8000:8000 \
   -e KIMI_API_KEY=your-key \
   huanjie-backend
 ```
+
+### Render
+
+- Blueprint 文件：`app/backend/render.yaml`
+- 如果仓库是 monorepo，在 Render 创建 Blueprint 时选择这个文件路径即可
+- 部署后确认 `CORS_ALLOW_ORIGINS` 填的是前端页面 origin，例如 `https://your-user.github.io`
+
+### Railway
+
+- 直接使用 `app/backend/Dockerfile`
+- 若服务源码目录不是仓库根目录，把 Railway service root 指向 `app/backend`
+- 保持 `PORT` 由平台注入，不要手动写死
 
 ## API
 

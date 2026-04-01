@@ -28,11 +28,35 @@ VITE_API_BASE_URL=https://your-backend.example.com npm run build
 
 示例配置见 `app/frontend/.env.example`（开发环境）和 `env.production.example`（生产构建参考）。实际使用时请在本地创建 `.env` / `.env.production` 或直接通过 CI 环境变量注入。
 
-## GitHub Pages
+## GitHub Pages 部署
 
-仓库包含 `.github/workflows/deploy-frontend-pages.yml`：
+### 公开访问入口（示例）
 
-- `main` 分支推送后自动构建并发布到 GitHub Pages
-- 构建前强制检查仓库 secret `VITE_API_BASE_URL`
-- 默认将 `VITE_BASE_PATH` 设为 `/<repo-name>/`
-- 构建后复制 `index.html` 为 `404.html`，兼容单页应用刷新
+> 以下链接为占位示例，实际部署后请替换为真实地址。
+
+- **前端（GitHub Pages）**：`https://<your-username>.github.io/<repo-name>/`
+- **后端（健康检查）**：`https://<your-backend-domain>/health`
+- **后端 API 文档**：`https://<your-backend-domain>/docs`
+
+### 自动部署（GitHub Actions）
+
+1. 在仓库 **Settings > Pages** 中启用 GitHub Pages（来源选 GitHub Actions）。
+2. 在仓库 **Settings > Secrets and variables > Actions** 中添加 `VITE_API_BASE_URL`（你的云后端 HTTPS 地址）。
+3. 推送 `main` 分支后，`.github/workflows/deploy-frontend-pages.yml` 会自动构建并发布。
+
+### 手动本地构建
+
+```bash
+cd app/frontend
+npm ci
+VITE_API_BASE_URL=https://your-backend.example.com npm run build
+```
+
+构建产物在 `app/frontend/dist`，可直接上传到任意静态托管服务。
+
+### 生产环境变量说明
+
+| 变量 | 说明 | 示例 |
+|------|------|------|
+| `VITE_API_BASE_URL` | 前端构建时注入的后端根地址 | `https://huanjie-backend.fly.dev` |
+| `VITE_BASE_PATH` | 前端静态资源基础路径（GitHub Pages 需设） | `/<repo-name>/` |

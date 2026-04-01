@@ -63,3 +63,41 @@ docker run -p 8000:8000 \
 ```
 
 `runtime.txt` 固定了 Python 3.11，便于使用支持该约定的平台。
+
+## 一键部署到云平台
+
+### Railway
+
+```bash
+cd app/backend
+./scripts/deploy-railway.sh
+```
+
+前置条件：安装 [Railway CLI](https://docs.railway.app/develop/cli) 并已登录。部署后请在 Railway Dashboard 设置环境变量（`KIMI_API_KEY`、`CORS_ALLOW_ORIGINS` 等）。
+
+### Fly.io
+
+```bash
+cd app/backend
+flyctl apps create huanjie-backend   # 首次部署需创建应用
+./scripts/deploy-fly.sh
+```
+
+前置条件：安装 [flyctl](https://fly.io/docs/flyctl/install/) 并已登录。首次创建应用后，后续可直接运行 `./scripts/deploy-fly.sh`。 secrets 请通过 `flyctl secrets set` 配置。
+
+```bash
+flyctl secrets set KIMI_API_KEY=xxx
+flyctl secrets set CORS_ALLOW_ORIGINS=https://<your-username>.github.io
+```
+
+### 生产环境变量说明
+
+| 变量 | 说明 | 示例 |
+|------|------|------|
+| `PORT` | 后端监听端口 | `8000` |
+| `HOST` | 后端监听地址 | `0.0.0.0` |
+| `CORS_ALLOW_ORIGINS` | 允许跨域的前端地址 | `https://xxx.github.io` |
+| `KIMI_API_KEY` | Kimi API Key | — |
+| `OPENAI_API_KEY` | OpenAI API Key | — |
+
+后端默认已放行 `https://*.github.io`，若使用其他前端域名，请通过 `CORS_ALLOW_ORIGINS` 显式配置。

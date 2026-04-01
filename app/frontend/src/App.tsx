@@ -131,36 +131,6 @@ type Skill = {
   proficient: boolean;
 };
 
-const SKILLS: Skill[] = [
-  { name: "杂技", ability: "dex", proficient: false },
-  { name: "运动", ability: "str", proficient: false },
-  { name: "欺骗", ability: "cha", proficient: false },
-  { name: "历史", ability: "int", proficient: false },
-  { name: "威吓", ability: "cha", proficient: false },
-  { name: "洞察", ability: "wis", proficient: true },
-  { name: "调查", ability: "int", proficient: false },
-  { name: "医药", ability: "wis", proficient: false },
-  { name: "自然", ability: "int", proficient: false },
-  { name: "察觉", ability: "wis", proficient: true },
-  { name: "表演", ability: "cha", proficient: false },
-  { name: "说服", ability: "cha", proficient: false },
-  { name: "宗教", ability: "int", proficient: false },
-  { name: "巧手", ability: "dex", proficient: true },
-  { name: "隐匿", ability: "dex", proficient: true },
-  { name: "生存", ability: "wis", proficient: false },
-];
-
-const CLASS_SKILLS: Record<CharacterClass, string[]> = {
-  warrior: ["运动", "威吓", "察觉", "生存"],
-  mage: ["历史", "调查", "奥秘", "宗教"],
-  rogue: ["杂技", "欺骗", "洞察", "巧手", "隐匿"],
-};
-
-// Arcana skill for mage class proficiency
-const EXTRA_SKILLS: Skill[] = [
-  { name: "奥秘", ability: "int", proficient: false },
-];
-
 const SKILL_LABELS: Record<string, string> = {
   athletics: "运动",
   acrobatics: "杂技",
@@ -181,6 +151,36 @@ const SKILL_LABELS: Record<string, string> = {
   performance: "表演",
   persuasion: "说服",
 };
+
+const SKILLS: Skill[] = [
+  { name: "acrobatics", ability: "dex", proficient: false },
+  { name: "animal_handling", ability: "wis", proficient: false },
+  { name: "athletics", ability: "str", proficient: false },
+  { name: "deception", ability: "cha", proficient: false },
+  { name: "history", ability: "int", proficient: false },
+  { name: "insight", ability: "wis", proficient: false },
+  { name: "intimidation", ability: "cha", proficient: false },
+  { name: "investigation", ability: "int", proficient: false },
+  { name: "medicine", ability: "wis", proficient: false },
+  { name: "nature", ability: "int", proficient: false },
+  { name: "perception", ability: "wis", proficient: false },
+  { name: "performance", ability: "cha", proficient: false },
+  { name: "persuasion", ability: "cha", proficient: false },
+  { name: "religion", ability: "int", proficient: false },
+  { name: "sleight_of_hand", ability: "dex", proficient: false },
+  { name: "stealth", ability: "dex", proficient: false },
+  { name: "survival", ability: "wis", proficient: false },
+];
+
+const CLASS_SKILLS: Record<CharacterClass, string[]> = {
+  warrior: ["athletics", "intimidation", "perception", "survival"],
+  mage: ["arcana", "history", "investigation", "insight"],
+  rogue: ["acrobatics", "sleight_of_hand", "stealth", "deception", "persuasion"],
+};
+
+const EXTRA_SKILLS: Skill[] = [
+  { name: "arcana", ability: "int", proficient: false },
+];
 
 const ABILITY_LABELS: Record<string, string> = {
   str: "力量",
@@ -497,29 +497,32 @@ function StatusEffect({ name, isNew }: { name: string; isNew?: boolean }) {
 }
 
 function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolean }) {
-  // Use backend-provided skills when available; fallback to local computation for previews
-  const backendSkills = actor.skills;
-  if (backendSkills && backendSkills.length > 0) {
-    if (compact) {
-      const proficientSkills = backendSkills.filter((s) => s.proficient);
-      return (
-        <div className="skills-list-compact">
-          {proficientSkills.map((skill) => (
-            <div key={skill.name} className="skill-item-compact proficient">
-              <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
-              <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
+  // Prefer backend-provided skills when available; fallback to frontend computation
+  const skills = actor.skills && actor.skills.length > 0
+    ? actor.skills
+    : (() => {
+        const profBonus = actor.proficiency_bonus;
+        const classProfSkills = CLASS_SKILLS[actor.character_class ?? "warrior"] ?? [];
+        const allSkills = [...SKILLS, ...EXTRA_SKILLS];
+        return allSkills.map((skill) => {
+          const abilityMod = getModifier(actor.abilities[skill.ability]);
+          const isProficient = classProfSkills.includes(skill.name);
+          return {
+            name: skill.name,
+            ability: skill.ability,
+            proficient: isProficient,
+            modifier: abilityMod + (isProficient ? profBonus : 0),
+          };
+        });
+      })();
+
+  if (compact) {
+    const proficientSkills = skills.filter((s) => s.proficient);
     return (
-      <div className="skills-list">
-        {backendSkills.map((skill) => (
-          <div key={skill.name} className={`skill-item ${skill.proficient ? "proficient" : ""}`}>
-            <span className="skill-dot">{skill.proficient ? "●" : "○"}</span>
+      <div className="skills-list-compact">
+        {proficientSkills.map((skill) => (
+          <div key={skill.name} className="skill-item-compact proficient">
             <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
-            <span className="skill-ability">({ABILITY_LABELS[skill.ability] ?? skill.ability})</span>
             <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
           </div>
         ))}
@@ -527,44 +530,16 @@ function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolea
     );
   }
 
-  // Fallback for preview actors without backend skills
-  const profBonus = actor.proficiency_bonus;
-  const classProfSkills = CLASS_SKILLS[actor.character_class ?? "warrior"] ?? [];
-  const allSkills = [...SKILLS, ...EXTRA_SKILLS];
-
-  if (compact) {
-    const proficientSkills = allSkills.filter((s) => classProfSkills.includes(s.name));
-    return (
-      <div className="skills-list-compact">
-        {proficientSkills.map((skill) => {
-          const abilityMod = getModifier(actor.abilities[skill.ability]);
-          const total = abilityMod + profBonus;
-          return (
-            <div key={skill.name} className="skill-item-compact proficient">
-              <span className="skill-name">{skill.name}</span>
-              <span className="skill-bonus">{formatModifier(total)}</span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
   return (
     <div className="skills-list">
-      {allSkills.map((skill) => {
-        const abilityMod = getModifier(actor.abilities[skill.ability]);
-        const isProficient = classProfSkills.includes(skill.name);
-        const total = abilityMod + (isProficient ? profBonus : 0);
-        return (
-          <div key={skill.name} className={`skill-item ${isProficient ? "proficient" : ""}`}>
-            <span className="skill-dot">{isProficient ? "●" : "○"}</span>
-            <span className="skill-name">{skill.name}</span>
-            <span className="skill-ability">({ABILITY_LABELS[skill.ability]})</span>
-            <span className="skill-bonus">{formatModifier(total)}</span>
-          </div>
-        );
-      })}
+      {skills.map((skill) => (
+        <div key={skill.name} className={`skill-item ${skill.proficient ? "proficient" : ""}`}>
+          <span className="skill-dot">{skill.proficient ? "●" : "○"}</span>
+          <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
+          <span className="skill-ability">({ABILITY_LABELS[skill.ability]})</span>
+          <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -969,6 +944,10 @@ function CharacterCreationScreen({
                 ))}
               </div>
             </div>
+            <div className="creation-preview-section">
+              <h3>技能熟练</h3>
+              <SkillsList actor={actorPreview} compact />
+            </div>
           </>
         ) : (
           <div className="sidebar-loading">输入姓名并选择职业后查看预览。</div>
@@ -982,29 +961,49 @@ function createPreviewActor(draft: CharacterDraft): Actor | null {
   const trimmedName = draft.name.trim();
   if (!trimmedName) return null;
 
-  const classHp: Record<CharacterClass, number> = { warrior: 12, mage: 8, rogue: 10 };
-  const baseAc: Record<CharacterClass, number> = { warrior: 16, mage: 12, rogue: 14 };
+  // Hit dice match backend CLASS_HIT_DICE
+  const classHitDie: Record<CharacterClass, number> = { warrior: 10, mage: 6, rogue: 8 };
+
+  // Calculate HP: hit die max + CON modifier (matches backend)
+  const conMod = getModifier(draft.abilities.con);
+  const hp = classHitDie[draft.characterClass] + conMod;
 
   // Calculate AC based on abilities
   const dexMod = getModifier(draft.abilities.dex);
-  let ac = baseAc[draft.characterClass];
+  let ac = 16;
   if (draft.characterClass === "mage") {
     ac = 10 + dexMod;
   } else if (draft.characterClass === "rogue") {
     ac = 11 + dexMod;
   }
 
+  // Compute skills to match backend logic
+  const profBonus = 2;
+  const classProfSkills = CLASS_SKILLS[draft.characterClass] ?? [];
+  const allSkills = [...SKILLS, ...EXTRA_SKILLS];
+  const skills = allSkills.map((skill) => {
+    const abilityMod = getModifier(draft.abilities[skill.ability]);
+    const isProficient = classProfSkills.includes(skill.name);
+    return {
+      name: skill.name,
+      ability: skill.ability,
+      proficient: isProficient,
+      modifier: abilityMod + (isProficient ? profBonus : 0),
+    };
+  });
+
   return {
     id: `preview-${draft.characterClass}`,
     name: trimmedName,
     character_class: draft.characterClass,
     abilities: draft.abilities,
-    proficiency_bonus: 2,
-    hp: classHp[draft.characterClass],
-    hp_max: classHp[draft.characterClass],
+    proficiency_bonus: profBonus,
+    hp,
+    hp_max: hp,
     ac,
     description: CLASS_SUMMARIES[draft.characterClass],
     conditions: [],
+    skills,
   };
 }
 
@@ -1376,14 +1375,12 @@ function App() {
         ability_generation: creationDraft.abilityGeneration,
       };
 
-      // Backend ignores abilities when ability_generation is standard_array.
-      // To respect the player's allocation, send as manual with the chosen abilities.
-      if (creationDraft.abilityGeneration === "standard_array") {
+      // Backend ignores abilities when ability_generation is standard_array or random_4d6.
+      // To respect the player's chosen/rolled abilities, send as manual with the chosen abilities.
+      if (creationDraft.abilityGeneration === "standard_array" || creationDraft.abilityGeneration === "random_4d6") {
         body.ability_generation = "manual";
-        body.abilities = creationDraft.abilities;
-      } else {
-        body.abilities = creationDraft.abilities;
       }
+      body.abilities = creationDraft.abilities;
 
       const response = await fetch(apiUrl("/character/create"), {
         method: "POST",
@@ -1803,7 +1800,7 @@ function App() {
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && send()}
-                placeholder={sending ? "裁定中…" : "输入你的行动…"}
+                placeholder={sending ? "裁定中…" : "输入你的行动（或先创建角色）…"}
                 disabled={sending}
               />
               <button onClick={send} disabled={sending}>

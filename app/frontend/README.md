@@ -1,73 +1,38 @@
-# React + TypeScript + Vite
+# 幻界 2.0 前端
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite 单页应用。
 
-Currently, two official plugins are available:
+## 本地开发
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cd app/frontend
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+开发服务器默认通过 Vite 代理把 `/api/*` 转发到 `http://localhost:8000`。
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 生产构建
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+生产环境通过 `VITE_API_BASE_URL` 注入后端地址，不再依赖同源 `/api`。
+
+```bash
+cd app/frontend
+VITE_API_BASE_URL=https://your-backend.example.com npm run build
 ```
+
+可选环境变量：
+
+- `VITE_API_BASE_URL`：生产环境后端 HTTPS 根地址，例如 `https://your-backend.example.com`
+- `VITE_BASE_PATH`：静态资源部署基础路径；GitHub Pages 场景通常为 `/<repo-name>/`
+
+示例配置见 `app/frontend/env.production.example`。实际使用时请在本地创建 `.env.production` 或直接通过 CI 环境变量注入。
+
+## GitHub Pages
+
+仓库包含 `.github/workflows/deploy-frontend-pages.yml`：
+
+- `main` 分支推送后自动构建并发布到 GitHub Pages
+- 构建前强制检查仓库 secret `VITE_API_BASE_URL`
+- 默认将 `VITE_BASE_PATH` 设为 `/<repo-name>/`
+- 构建后复制 `index.html` 为 `404.html`，兼容单页应用刷新

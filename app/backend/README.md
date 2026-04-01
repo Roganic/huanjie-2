@@ -63,24 +63,3 @@ docker run -p 8000:8000 \
 ```
 
 `runtime.txt` 固定了 Python 3.11，便于使用支持该约定的平台。
-
-## 一键部署到云平台
-
-### Railway
-
-```bash
-cd app/backend
-./scripts/deploy-railway.sh
-```
-
-前置条件：安装 [Railway CLI](https://docs.railway.app/develop/cli) 并已登录。部署后请在 Railway Dashboard 设置环境变量（`KIMI_API_KEY`、`CORS_ALLOW_ORIGINS` 等）。
-
-### Fly.io
-
-```bash
-cd app/backend
-flyctl apps create huanjie-backend   # 首次部署需创建应用
-./scripts/deploy-fly.sh
-```
-
-前置条件：安装 [flyctl](https://fly.io/docs/flyctl/install/) 并已登录。首次创建应用后，后续可直接运行 `./scripts/deploy-fly.sh`。 secrets 请通过 `flyctl secrets set` 配置。

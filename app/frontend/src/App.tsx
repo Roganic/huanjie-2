@@ -151,6 +151,16 @@ const CLASS_SUMMARIES: Record<CharacterClass, string> = {
   rogue: "高敏捷，中等防护，擅长机动与潜入。",
 };
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
+function apiUrl(path: string): string {
+  if (!path.startsWith("/")) {
+    throw new Error(`API path must start with "/": ${path}`);
+  }
+
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : `/api${path}`;
+}
+
 function getModifier(score: number): number {
   return Math.floor((score - 10) / 2);
 }
@@ -763,7 +773,7 @@ function App() {
 
     const check = async () => {
       try {
-        const response = await fetch("/api/health");
+        const response = await fetch(apiUrl("/health"));
         if (!cancelled) setHealth(response.ok ? "ok" : "error");
       } catch {
         if (!cancelled) setHealth("error");
@@ -783,7 +793,7 @@ function App() {
 
     (async () => {
       try {
-        const response = await fetch("/api/state");
+        const response = await fetch(apiUrl("/state"));
         if (!response.ok) return;
         const data: BootstrapState = await response.json();
         if (!cancelled) setBootstrap(data);
@@ -811,7 +821,7 @@ function App() {
   };
 
   const refreshState = async () => {
-    const response = await fetch("/api/state");
+    const response = await fetch(apiUrl("/state"));
     if (!response.ok) {
       throw new Error(`状态同步失败 (${response.status})`);
     }
@@ -827,7 +837,7 @@ function App() {
     setCreationError(null);
 
     try {
-      const response = await fetch("/api/state/reset", { method: "POST" });
+      const response = await fetch(apiUrl("/state/reset"), { method: "POST" });
       if (!response.ok) {
         throw new Error(await response.text());
       }
@@ -861,7 +871,7 @@ function App() {
     setCreationError(null);
 
     try {
-      const response = await fetch("/api/character/create", {
+      const response = await fetch(apiUrl("/character/create"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -925,7 +935,7 @@ function App() {
     });
 
     try {
-      const response = await fetch("/api/action", {
+      const response = await fetch(apiUrl("/action"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -120,6 +120,9 @@ class GMAgent:
         if req.action_type == ActionType.ATTACK or req.weapon is not None:
             return self._resolve_attack(req, actor)
         
+        if req.action_type == ActionType.SKILL_CHECK or req.skill is not None:
+            return self._resolve_skill_check(req, actor)
+        
         return self._resolve_generic_action(req, actor)
     
     def _call_get_current_state(self) -> CurrentStateResult:
@@ -227,6 +230,109 @@ class GMAgent:
     # Resolution Paths
     # -----------------------------------------------------------------------
     
+    def _resolve_skill_check(
+        self,
+        req: ActionRequest,
+        actor: Actor,
+    ) -> ActionResponse:
+        """Resolve a skill check action (proficiency-based).
+        
+        Skill checks add proficiency bonus only if the character is proficient
+        in that specific skill.
+        """
+        skill_name = req.skill or "athletics"
+        action_summary = f"{req.actor} uses {skill_name} to {req.intent}"
+        
+        # Determine governing ability
+        skill_abilities = {
+            "athletics": "str",
+            "acrobatics": "dex", "sleight_of_hand": "dex", "stealth": "dex",
+            "arcana": "int", "history": "int", "investigation": "int",
+            "nature": "int", "religion": "int",
+            "animal_handling": "wis", "insight": "wis", "medicine": "wis",
+            "perception": "wis", "survival": "wis",
+            "deception": "cha", "intimidation": "cha", "performance": "cha",
+            "persuasion": "cha",
+        }
+        ability = req.ability or skill_abilities.get(skill_name.lower(), "str")
+        
+        # Calculate modifiers
+        ability_modifier = actor.abilities.modifier(ability)
+        
+        # Check proficiency
+        is_proficient = False
+        for skill in actor.skills:
+            if skill.name.lower() == skill_name.lower():
+                is_proficient = skill.proficient
+                break
+        
+        prof_bonus = actor.proficiency_bonus if is_proficient else 0
+        
+        dc = req.dc or self._pick_dc(req.intent)
+        advantage = req.advantage
+        
+        # Roll d20 + ability modifier + proficiency (if proficient)
+        roll_result = self._call_roll_dice(
+            dice_type=DiceType.D20,
+            reason=f"{skill_name} check ({ability.upper()})",
+            advantage=advantage,
+            modifier=ability_modifier + prof_bonus,
+        )
+        
+        total = roll_result.total
+        outcome = Outcome.SUCCESS if total >= dc else Outcome.FAILURE
+        
+        # Build check detail
+        check = CheckDetail(
+            ability=ability,
+            modifier=ability_modifier,
+            proficiency_bonus=prof_bonus,
+            advantage=advantage,
+            roll=roll_result.roll,
+            total=total,
+            dc=dc,
+            skill_name=skill_name,
+        )
+        
+        # Apply effects
+        self._apply_check_effects(actor, ability, outcome)
+        
+        # Generate narrative
+        check_result = {
+            "ability": ability,
+            "skill": skill_name,
+            "proficient": is_proficient,
+            "modifier": ability_modifier,
+            "proficiency_bonus": prof_bonus,
+            "dc": dc,
+            "roll": roll_result.roll,
+            "total": total,
+        }
+        narrative_result = self._call_generate_narrative(
+            req=req,
+            outcome=outcome,
+            check_result=check_result,
+        )
+        self._record_narrative_history(
+            action_summary=action_summary,
+            resolution_type=ResolutionType.CHECK,
+            outcome=outcome,
+            narration_result=narrative_result,
+            check_result=check_result,
+        )
+        
+        return ActionResponse(
+            action_summary=action_summary,
+            resolution_type=ResolutionType.CHECK,
+            check=check,
+            attack=None,
+            outcome=outcome,
+            effects=self.effects,
+            narration=narrative_result.narrative,
+            scene_progression=narrative_result.scene_progression,
+            gm_prompt=narrative_result.gm_prompt,
+        )
+
     def _resolve_generic_action(self, req: ActionRequest, actor: Actor) -> ActionResponse:
         """Resolve a generic (non-attack) action."""
         action_summary = f"{req.actor} attempts to {req.intent} by {req.approach}"
@@ -396,10 +502,13 @@ class GMAgent:
                 dice_expression=damage_dice,
             )
             
-            damage_total = damage_result.total
+            # Damage = weapon dice + ability modifier (min 1 damage on hit)
+            damage_modifier = modifier  # Same ability used for attack roll
+            damage_total = max(1, damage_result.total + damage_modifier)
             damage_detail = DamageDetail(
                 dice_expression=damage_dice,
                 rolls=damage_result.rolls,
+                modifier=damage_modifier,
                 total=damage_total,
             )
             attack_detail.damage = damage_detail

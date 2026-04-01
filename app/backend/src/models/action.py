@@ -17,6 +17,7 @@ class ActionType(str, Enum):
     GENERIC = "generic"
     ATTACK = "attack"
     SPELL_ATTACK = "spell_attack"  # Attack that may require saving throw
+    SKILL_CHECK = "skill_check"    # Skill check (proficiency-based)
 
 
 class ActionRequest(BaseModel):
@@ -69,6 +70,11 @@ class ActionRequest(BaseModel):
         None,
         description="Override damage dice expression (e.g., 1d8, 2d6+1)",
     )
+    # Skill check field
+    skill: Optional[str] = Field(
+        None,
+        description="Skill name for skill checks (e.g., athletics, perception, stealth)",
+    )
     # Multi-step action fields
     requires_saving_throw: bool = Field(
         default=False,
@@ -106,6 +112,7 @@ class CheckDetail(BaseModel):
     roll: int
     total: int
     dc: int
+    skill_name: Optional[str] = None  # For skill checks, e.g., "athletics", "perception"
 
 
 class DamageDetail(BaseModel):

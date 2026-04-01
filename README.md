@@ -65,7 +65,7 @@ AI 跑团项目工作区。这个目录承载产品设计、规则研究与产�
 
 本项目使用独立 git 仓库管理，并推荐在进入并行开发阶段后使用 `git worktree`。
 
-- 主工作目录保留为“整合区”，用于查看全局状态、做最终整合和提交。
+- 主工作目录保留为"整合区"，用于查看全局状态、做最终整合和提交。
 - 每个并行 agent 使用一个独立 worktree，避免直接共用同一目录。
 - worktree 建议放在仓库外的兄弟目录中，例如 `../幻界2.0-worktrees/`。
 - 文档和代码都可以使用 worktree，但共享文件仍应尽量由单一 agent 整合回主线。
@@ -110,6 +110,76 @@ ForgeFlow 目录：
 - 运行态任务状态与日志
 - admin dashboard
 - 项目 worktree 管理
+
+## 部署与访问
+
+### 公开访问入口（示例）
+
+> 以下链接为占位示例，实际部署后请替换为真实地址。
+
+- **前端（GitHub Pages）**：`https://<your-username>.github.io/<repo-name>/`
+- **后端（健康检查）**：`https://<your-backend-domain>/health`
+- **后端 API 文档**：`https://<your-backend-domain>/docs`
+
+### 前端部署到 GitHub Pages
+
+1. 在仓库 **Settings > Pages** 中启用 GitHub Pages（来源选 GitHub Actions）。
+2. 在仓库 **Settings > Secrets and variables > Actions** 中添加 `VITE_API_BASE_URL`（你的云后端 HTTPS 地址）。
+3. 推送 `main` 分支后，`.github/workflows/deploy-frontend-pages.yml` 会自动构建并发布。
+
+手动本地构建：
+
+```bash
+cd app/frontend
+npm ci
+VITE_API_BASE_URL=https://your-backend.example.com npm run build
+```
+
+构建产物在 `app/frontend/dist`，可直接上传到任意静态托管服务。
+
+### 后端部署到云平台
+
+后端提供 `Dockerfile` 和一键部署脚本，支持 Railway、Fly.io 等容器平台。
+
+#### Railway
+
+```bash
+cd app/backend
+./scripts/deploy-railway.sh
+```
+
+部署后在 Railway Dashboard 设置环境变量：
+- `KIMI_API_KEY`（或 `OPENAI_API_KEY`）
+- `CORS_ALLOW_ORIGINS=https://<your-username>.github.io`
+
+#### Fly.io
+
+```bash
+cd app/backend
+flyctl apps create huanjie-backend   # 仅首次
+./scripts/deploy-fly.sh
+```
+
+通过 `flyctl secrets set` 配置敏感变量：
+
+```bash
+flyctl secrets set KIMI_API_KEY=xxx
+flyctl secrets set CORS_ALLOW_ORIGINS=https://<your-username>.github.io
+```
+
+### 生产环境变量说明
+
+| 变量 | 说明 | 示例 |
+|------|------|------|
+| `VITE_API_BASE_URL` | 前端构建时注入的后端根地址 | `https://huanjie-backend.fly.dev` |
+| `VITE_BASE_PATH` | 前端静态资源基础路径（GitHub Pages 需设） | `/<repo-name>/` |
+| `PORT` | 后端监听端口 | `8000` |
+| `HOST` | 后端监听地址 | `0.0.0.0` |
+| `CORS_ALLOW_ORIGINS` | 允许跨域的前端地址 | `https://xxx.github.io` |
+| `KIMI_API_KEY` | Kimi API Key | — |
+| `OPENAI_API_KEY` | OpenAI API Key | — |
+
+后端默认已放行 `https://*.github.io`，若使用其他前端域名，请通过 `CORS_ALLOW_ORIGINS` 显式配置。
 
 ## 当前阶段建议
 

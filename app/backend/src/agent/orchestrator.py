@@ -134,6 +134,12 @@ class GMAgent:
         if req.action_type == ActionType.SKILL_CHECK or req.skill is not None:
             return self._resolve_skill_check(req, actor)
         
+        # Check for equipment actions before generic action resolution
+        from ..action_handler import handle_equipment_action
+        equipment_response = handle_equipment_action(req, actor)
+        if equipment_response is not None:
+            return equipment_response
+        
         # Check for NPC interaction before generic action resolution
         scene = get_scene()
         if is_npc_interaction(req.intent, req.approach):

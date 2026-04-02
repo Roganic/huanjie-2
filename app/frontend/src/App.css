@@ -3669,60 +3669,200 @@
   cursor: not-allowed;
 }
 
-/* ---- Spell Slots ---- */
+/* ---- XP Progress Bar ---- */
 
-.spell-slots {
+.xp-section {
   margin-top: 12px;
-  padding: 10px 12px;
-  background: linear-gradient(135deg, rgba(138, 43, 226, 0.1), rgba(75, 0, 130, 0.1));
-  border: 1px solid rgba(138, 43, 226, 0.3);
-  border-radius: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 
-.spell-slots-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #8a2be2;
+.xp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 6px;
 }
 
-.spell-slots-list {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.spell-slot-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: rgba(138, 43, 226, 0.15);
-  border-radius: 6px;
-  font-size: 12px;
-}
-
-.spell-slot-level {
-  color: var(--text-secondary);
+.xp-label {
   font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.spell-slot-count {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+.xp-values {
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text-secondary);
 }
 
-.spell-slot-current {
+.xp-current {
+  color: #c7a86d;
   font-weight: 600;
-  color: #8a2be2;
 }
 
-.spell-slot-separator {
+.xp-separator {
   color: var(--text-muted);
   margin: 0 2px;
 }
 
-.spell-slot-max {
+.xp-needed {
+  color: var(--text-muted);
+}
+
+.xp-bar-container {
+  height: 6px;
+  background: var(--hp-bg);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.xp-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #8b7355, #c7a86d);
+  border-radius: 3px;
+  transition: width var(--transition-normal);
+  position: relative;
+}
+
+.xp-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.2), transparent);
+  border-radius: 3px 3px 0 0;
+}
+
+.xp-level-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(199, 168, 109, 0.15);
+  border: 1px solid rgba(199, 168, 109, 0.4);
+  border-radius: 12px;
+  color: #c7a86d;
+  font-weight: 600;
+}
+
+.level-up-notification {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  background: linear-gradient(135deg, rgba(199, 168, 109, 0.2), rgba(199, 168, 109, 0.05));
+  border: 1px solid #c7a86d;
+  border-radius: 10px;
+  animation: levelUpPulse 2s ease-in-out infinite;
+}
+
+.level-up-icon {
+  font-size: 24px;
+}
+
+.level-up-content {
+  flex: 1;
+}
+
+.level-up-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #c7a86d;
+  margin-bottom: 2px;
+}
+
+.level-up-details {
+  font-size: 12px;
   color: var(--text-secondary);
+}
+
+@keyframes levelUpPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(199, 168, 109, 0.4); }
+  50% { box-shadow: 0 0 20px 4px rgba(199, 168, 109, 0.15); }
+}
+
+/* Mini character card XP display */
+.mini-xp-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #c7a86d;
+}
+
+.mini-xp-icon {
+  font-size: 9px;
+}
+
+.xp-gained-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(199, 168, 109, 0.2);
+  border: 1px solid #c7a86d;
+  border-radius: 12px;
+  color: #c7a86d;
+  font-size: 12px;
+  font-weight: 600;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.xp-gained-badge::before {
+  content: '✨';
+}
+
+/* ---- Equipped Items Display ---- */
+
+.equipped-items {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.equipped-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.equipped-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.equipped-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.equipped-item:hover {
+  border-color: var(--border-light);
+  background: var(--bg-panel-hover);
+}
+
+.equipped-icon {
+  font-size: 12px;
+}
+
+.equipped-name {
+  font-weight: 500;
 }

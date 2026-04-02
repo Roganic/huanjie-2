@@ -1,306 +1,271 @@
-"""Action handler for player movement and scene transitions.
+"""Action handler for equipment and special actions.
 
-This module handles movement actions, including:
-- Parsing movement intents
-- Checking combat state restrictions
-- Resolving scene transitions
-- Random encounter checks
+This module handles special player actions that modify game state directly,
+such as equipping items from inventory.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
 from typing import Optional
 
-from .models.state import AdventurePhase
-from .scene_map import (
-    get_scene_node,
-    get_connected_scene,
-    parse_movement_intent,
-    check_encounter_on_move,
-    SCENE_NAME_ALIASES,
-)
-from .state import (
-    get_game_phase,
-    switch_scene,
-    set_combat_scene,
-    get_scene,
-    get_enemy,
-    _get_session,
-    _resolve_session_id,
-)
+from .models.action import ActionRequest, ActionResponse, Outcome, ResolutionType
 
 
-@dataclass
-class MovementResult:
-    """Result of a movement action."""
-    success: bool
-    message: str
-    from_scene_id: str
-    to_scene_id: Optional[str] = None
-    triggered_combat: bool = False
-    enemy_id: Optional[str] = None
-    error_code: Optional[str] = None  # "in_combat", "invalid_direction", "same_scene", etc.
-
-
-# Movement keywords for intent detection
-MOVEMENT_VERBS = [
-    "去", "前往", "走向", "进入", "到", "向", "走", "移动", "回去", "返回",
-    "go", "move", "walk", "head", "enter", "leave", "exit", "return", "back",
-    "north", "south", "east", "west", "up", "down",
-    "北", "南", "东", "西", "上", "下",
-]
-
-# Combat-related keywords that should NOT be treated as movement
-COMBAT_KEYWORDS = [
-    "攻击", "战斗", "打", "杀", "砍", "刺", "射击", "开战", "战斗",
-    "attack", "fight", "combat", "hit", "strike", "stab", "slash", "shoot",
-    "kill", "defeat", "engage", "ambush", "assault", "battle",
-]
-
-
-def is_movement_action(intent: str, approach: str = "") -> bool:
-    """Check if the action intent is a movement action.
+def is_equipment_action(intent: str, approach: str) -> bool:
+    """Check if the action is an equipment-related action.
     
     Args:
         intent: The action intent
-        approach: The approach description
+        approach: The action approach
         
     Returns:
-        True if this appears to be a movement action
+        True if this is an equipment action
     """
     text = f"{intent} {approach}".lower()
     
-    # Check for combat keywords first - if present, it's not movement
-    for keyword in COMBAT_KEYWORDS:
-        if keyword.lower() in text:
-            return False
+    # Equipment keywords in Chinese and English
+    equip_keywords = [
+        "装备", "equip", "穿戴", "wear", "拿起", "hold", "使用武器", "use weapon",
+        "卸下", "unequip", "remove", "脱下", "take off",
+    ]
     
-    # Check for movement verbs
-    for verb in MOVEMENT_VERBS:
-        if verb.lower() in text:
-            # Additional check: make sure it's not part of another word
-            # For Chinese, we can do direct containment
-            # For English, we'd need word boundary checks
-            if len(verb) > 2 or any(c in text for c in [" ", verb]):
-                return True
-    
-    # Check for scene name aliases
-    for alias in SCENE_NAME_ALIASES.keys():
-        if alias.lower() in text:
+    for keyword in equip_keywords:
+        if keyword in text:
             return True
     
     return False
 
 
-def can_move_in_current_state(session_id: Optional[str] = None) -> tuple[bool, Optional[str]]:
-    """Check if the player can move in their current state.
+def parse_equipment_action(intent: str, approach: str) -> tuple[str, str]:
+    """Parse an equipment action to determine the operation and item name.
     
     Args:
-        session_id: The session ID
+        intent: The action intent
+        approach: The action approach
         
     Returns:
-        Tuple of (can_move, error_message)
+        A tuple of (operation, item_name) where operation is "equip" or "unequip"
     """
-    game_phase = get_game_phase(session_id)
+    text = f"{intent} {approach}".lower()
     
-    if game_phase == AdventurePhase.COMBAT:
-        return False, "你正处于战斗中，无法移动！先结束战斗或击败所有敌人。"
+    # Check for unequip keywords
+    unequip_keywords = ["卸下", "unequip", "remove", "脱下", "take off"]
+    is_unequip = any(kw in text for kw in unequip_keywords)
     
-    return True, None
+    operation = "unequip" if is_unequip else "equip"
+    
+    # Try to extract item name
+    # Patterns:
+    # - "装备长剑" -> extract "长剑"
+    # - "equip longsword" -> extract "longsword"
+    # - "装备 长剑" -> extract "长剑"
+    
+    item_name = None
+    
+    # Pattern 1: 装备 + item (Chinese)
+    chinese_equip_match = re.search(r'装备\s*(\S+)', intent)
+    if chinese_equip_match:
+        item_name = chinese_equip_match.group(1).strip()
+    
+    # Pattern 2: equip + item (English)
+    if item_name is None:
+        english_equip_match = re.search(r'equip\s*(\S+)', intent, re.IGNORECASE)
+        if english_equip_match:
+            item_name = english_equip_match.group(1).strip()
+    
+    # Pattern 3: Check approach for item name if intent didn't have it
+    if item_name is None:
+        # Try "装备" + item in approach
+        chinese_equip_match = re.search(r'装备\s*(\S+)', approach)
+        if chinese_equip_match:
+            item_name = chinese_equip_match.group(1).strip()
+    
+    if item_name is None:
+        # Try "equip" + item in approach
+        english_equip_match = re.search(r'equip\s*(\S+)', approach, re.IGNORECASE)
+        if english_equip_match:
+            item_name = english_equip_match.group(1).strip()
+    
+    # For unequip, also check for slot names
+    if operation == "unequip" and item_name is None:
+        # Check for slot names
+        if any(kw in text for kw in ["武器", "weapon", "剑", "sword"]):
+            item_name = "weapon"
+        elif any(kw in text for kw in ["护甲", "armor", "甲", "衣服", "clothes"]):
+            item_name = "armor"
+    
+    return operation, item_name
 
 
-def handle_movement(
-    intent: str,
-    approach: str = "",
-    session_id: Optional[str] = None
-) -> MovementResult:
-    """Handle a movement action.
+def handle_equipment_action(
+    req: ActionRequest,
+    actor,
+) -> Optional[ActionResponse]:
+    """Handle an equipment action.
     
     Args:
-        intent: The movement intent (e.g., "向北走", "去酒馆")
-        approach: Optional approach description
-        session_id: The session ID
+        req: The action request
+        actor: The actor performing the action
         
     Returns:
-        MovementResult with outcome details
+        An ActionResponse if this was an equipment action, None otherwise
     """
-    # Check if we can move
-    can_move, error_msg = can_move_in_current_state(session_id)
-    if not can_move:
-        current_scene = get_scene(session_id)
-        return MovementResult(
-            success=False,
-            message=error_msg or "无法移动",
-            from_scene_id=current_scene.id,
-            error_code="in_combat"
+    from .state import equip_item_for_actor, unequip_item_from_actor
+    
+    if not is_equipment_action(req.intent, req.approach):
+        return None
+    
+    operation, item_name = parse_equipment_action(req.intent, req.approach)
+    
+    if item_name is None:
+        # Could not parse item name
+        return ActionResponse(
+            action_summary=f"{actor.name} attempts to {operation} an item",
+            resolution_type=ResolutionType.AUTO_SUCCESS,
+            outcome=Outcome.FAILURE,
+            effects=[],
+            narration=f"{actor.name} 想要{operation}一件物品，但没有指定是什么物品。",
+            scene_progression="请指定要装备的物品名称。",
+            gm_prompt="请提示玩家明确指定要装备的物品名称。",
         )
     
-    # Get current scene
-    current_scene = get_scene(session_id)
-    current_node = get_scene_node(current_scene.id)
-    
-    if not current_node:
-        return MovementResult(
-            success=False,
-            message=f"当前场景 {current_scene.name} 无法导航",
-            from_scene_id=current_scene.id,
-            error_code="no_nav_data"
-        )
-    
-    # Parse the movement intent
-    full_intent = f"{intent} {approach}".strip()
-    target_scene_id, direction_or_name = parse_movement_intent(full_intent)
-    
-    # If we got a direction, resolve it using current scene exits
-    if direction_or_name and not target_scene_id:
-        target_scene_id = get_connected_scene(current_scene.id, direction_or_name)
-        if not target_scene_id:
-            available_exits = current_node.get_exit_directions()
-            return MovementResult(
-                success=False,
-                message=f"无法向'{direction_or_name}'移动。可用出口: {', '.join(available_exits) or '无'}",
-                from_scene_id=current_scene.id,
-                error_code="invalid_direction"
+    if operation == "equip":
+        # Try to equip the item
+        result = equip_item_for_actor(item_name)
+        
+        if result["success"]:
+            equipped_item = result["item"]
+            previous_item = result.get("previous_item")
+            new_ac = result["ac"]
+            
+            # Build narration
+            narration = f"{actor.name} 装备上了 {equipped_item['name']}。"
+            if previous_item:
+                narration += f" (替换了 {previous_item['name']})"
+            
+            # Update actor's equipped info for the response
+            from .equipment import format_equipment_for_response
+            from .state import get_actor
+            updated_actor = get_actor()
+            equipped_data = format_equipment_for_response(updated_actor)
+            
+            return ActionResponse(
+                action_summary=f"{actor.name} equips {equipped_item['name']}",
+                resolution_type=ResolutionType.AUTO_SUCCESS,
+                outcome=Outcome.SUCCESS,
+                effects=[],
+                narration=narration,
+                scene_progression=f"{actor.name} 的护甲等级现在是 {new_ac}。",
+                gm_prompt=f"{actor.name} 已装备 {equipped_item['name']}。当前AC为{new_ac}。",
+            )
+        else:
+            # Failed to equip
+            error_msg = result.get("error", "无法装备该物品")
+            return ActionResponse(
+                action_summary=f"{actor.name} tries to equip {item_name}",
+                resolution_type=ResolutionType.AUTO_SUCCESS,
+                outcome=Outcome.FAILURE,
+                effects=[],
+                narration=f"{actor.name} 尝试装备 {item_name}，但失败了：{error_msg}",
+                scene_progression="装备失败。",
+                gm_prompt=f"装备失败：{error_msg}",
             )
     
-    # If we got a scene ID, validate it's connected
-    if target_scene_id:
-        # Check if this scene is directly reachable
-        connected_scene = get_connected_scene(current_scene.id, target_scene_id)
+    else:  # operation == "unequip"
+        # Determine slot from item name or use as slot directly
+        slot = item_name if item_name in ("weapon", "armor") else None
         
-        # Also check if the target_scene_id is actually a scene name/alias that resolves
-        if not connected_scene:
-            # Try to find an exit that leads to this scene
-            for exit_info in current_node.exits:
-                if exit_info.target_scene_id == target_scene_id:
-                    connected_scene = target_scene_id
-                    break
+        if slot is None:
+            # Try to infer slot from item name
+            if item_name in ["武器", "weapon", "剑", "sword", "刀", "axe", "斧"]:
+                slot = "weapon"
+            elif item_name in ["护甲", "armor", "甲", "衣服", "clothes", "铠甲"]:
+                slot = "armor"
         
-        if not connected_scene and target_scene_id != current_scene.id:
-            # Scene exists but isn't directly connected
-            target_node = get_scene_node(target_scene_id)
-            if target_node:
-                return MovementResult(
-                    success=False,
-                    message=f"无法直接前往{target_node.name}。请检查可用出口。",
-                    from_scene_id=current_scene.id,
-                    error_code="not_connected"
-                )
-        
-        if target_scene_id == current_scene.id:
-            return MovementResult(
-                success=False,
-                message=f"你已经在了{current_node.name}。",
-                from_scene_id=current_scene.id,
-                error_code="same_scene"
+        if slot is None:
+            return ActionResponse(
+                action_summary=f"{actor.name} tries to unequip {item_name}",
+                resolution_type=ResolutionType.AUTO_SUCCESS,
+                outcome=Outcome.FAILURE,
+                effects=[],
+                narration=f"{actor.name} 想要卸下 {item_name}，但请指定是武器(weapon)还是护甲(armor)。",
+                scene_progression="请指定要卸下的装备类型。",
+                gm_prompt="请提示玩家明确指定要卸下武器还是护甲。",
             )
         
-        # Perform the scene switch
-        switch_scene(target_scene_id, session_id)
+        result = unequip_item_from_actor(slot)
         
-        # Check for random encounter at destination
-        triggered_combat = False
-        enemy_id = None
-        encounter_triggered, encounter_enemy = check_encounter_on_move(
-            current_scene.id, target_scene_id
-        )
-        
-        if encounter_triggered:
-            triggered_combat = True
-            enemy_id = encounter_enemy
-            # Set combat scene
-            set_combat_scene(session_id)
-        
-        target_node = get_scene_node(target_scene_id)
-        target_name = target_node.name if target_node else target_scene_id
-        
-        message = f"你移动到了{target_name}。"
-        if triggered_combat:
-            message += f" {target_node.encounter_config.encounter_description if target_node else '遭遇敌人！'}"
-        
-        return MovementResult(
-            success=True,
-            message=message,
-            from_scene_id=current_scene.id,
-            to_scene_id=target_scene_id,
-            triggered_combat=triggered_combat,
-            enemy_id=enemy_id,
-        )
-    
-    # Could not parse movement intent
-    available_exits = current_node.get_exit_directions()
-    return MovementResult(
-        success=False,
-        message=f"无法理解移动意图'{intent}'。可用出口: {', '.join(available_exits) or '无'}",
-        from_scene_id=current_scene.id,
-        error_code="parse_error"
-    )
+        if result["success"]:
+            removed_item = result.get("removed_item")
+            new_ac = result["ac"]
+            
+            if removed_item:
+                narration = f"{actor.name} 卸下了 {removed_item['name']}。"
+            else:
+                narration = f"{actor.name} 没有装备该位置的物品。"
+            
+            return ActionResponse(
+                action_summary=f"{actor.name} unequips {slot}",
+                resolution_type=ResolutionType.AUTO_SUCCESS,
+                outcome=Outcome.SUCCESS,
+                effects=[],
+                narration=narration,
+                scene_progression=f"{actor.name} 的护甲等级现在是 {new_ac}。" if slot == "armor" else "装备已更新。",
+                gm_prompt=f"{actor.name} 已卸下装备。当前AC为{new_ac}。" if slot == "armor" else f"{actor.name} 已卸下武器。",
+            )
+        else:
+            error_msg = result.get("error", "无法卸下该物品")
+            return ActionResponse(
+                action_summary=f"{actor.name} tries to unequip {slot}",
+                resolution_type=ResolutionType.AUTO_SUCCESS,
+                outcome=Outcome.FAILURE,
+                effects=[],
+                narration=f"{actor.name} 尝试卸下装备，但失败了：{error_msg}",
+                scene_progression="卸下装备失败。",
+                gm_prompt=f"卸下装备失败：{error_msg}",
+            )
 
 
-def get_available_exits(session_id: Optional[str] = None) -> list[dict]:
-    """Get available exits from current scene.
+def get_equipped_weapon_info(actor) -> Optional[dict]:
+    """Get information about the actor's equipped weapon.
     
     Args:
-        session_id: The session ID
+        actor: The actor to check
         
     Returns:
-        List of exit info dictionaries
+        A dictionary with weapon info, or None if no weapon is equipped
     """
-    current_scene = get_scene(session_id)
-    node = get_scene_node(current_scene.id)
+    from .equipment import get_equipped_weapon, get_weapon_damage_dice, get_weapon_attack_ability
     
-    if not node:
-        return []
+    weapon = get_equipped_weapon(actor)
+    if weapon is None:
+        return None
     
-    exits = []
-    for exit_info in node.exits:
-        target_node = get_scene_node(exit_info.target_scene_id)
-        exits.append({
-            "direction": exit_info.direction,
-            "target_scene_id": exit_info.target_scene_id,
-            "target_name": target_node.name if target_node else exit_info.target_scene_id,
-            "description": exit_info.description,
-        })
-    
-    return exits
-
-
-def get_current_scene_info(session_id: Optional[str] = None) -> dict:
-    """Get comprehensive current scene information.
-    
-    Args:
-        session_id: The session ID
-        
-    Returns:
-        Dictionary with scene info including exits, npcs, encounter rate
-    """
-    current_scene = get_scene(session_id)
-    node = get_scene_node(current_scene.id)
-    game_phase = get_game_phase(session_id)
-    
-    result = {
-        "scene_id": current_scene.id,
-        "name": current_scene.name,
-        "description": current_scene.description,
-        "exits": [],
-        "npcs": [npc.model_dump(mode="json") for npc in current_scene.npcs],
-        "can_move": game_phase != AdventurePhase.COMBAT,
-        "game_phase": game_phase.value,
-        "encounter_rate": 0.0,
+    return {
+        "name": weapon.name,
+        "damage_dice": get_weapon_damage_dice(weapon),
+        "attack_ability": get_weapon_attack_ability(weapon),
     }
+
+
+def get_equipped_armor_info(actor) -> Optional[dict]:
+    """Get information about the actor's equipped armor.
     
-    if node:
-        result["exits"] = [
-            {
-                "direction": exit_info.direction,
-                "target_scene_id": exit_info.target_scene_id,
-                "target_name": get_scene_node(exit_info.target_scene_id).name if get_scene_node(exit_info.target_scene_id) else exit_info.target_scene_id,
-                "description": exit_info.description,
-            }
-            for exit_info in node.exits
-        ]
-        result["encounter_rate"] = node.encounter_config.encounter_rate
-        result["available_actions"] = node.available_actions
+    Args:
+        actor: The actor to check
+        
+    Returns:
+        A dictionary with armor info, or None if no armor is equipped
+    """
+    from .equipment import get_equipped_armor
     
-    return result
+    armor = get_equipped_armor(actor)
+    if armor is None:
+        return None
+    
+    return {
+        "name": armor.name,
+        "base_ac": armor.base_ac,
+        "ac": actor.ac,
+    }

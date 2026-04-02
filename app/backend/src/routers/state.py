@@ -9,6 +9,7 @@ from ..state import (
     create_session,
     get_action_history,
     get_bootstrap_state,
+    get_map_state,
     get_narrative_history,
     require_bootstrap_state,
     reset_current_session,
@@ -128,6 +129,22 @@ async def session_reset(request: Request):
         return result
     finally:
         reset_current_session(token)
+
+
+@router.get("/map")
+async def map_endpoint(request: Request):
+    """Return the full map topology, current node, and explored nodes."""
+    session_id = _request_session_id(request)
+    if session_id is None:
+        from ..state import DEFAULT_SESSION_ID
+        session_id = DEFAULT_SESSION_ID
+
+    try:
+        require_bootstrap_state(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
+
+    return get_map_state(session_id)
 
 
 @router.get("/memory")

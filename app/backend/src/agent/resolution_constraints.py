@@ -65,8 +65,13 @@ DEFEAT_INDICATORS = (
     " slain",
     " kills ",
     " killed ",
+    " killing",
+    " kill ",
     " dead",
     " collapses lifeless",
+    " dies",
+    " dying",
+    " lifeless",
 )
 
 # Patterns for detecting unauthorized numeric declarations in narrative
@@ -151,11 +156,13 @@ UNAUTHORIZED_PLOT_ADVANCE_PATTERNS = [
 # Patterns for detecting unauthorized state changes not from rule engine
 UNAUTHORIZED_STATE_CHANGE_PATTERNS = [
     # Chinese unauthorized state changes
-    re.compile(r"(?:获得|得到|失去)\s*(?:状态|condition|buff|debuff)", re.IGNORECASE),
-    re.compile(r"(?:状态|condition)\s*(?:变为|改成|设置为)", re.IGNORECASE),
+    re.compile(r"(?:获得|得到|失去)\s*(?:了)?\s*(?:\w+)?\s*(?:状态|condition|buff|debuff)"),
+    re.compile(r"(?:状态|condition)\s*(?:变为|改成|设置为)"),
+    re.compile(r"(?:获得|得到)\s*(?:了)?\s*(?:中毒|恐惧|麻痹|眩晕|昏迷| restrained|prone|poisoned|frightened)"),
     # English unauthorized state changes
-    re.compile(r"(?:gain|lose|receive)\s+(?:the\s+)?(?:\w+)\s+(?:condition|status|state)", re.IGNORECASE),
+    re.compile(r"(?:gain|lose|receive)\s+(?:the\s+)?\w+\s+(?:condition|status|state)", re.IGNORECASE),
     re.compile(r"(?:condition|status|state)\s+(?:becomes?|changes?\s+to|is\s+set\s+to)", re.IGNORECASE),
+    re.compile(r"(?:gain|receive|afflicted\s+by)\s+(?:the\s+)?(?:poisoned|frightened|paralyzed|stunned|restrained|prone)", re.IGNORECASE),
 ]
 
 ALL_UNAUTHORIZED_PATTERNS = (

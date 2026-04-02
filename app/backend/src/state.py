@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field
 from .models.action import Effect
 from .scene import SceneData, get_default_exploration_scene, get_scene_by_id
 from .models.state import (
+    NPC,
+    NPCType,
     AbilityScores,
     Actor,
     AdventurePhase,
@@ -128,23 +130,46 @@ _CLASS_SKILL_PROFICIENCIES: dict[CharacterClass, set[str]] = {
     CharacterClass.ROGUE: {"acrobatics", "sleight_of_hand", "stealth", "deception", "persuasion"},
 }
 
-_ENEMY_INIT = dict(
-    id="goblin-01",
-    name="哥布林斥候",
-    abilities=AbilityScores(**{
-        "str": 8,
-        "dex": 14,
-        "con": 10,
-        "int": 10,
-        "wis": 8,
-        "cha": 8,
-    }),
-    proficiency_bonus=2,
-    hp=7,
-    hp_max=7,
-    ac=12,
-    description="一只瘦小的哥布林，手持锈迹斑斑的匕首。",
-)
+def _npc_to_actor(npc: NPC) -> Actor:
+    """Convert an NPC to an Actor for combat."""
+    return Actor(
+        id=npc.id,
+        name=npc.name,
+        abilities=AbilityScores(**{
+            "str": npc.attributes.get("str", 10),
+            "dex": npc.attributes.get("dex", 10),
+            "con": npc.attributes.get("con", 10),
+            "int": npc.attributes.get("int", 10),
+            "wis": npc.attributes.get("wis", 10),
+            "cha": npc.attributes.get("cha", 10),
+        }),
+        proficiency_bonus=2,
+        hp=npc.hp,
+        hp_max=npc.hp_max,
+        ac=npc.ac,
+        description=npc.description,
+    )
+
+
+def _get_default_enemy() -> Actor:
+    """Get the default fallback enemy actor."""
+    from .scene import FOREST_PATH_SCENE
+    for npc in FOREST_PATH_SCENE.npcs:
+        if npc.type == NPCType.HOSTILE:
+            return _npc_to_actor(npc)
+    return Actor(
+        id="goblin-01",
+        name="哥布林斥候",
+        abilities=AbilityScores(**{
+            "str": 8, "dex": 14, "con": 10, "int": 10, "wis": 8, "cha": 8,
+        }),
+        proficiency_bonus=2,
+        hp=7,
+        hp_max=7,
+        ac=12,
+        description="一只瘦小的哥布林，手持锈迹斑斑的匕首。",
+    )
+
 
 _COMBAT_SCENE_INIT = dict(
     id="combat-01",
@@ -173,7 +198,7 @@ class SessionData(BaseModel):
     phase: GamePhase = GamePhase.CHARACTER_CREATION
     game_phase: AdventurePhase = AdventurePhase.EXPLORATION
     actor: Actor | None = None
-    enemy: Actor = Field(default_factory=lambda: Actor(**_ENEMY_INIT))
+    enemy: Actor = Field(default_factory=_get_default_enemy)
     scene: Scene = Field(default_factory=lambda: Scene(**_CHARACTER_CREATION_SCENE_INIT))
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
     scene_history: list[SceneHistoryEntry] = Field(default_factory=list)
@@ -303,18 +328,22 @@ def set_combat_scene(session_id: str | None = None) -> None:
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:
         session = _get_session(resolved_session_id, create_if_missing=True)
-        actors = ["goblin-01"]
-        if session.actor is not None:
-            actors.insert(0, session.actor.id)
-        # Use combat scene from scene system with NPCs
-        from .scene import COMBAT_ENCOUNTER_SCENE
-        session.scene = Scene(
-            id=COMBAT_ENCOUNTER_SCENE.id,
-            name=COMBAT_ENCOUNTER_SCENE.name,
-            description=COMBAT_ENCOUNTER_SCENE.description,
-            actors=actors,
-            npcs=COMBAT_ENCOUNTER_SCENE.npcs,
-        )
+        # Use current scene's hostile NPCs as enemies
+        hostile_npcs = [npc for npc in session.scene.npcs if npc.type == NPCType.HOSTILE]
+        if not hostile_npcs:
+            # Fallback to forest path scene if current scene has no hostiles
+            from .scene import FOREST_PATH_SCENE
+            hostile_npcs = [npc for npc in FOREST_PATH_SCENE.npcs if npc.type == NPCType.HOSTILE]
+            session.scene = Scene(
+                id=FOREST_PATH_SCENE.id,
+                name=FOREST_PATH_SCENE.name,
+                description=FOREST_PATH_SCENE.description,
+                actors=[session.actor.id] if session.actor else [],
+                npcs=FOREST_PATH_SCENE.npcs,
+            )
+        # Set first hostile NPC as the primary enemy for backward compatibility
+        if hostile_npcs:
+            session.enemy = _npc_to_actor(hostile_npcs[0])
         session.game_phase = AdventurePhase.COMBAT
         _save_session(session)
 
@@ -514,7 +543,9 @@ def create_character(
             actors=[session.actor.id],
             npcs=scene_data.npcs,
         )
-        session.enemy = Actor(**_ENEMY_INIT)
+        # Set enemy from current scene's first hostile NPC
+        hostile_npcs = [npc for npc in scene_data.npcs if npc.type == NPCType.HOSTILE]
+        session.enemy = _npc_to_actor(hostile_npcs[0]) if hostile_npcs else _get_default_enemy()
         session.narrative_history = []
         session.scene_history = []
         _save_session(session)
@@ -804,3 +835,74 @@ def _delete_session(session_id: str) -> None:
 
 def _is_expired(session: SessionData) -> bool:
     return (time.time() - session.updated_at) > SESSION_TTL_SECONDS
+
+
+# ---------------------------------------------------------------------------
+# Combat state helpers (agent/orchestrator compatibility)
+# ---------------------------------------------------------------------------
+
+class CombatSessionState:
+    """Simple wrapper around CombatState for agent compatibility."""
+
+    def __init__(self, combat_state: "CombatState | None"):
+        self._state = combat_state
+
+    @property
+    def is_active(self) -> bool:
+        from combat.models import CombatOutcome
+        return self._state is not None and self._state.outcome == CombatOutcome.ONGOING
+
+    @property
+    def round_number(self) -> int:
+        return self._state.round_number if self._state else 0
+
+    @property
+    def turn_order(self) -> list[str]:
+        return self._state.turn_order if self._state else []
+
+    @property
+    def combatant_names(self) -> dict[str, str]:
+        if not self._state:
+            return {}
+        return {c.id: c.name for c in self._state.combatants}
+
+
+def get_combat_state(session_id: str | None = None) -> CombatSessionState:
+    from combat import load_combat_state
+    resolved = _resolve_session_id(session_id)
+    cs = load_combat_state(resolved)
+    return CombatSessionState(cs)
+
+
+def start_combat_session(session_id: str | None = None) -> None:
+    """No-op placeholder; combat state is created in the combat start endpoint."""
+    pass
+
+
+def end_combat_session(reason: str | None = None, session_id: str | None = None) -> None:
+    from combat import clear_combat_state
+    resolved = _resolve_session_id(session_id)
+    clear_combat_state(resolved)
+
+
+def update_combatant_hp(combatant_id: str, hp: int, session_id: str | None = None) -> None:
+    from combat import load_combat_state, save_combat_state
+    resolved = _resolve_session_id(session_id)
+    cs = load_combat_state(resolved)
+    if cs is None:
+        return
+    for c in cs.combatants:
+        if c.id == combatant_id:
+            c.hp = hp
+            break
+    save_combat_state(cs)
+
+
+def advance_combat_round(session_id: str | None = None) -> None:
+    from combat import next_turn, load_combat_state, save_combat_state
+    resolved = _resolve_session_id(session_id)
+    cs = load_combat_state(resolved)
+    if cs is None:
+        return
+    next_turn(cs)
+    save_combat_state(cs)

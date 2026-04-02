@@ -42,6 +42,10 @@ TAVERN_KEEPER = NPC(
     description="灯笼酒馆的老板，一位白发苍苍的老兵，瞎了一只眼但笑容温暖。",
     race="人类",
     occupation="酒馆老板",
+    hp=12,
+    hp_max=12,
+    ac=14,
+    attributes={"str": 14, "dex": 12, "con": 14, "int": 10, "wis": 12, "cha": 12},
 )
 
 TAVERN_BARD = NPC(
@@ -51,6 +55,10 @@ TAVERN_BARD = NPC(
     description="在角落演奏竖琴的吟游诗人，据说知道很多古老传说。",
     race="精灵",
     occupation="吟游诗人",
+    hp=8,
+    hp_max=8,
+    ac=12,
+    attributes={"str": 8, "dex": 14, "con": 10, "int": 12, "wis": 12, "cha": 16},
 )
 
 SUSPICIOUS_MERCHANT = NPC(
@@ -60,6 +68,10 @@ SUSPICIOUS_MERCHANT = NPC(
     description="独自坐在阴影中的神秘商人，时不时打量着进出的客人。",
     race="未知",
     occupation="商人",
+    hp=10,
+    hp_max=10,
+    ac=13,
+    attributes={"str": 10, "dex": 14, "con": 12, "int": 14, "wis": 12, "cha": 12},
 )
 
 # Dungeon entrance NPCs
@@ -70,6 +82,10 @@ WOUNDED_ADVENTURER = NPC(
     description="从地下城逃出来的受伤冒险者，神情惊恐。",
     race="矮人",
     occupation="冒险者",
+    hp=6,
+    hp_max=10,
+    ac=15,
+    attributes={"str": 14, "dex": 10, "con": 14, "int": 8, "wis": 10, "cha": 8},
 )
 
 GUARD_CORPSE = NPC(
@@ -79,9 +95,13 @@ GUARD_CORPSE = NPC(
     description="倒在地下城入口旁的石像守卫，身上布满了战斗的痕迹。",
     race="构造体",
     occupation="守卫",
+    hp=0,
+    hp_max=15,
+    ac=16,
+    attributes={"str": 16, "dex": 8, "con": 16, "int": 3, "wis": 10, "cha": 1},
 )
 
-# Combat encounter NPCs (enemies)
+# Forest path / Combat encounter NPCs (enemies)
 GOBLIN_SCOUT = NPC(
     id="goblin-01",
     name="哥布林斥候",
@@ -89,6 +109,10 @@ GOBLIN_SCOUT = NPC(
     description="一只瘦小的哥布林，手持锈迹斑斑的匕首，眼中闪烁着贪婪的光芒。",
     race="哥布林",
     occupation="斥候",
+    hp=7,
+    hp_max=7,
+    ac=12,
+    attributes={"str": 8, "dex": 14, "con": 10, "int": 10, "wis": 8, "cha": 8},
 )
 
 GOBLIN_SHAMAN = NPC(
@@ -98,6 +122,10 @@ GOBLIN_SHAMAN = NPC(
     description="头戴骨饰的哥布林施法者，正在低声念诵某种咒语。",
     race="哥布林",
     occupation="萨满",
+    hp=9,
+    hp_max=9,
+    ac=13,
+    attributes={"str": 8, "dex": 12, "con": 12, "int": 12, "wis": 14, "cha": 10},
 )
 
 WOLF_COMPANION = NPC(
@@ -107,6 +135,10 @@ WOLF_COMPANION = NPC(
     description="一只体型巨大的灰狼，獠牙外露，口水滴落在地上。",
     race="野兽",
     occupation="战斗伙伴",
+    hp=11,
+    hp_max=11,
+    ac=13,
+    attributes={"str": 14, "dex": 14, "con": 12, "int": 3, "wis": 12, "cha": 6},
 )
 
 # NPC collections by scene

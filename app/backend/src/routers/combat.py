@@ -26,8 +26,6 @@ from src.state import (
     _SESSION_LOCK,
     _get_session,
     _save_session,
-    _ADVENTURE_SCENE_INIT,
-    Scene,
 )
 
 router = APIRouter(prefix="/combat", tags=["combat"])
@@ -85,9 +83,17 @@ def _sync_hp_to_session(combat_state, session_id: str) -> None:
         if player is not None and session.actor is not None:
             session.actor = session.actor.model_copy(update={"hp": player.hp})
         for enemy in combat_state.get_enemies():
+            # Sync to scene NPCs
+            updated_npcs = []
+            for npc in session.scene.npcs:
+                if npc.id == enemy.id:
+                    updated_npcs.append(npc.model_copy(update={"hp": enemy.hp}))
+                else:
+                    updated_npcs.append(npc)
+            session.scene = session.scene.model_copy(update={"npcs": updated_npcs})
+            # Sync to primary enemy for backward compatibility
             if session.enemy.id == enemy.id:
                 session.enemy = session.enemy.model_copy(update={"hp": enemy.hp})
-                break
         _save_session(session)
 
 
@@ -127,7 +133,7 @@ def _run_enemy_turn(combat_state) -> dict | None:
 
 @router.post("/start")
 async def combat_start(request: Request):
-    """Initialize combat with current actor and enemy."""
+    """Initialize combat with current actor and scene hostile NPCs."""
     session_id = _resolve_session_id_or_404(request)
     token = set_current_session(session_id)
     try:
@@ -135,14 +141,32 @@ async def combat_start(request: Request):
         if actor is None:
             raise HTTPException(status_code=400, detail="No character found.")
 
-        enemy = get_enemy(session_id=session_id)
-        combatants = [
-            _actor_to_combatant(actor, CombatantType.PLAYER),
-            _actor_to_combatant(enemy, CombatantType.ENEMY),
-        ]
+        # Ensure combat scene is set so hostile NPCs are loaded
+        set_combat_scene(session_id=session_id)
+
+        session = _get_session(session_id, create_if_missing=False)
+        hostile_npcs = [npc for npc in session.scene.npcs if npc.type.value == "hostile"]
+        if not hostile_npcs:
+            # Fallback to single enemy
+            enemy = get_enemy(session_id=session_id)
+            hostile_npcs = [session.scene.npcs[0]] if session.scene.npcs else []
+
+        combatants = [_actor_to_combatant(actor, CombatantType.PLAYER)]
+        for npc in hostile_npcs:
+            combatants.append(Combatant(
+                id=npc.id,
+                name=npc.name,
+                type=CombatantType.ENEMY,
+                hp=npc.hp,
+                hp_max=npc.hp_max,
+                ac=npc.ac,
+                abilities=npc.attributes,
+                proficiency_bonus=2,
+                conditions=[],
+            ))
+
         combat_state = start_combat(session_id, combatants)
         save_combat_state(combat_state)
-        set_combat_scene(session_id=session_id)
 
         # If enemy wins initiative, run their turn immediately so it's player's turn
         enemy_start_action = None
@@ -317,10 +341,20 @@ async def combat_end(request: Request):
             _sync_hp_to_session(combat_state, session_id)
             clear_combat_state(session_id)
 
+        # Switch back to exploration phase - scene will be set appropriately
+        from ..scene import get_default_exploration_scene
         with _SESSION_LOCK:
             session = _get_session(session_id, create_if_missing=False)
             if session.actor is not None:
-                session.scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [session.actor.id]})
+                scene_data = get_default_exploration_scene()
+                from ..models.state import Scene
+                session.scene = Scene(
+                    id=scene_data.id,
+                    name=scene_data.name,
+                    description=scene_data.description,
+                    actors=[session.actor.id],
+                    npcs=scene_data.npcs,
+                )
             _save_session(session)
 
         return get_bootstrap_state(session_id=session_id)

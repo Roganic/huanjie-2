@@ -40,6 +40,37 @@ async def state(request: Request):
     return bootstrap
 
 
+@router.get("/scene")
+async def get_scene_info(request: Request):
+    """Return current scene information with NPCs."""
+    from ..state import get_scene
+    session_id = _request_session_id(request)
+    if session_id is None:
+        from ..state import DEFAULT_SESSION_ID
+        session_id = DEFAULT_SESSION_ID
+    try:
+        require_bootstrap_state(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
+    scene = get_scene(session_id)
+    return {
+        "scene_name": scene.name,
+        "description": scene.description,
+        "npcs": [
+            {
+                "id": npc.id,
+                "name": npc.name,
+                "type": npc.type.value,
+                "description": npc.description,
+                "hp": getattr(npc, "hp", None),
+                "ac": getattr(npc, "ac", None),
+                "attributes": getattr(npc, "attributes", None),
+            }
+            for npc in scene.npcs
+        ],
+    }
+
+
 @router.get("/state/bootstrap", response_model=BootstrapState)
 async def bootstrap(request: Request):
     """Return the current fixed actor and scene for client initialisation."""

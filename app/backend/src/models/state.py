@@ -239,6 +239,13 @@ class NPC(BaseModel):
     description: str = Field(default="", description="Brief description of the NPC")
     race: Optional[str] = Field(default=None, description="NPC race/species")
     occupation: Optional[str] = Field(default=None, description="NPC occupation or role")
+    hp: int = Field(default=7, description="Current HP")
+    hp_max: int = Field(default=7, description="Maximum HP")
+    ac: int = Field(default=12, description="Armor Class")
+    attributes: dict[str, int] = Field(
+        default_factory=dict,
+        description="Combat attributes: str, dex, con, int, wis, cha",
+    )
 
 
 class Scene(BaseModel):

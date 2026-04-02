@@ -9,7 +9,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from ..models.state import NPC, NPCType, SceneExit
+from ..models.state import NPC, NPCType, SceneExit, InventoryItem
 
 
 class SceneData(BaseModel):
@@ -36,6 +36,10 @@ class SceneData(BaseModel):
     exits: list[SceneExit] = Field(
         default_factory=list,
         description="Available exits from this scene with direction names"
+    )
+    loot_items: list[InventoryItem] = Field(
+        default_factory=list,
+        description="Items available to pick up in this scene"
     )
     
     model_config = {"populate_by_name": True}
@@ -103,6 +107,10 @@ VILLAGE_SQUARE_SCENE = SceneData(
         SceneExit(direction="酒馆", target_scene_id="tavern-01"),
         SceneExit(direction="森林入口", target_scene_id="dungeon-entrance-01"),
     ],
+    loot_items=[
+        InventoryItem(id="dagger", name="匕首", type="weapon", damage_dice="1d4", attack_ability="dex", description="一把锋利的匕首。"),
+        InventoryItem(id="leather", name="皮甲", type="armor", base_ac=11, add_dex_modifier=True, description="轻便的皮革护甲。"),
+    ],
 )
 
 # Scene 2: The Tavern (starting exploration scene)
@@ -139,6 +147,10 @@ TAVERN_SCENE = SceneData(
     exits=[
         SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
         SceneExit(direction="森林入口", target_scene_id="dungeon-entrance-01"),
+    ],
+    loot_items=[
+        InventoryItem(id="shortsword", name="短剑", type="weapon", damage_dice="1d6", attack_ability="dex", description="一把轻便的短剑。"),
+        InventoryItem(id="robe", name="布袍", type="armor", base_ac=10, add_dex_modifier=True, description="普通的布制长袍。"),
     ],
 )
 

@@ -562,9 +562,20 @@ class GMAgent:
         action_summary = f"{actor.name} attacks {target.name} with {req.weapon or 'weapon'}"
         
         # Determine attack parameters
-        weapon = req.weapon or "longsword"
-        damage_dice = req.damage_dice or self._get_weapon_damage(weapon)
-        ability = req.ability or self._infer_attack_ability(weapon)
+        # Priority: 1. Request override, 2. Equipped weapon, 3. Unarmed fallback
+        if req.weapon:
+            weapon = req.weapon
+            damage_dice = req.damage_dice or self._get_weapon_damage(weapon)
+            ability = req.ability or self._infer_attack_ability(weapon)
+        elif actor.equipped and actor.equipped.weapon:
+            equipped_weapon = actor.equipped.weapon
+            weapon = equipped_weapon.name
+            damage_dice = req.damage_dice or equipped_weapon.damage_dice or self._get_weapon_damage(equipped_weapon.id)
+            ability = req.ability or (equipped_weapon.attack_ability or self._infer_attack_ability(weapon))
+        else:
+            weapon = "unarmed"
+            damage_dice = req.damage_dice or "1d4"
+            ability = req.ability or "str"
         modifier = actor.abilities.modifier(ability)
         prof = actor.proficiency_bonus
         advantage = req.advantage
@@ -1014,6 +1025,7 @@ class GMAgent:
             "halberd": "1d10",
             "rapier": "1d8",
             "scimitar": "1d6",
+            "unarmed": "1d4",
             "quarterstaff": "1d6",
             "handaxe": "1d6",
             "light_crossbow": "1d8",

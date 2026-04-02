@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "saved_at": "2026-04-02T11:53:56.866993",
-  "session_id": "852d85c727cc47c6b5421778a0a054f2",
+  "saved_at": "2026-04-02T13:09:55.058726",
+  "session_id": "9afbf27c705d44fc877f458e59cac76b",
   "phase": "adventure",
-  "game_phase": "exploration",
+  "game_phase": "combat",
   "character": {
     "id": "warrior-testhero",
     "name": "TestHero",
@@ -18,7 +18,7 @@
     },
     "proficiency_bonus": 2,
     "level": 1,
-    "hp": 11,
+    "hp": 12,
     "hp_max": 12,
     "ac": 16,
     "conditions": [],
@@ -196,10 +196,12 @@
     },
     "proficiency_bonus": 2,
     "level": 1,
-    "hp": 7,
+    "hp": 0,
     "hp_max": 7,
     "ac": 12,
-    "conditions": [],
+    "conditions": [
+      "defeated"
+    ],
     "description": "一只瘦小的哥布林，手持锈迹斑斑的匕首。",
     "skills": [],
     "inventory": [],
@@ -209,80 +211,161 @@
     }
   },
   "scene": {
-    "id": "tavern-01",
-    "name": "锈迹斑斑的灯笼酒馆",
-    "description": "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒，角落里传来轻柔的竖琴声。酒保老马库斯在吧台后面擦拭着酒杯，不时用独眼打量着客人。",
+    "id": "combat-encounter-01",
+    "name": "地下城通道",
+    "description": "狭窄的地下通道，墙壁上长满了发光的苔藓，提供微弱的照明。前方传来沙沙声和低沉的念诵声。几只哥布林从阴影中窜出，挡住了去路，其中一只头戴骨饰，似乎是个施法者。一只体型巨大的座狼伴随在它们身边，獠牙外露。",
     "actors": [
-      "warrior-testhero"
+      "warrior-testhero",
+      "goblin-01"
     ],
     "npcs": [
       {
-        "id": "tavern-keeper-01",
-        "name": "老马库斯",
-        "type": "friendly",
-        "description": "灯笼酒馆的老板，一位白发苍苍的老兵，瞎了一只眼但笑容温暖。",
-        "race": "人类",
-        "occupation": "酒馆老板",
+        "id": "goblin-01",
+        "name": "哥布林斥候",
+        "type": "hostile",
+        "description": "一只瘦小的哥布林，手持锈迹斑斑的匕首，眼中闪烁着贪婪的光芒。",
+        "race": "哥布林",
+        "occupation": "斥候",
         "dialogue_count": 0
       },
       {
-        "id": "tavern-bard-01",
-        "name": "银弦艾拉",
-        "type": "neutral",
-        "description": "在角落演奏竖琴的吟游诗人，据说知道很多古老传说。",
-        "race": "精灵",
-        "occupation": "吟游诗人",
+        "id": "goblin-shaman-01",
+        "name": "哥布林萨满",
+        "type": "hostile",
+        "description": "头戴骨饰的哥布林施法者，正在低声念诵某种咒语。",
+        "race": "哥布林",
+        "occupation": "萨满",
         "dialogue_count": 0
       },
       {
-        "id": "merchant-01",
-        "name": "戴兜帽的商人",
-        "type": "neutral",
-        "description": "独自坐在阴影中的神秘商人，时不时打量着进出的客人。",
-        "race": "未知",
-        "occupation": "商人",
+        "id": "wolf-01",
+        "name": "座狼",
+        "type": "hostile",
+        "description": "一只体型巨大的灰狼，獠牙外露，口水滴落在地上。",
+        "race": "野兽",
+        "occupation": "战斗伙伴",
         "dialogue_count": 0
       }
     ],
-    "time": 1,
-    "flags": []
+    "time": 3,
+    "flags": [],
+    "exits": [
+      {
+        "direction": "地下城入口",
+        "target_scene_id": "dungeon-entrance-01"
+      }
+    ]
   },
-  "combat_state": null,
+  "combat_state": {
+    "combat_id": "combat-01",
+    "round_number": 1,
+    "turn_index": 0,
+    "status": "active",
+    "log": []
+  },
   "action_history": [
     {
-      "action_summary": "TestHero attempts to search the room by look under tables and behind barrels",
+      "action_summary": "TestHero attacks 哥布林斥候 with longsword",
       "resolution_summary": {
         "resolution_type": "check",
         "outcome": "failure",
-        "check": {
-          "ability": "str",
-          "modifier": 2,
-          "dc": 15,
-          "roll": 2,
-          "total": 4
+        "check": null,
+        "attack": {
+          "weapon": "longsword",
+          "target": "哥布林斥候",
+          "hit": false,
+          "damage": null
         },
-        "attack": null,
         "saving_throw": null,
         "effects": [
           {
-            "target": "tavern-01",
+            "target": "combat-encounter-01",
             "field": "time",
             "delta": 1,
-            "description": "时间流逝。"
-          },
-          {
-            "target": "warrior-testhero",
-            "field": "hp",
-            "delta": -1,
-            "description": "体力消耗造成轻微伤害。"
+            "description": "战斗时间流逝。"
           }
         ]
       },
-      "narration_summary": "TestHero attempts to search the room, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around TestHero. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. Time ",
-      "narration": "TestHero attempts to search the room, but fortune does not favor them this time. The effort falls short of success.",
-      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around TestHero. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
-      "gm_prompt": "The failed attempt gives the scene permission to push back. Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 1. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
-      "created_at": 1775102036863
+      "narration_summary": "TestHero attacks 哥布林斥候 with the longsword, but misses as the 哥布林斥候 dances aside at the last moment. The 哥布林斥候 regains footing as the fight resets for a heartbeat, and nearby movement grows tense. You can reposition, watch for a counterattack, or call out to control the next exchange. 哥布林斥候 has seen your line now and the fight threatens to turn back on you. Time in 地下城通道 has advanced to beat 1. Wha",
+      "narration": "TestHero attacks 哥布林斥候 with the longsword, but misses as the 哥布林斥候 dances aside at the last moment.",
+      "scene_progression": "The 哥布林斥候 regains footing as the fight resets for a heartbeat, and nearby movement grows tense. You can reposition, watch for a counterattack, or call out to control the next exchange.",
+      "gm_prompt": "哥布林斥候 has seen your line now and the fight threatens to turn back on you. Time in 地下城通道 has advanced to beat 1. What do you do before the counterpressure lands?",
+      "created_at": 1775106595042
+    },
+    {
+      "action_summary": "TestHero attacks 哥布林斥候 with longsword",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "failure",
+        "check": null,
+        "attack": {
+          "weapon": "longsword",
+          "target": "哥布林斥候",
+          "hit": false,
+          "damage": null
+        },
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "combat-encounter-01",
+            "field": "time",
+            "delta": 1,
+            "description": "战斗时间流逝。"
+          }
+        ]
+      },
+      "narration_summary": "TestHero attacks 哥布林斥候 with the longsword, but misses as the 哥布林斥候 dances aside at the last moment. The 哥布林斥候 regains footing as the fight resets for a heartbeat, and nearby movement grows tense. You can reposition, watch for a counterattack, or call out to control the next exchange. 哥布林斥候 has seen your line now and the fight threatens to turn back on you. The room is still reacting to the last be",
+      "narration": "TestHero attacks 哥布林斥候 with the longsword, but misses as the 哥布林斥候 dances aside at the last moment.",
+      "scene_progression": "The 哥布林斥候 regains footing as the fight resets for a heartbeat, and nearby movement grows tense. You can reposition, watch for a counterattack, or call out to control the next exchange.",
+      "gm_prompt": "哥布林斥候 has seen your line now and the fight threatens to turn back on you. The room is still reacting to the last beat: TestHero attacks 哥布林斥候 with the longsword, but misses as the 哥布林斥候 dances aside at the last moment. The 哥布林斥候 regains... Time in 地下城通道 has advanced to beat 2. What do you do before the counterpressure lands?",
+      "created_at": 1775106595047
+    },
+    {
+      "action_summary": "TestHero attacks 哥布林斥候 with longsword",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "success",
+        "check": null,
+        "attack": {
+          "weapon": "longsword",
+          "target": "哥布林斥候",
+          "hit": true,
+          "damage": {
+            "dice_expression": "1d8",
+            "rolls": [
+              6
+            ],
+            "modifier": 2,
+            "total": 8
+          }
+        },
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "goblin-01",
+            "field": "hp",
+            "delta": -8,
+            "description": "TestHero hits 哥布林斥候 with longsword for 8 damage."
+          },
+          {
+            "target": "goblin-01",
+            "field": "conditions_add",
+            "delta": "defeated",
+            "description": "哥布林斥候 has been defeated!"
+          },
+          {
+            "target": "combat-encounter-01",
+            "field": "time",
+            "delta": 1,
+            "description": "战斗时间流逝。"
+          }
+        ]
+      },
+      "narration_summary": "TestHero hits the 哥布林斥候 with a decisive strike from the longsword, and the 哥布林斥候 collapses to the ground, defeated. The combat concludes as the battlefield falls silent. The 哥布林斥候 recoils and the air in 地下城通道 tightens around the clash. You can press the advantage now or scan the room for whoever reacts next. 哥布林斥候 staggers but does not leave the scene; something in the melee is about to answer you",
+      "narration": "TestHero hits the 哥布林斥候 with a decisive strike from the longsword, and the 哥布林斥候 collapses to the ground, defeated. The combat concludes as the battlefield falls silent.",
+      "scene_progression": "The 哥布林斥候 recoils and the air in 地下城通道 tightens around the clash. You can press the advantage now or scan the room for whoever reacts next.",
+      "gm_prompt": "哥布林斥候 staggers but does not leave the scene; something in the melee is about to answer your advantage. The room is still reacting to the last beat: TestHero attacks 哥布林斥候 with the longsword, but misses as the 哥布林斥候 dances aside at the last moment. The 哥布林斥候 regains... Time in 地下城通道 has advanced to beat 3. Do you press the wounded foe, break away to reposition, or react to whoever else moves?",
+      "created_at": 1775106595057
     }
   ],
   "scene_history": []

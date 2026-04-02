@@ -242,6 +242,11 @@ class NPC(BaseModel):
     dialogue_count: int = Field(default=0, description="Number of dialogue interactions with this NPC")
 
 
+class SceneExit(BaseModel):
+    direction: str
+    target_scene_id: str
+
+
 class Scene(BaseModel):
     id: str
     name: str
@@ -250,6 +255,7 @@ class Scene(BaseModel):
     npcs: list[NPC] = Field(default_factory=list, description="NPCs present in this scene")
     time: int = Field(default=0, description="Abstract time ticks elapsed")
     flags: list[str] = Field(default_factory=list, description="Mutable scene state flags")
+    exits: list[SceneExit] = Field(default_factory=list, description="Available exits from this scene")
 
 
 class NarrativeHistoryEntry(BaseModel):

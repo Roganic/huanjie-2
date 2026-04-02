@@ -9,7 +9,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .models.state import NPC, NPCType
+from .models.state import NPC, NPCType, SceneExit, InventoryItem
 
 
 class SceneData(BaseModel):
@@ -32,6 +32,14 @@ class SceneData(BaseModel):
     connected_scenes: list[str] = Field(
         default_factory=list,
         description="IDs of scenes connected to this one"
+    )
+    exits: list[SceneExit] = Field(
+        default_factory=list,
+        description="Available exits from this scene with direction names"
+    )
+    loot_items: list[InventoryItem] = Field(
+        default_factory=list,
+        description="Items available to pick up in this scene"
     )
     
     model_config = {"populate_by_name": True}
@@ -94,6 +102,13 @@ TAVERN_SCENE = SceneData(
         "观察其他客人",
     ],
     connected_scenes=["dungeon-entrance-01"],
+    exits=[
+        SceneExit(direction="地下城入口", target_scene_id="dungeon-entrance-01"),
+    ],
+    loot_items=[
+        InventoryItem(id="shortsword", name="短剑", type="weapon", damage_dice="1d6", attack_ability="dex", description="一把轻便的短剑。"),
+        InventoryItem(id="leather", name="皮甲", type="armor", base_ac=11, add_dex_modifier=True, description="轻便的皮革护甲。"),
+    ],
 )
 
 # Scene 2: Dungeon Entrance
@@ -124,6 +139,10 @@ DUNGEON_ENTRANCE_SCENE = SceneData(
         "在入口处搜索线索",
     ],
     connected_scenes=["tavern-01", "combat-encounter-01"],
+    exits=[
+        SceneExit(direction="酒馆", target_scene_id="tavern-01"),
+        SceneExit(direction="地下城", target_scene_id="combat-encounter-01"),
+    ],
 )
 
 # Scene 3: Combat Encounter (used when combat triggers)
@@ -155,6 +174,9 @@ COMBAT_ENCOUNTER_SCENE = SceneData(
         "利用环境优势",
     ],
     connected_scenes=["dungeon-entrance-01"],
+    exits=[
+        SceneExit(direction="地下城入口", target_scene_id="dungeon-entrance-01"),
+    ],
 )
 
 # Scene registry for lookups

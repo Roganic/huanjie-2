@@ -70,12 +70,10 @@ def _actor_to_combatant(actor, combatant_type: CombatantType) -> Combatant:
 
 
 def _default_weapon_for_actor(actor) -> str:
-    class_value = (actor.character_class.value if actor.character_class else "warrior")
-    return {
-        "warrior": "longsword",
-        "rogue": "shortsword",
-        "mage": "dagger",
-    }.get(class_value, "longsword")
+    # Use equipped weapon if available, otherwise unarmed
+    if actor.equipped and actor.equipped.weapon:
+        return actor.equipped.weapon.id
+    return "unarmed"
 
 
 def _sync_hp_to_session(combat_state, session_id: str) -> None:

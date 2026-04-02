@@ -994,3 +994,110 @@ def is_first_npc_contact(
         True if this is the first contact, False otherwise
     """
     return get_npc_dialogue_count(npc_id, session_id) == 0
+
+
+# ---------------------------------------------------------------------------
+# Inventory / Equipment Operations
+# ---------------------------------------------------------------------------
+
+def pick_up_item(item_id: str, session_id: str | None = None) -> dict[str, Any] | None:
+    """Pick up an item from the current scene.
+    
+    Args:
+        item_id: The item ID to pick up
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        Dict with picked_up item info, or None if item not found in scene
+    """
+    from .scene import SCENE_REGISTRY
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.actor is None:
+            return None
+        
+        scene_data = SCENE_REGISTRY.get(session.scene.id)
+        if scene_data is None:
+            return None
+        
+        # Find the item in scene loot
+        item = None
+        for loot in scene_data.loot_items:
+            if loot.id == item_id:
+                item = loot
+                break
+        
+        if item is None:
+            return None
+        
+        # Check if already in inventory
+        for inv_item in session.actor.inventory:
+            if inv_item.id == item_id:
+                return None
+        
+        # Add to inventory
+        new_inventory = [*session.actor.inventory, item]
+        session.actor = session.actor.model_copy(update={"inventory": new_inventory})
+        _save_session(session)
+        
+        return {
+            "picked_up": _inventory_item_to_dict(item),
+            "inventory": [_inventory_item_to_dict(i) for i in new_inventory],
+        }
+
+
+def equip_item(item_id: str, session_id: str | None = None) -> dict[str, Any] | None:
+    """Equip an item from the character's inventory.
+    
+    Args:
+        item_id: The item ID to equip
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        Dict with equipped item info and updated inventory, or None if item not found
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.actor is None:
+            return None
+        
+        # Find item in inventory
+        item = None
+        for inv_item in session.actor.inventory:
+            if inv_item.id == item_id:
+                item = inv_item
+                break
+        
+        if item is None:
+            return None
+        
+        # Update equipped items
+        equipped = session.actor.equipped.model_copy(deep=True)
+        if item.type.value == "weapon":
+            equipped.weapon = item
+        elif item.type.value == "armor":
+            equipped.armor = item
+        else:
+            return None
+        
+        # Recalculate AC if armor changed
+        ac = session.actor.ac
+        if item.type.value == "armor":
+            ac = _calculate_ac_with_armor(session.actor.abilities, item)
+        
+        session.actor = session.actor.model_copy(update={
+            "equipped": equipped,
+            "ac": ac,
+        })
+        _save_session(session)
+        
+        return {
+            "equipped": {
+                "slot": item.type.value,
+                "item": _inventory_item_to_dict(item),
+            },
+            "inventory": [_inventory_item_to_dict(i) for i in session.actor.inventory],
+        }

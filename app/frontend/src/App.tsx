@@ -60,6 +60,21 @@ interface AbilityScores {
   cha: number;
 }
 
+interface InventoryItem {
+  id: string;
+  name: string;
+  type: "weapon" | "armor";
+  damage_dice?: string;
+  attack_ability?: string;
+  base_ac?: number;
+  description?: string;
+}
+
+interface EquippedItems {
+  weapon?: InventoryItem | null;
+  armor?: InventoryItem | null;
+}
+
 interface Actor {
   id: string;
   name: string;
@@ -73,6 +88,8 @@ interface Actor {
   description: string;
   conditions?: string[];
   skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
+  inventory?: InventoryItem[];
+  equipped?: EquippedItems;
 }
 
 interface NPC {
@@ -2412,6 +2429,54 @@ function App() {
               <h2>技能</h2>
               <SkillsList actor={bootstrap.actor} compact />
             </section>
+
+            {bootstrap.actor.equipped && (
+              <section>
+                <h2>装备</h2>
+                <div className="equipment-list">
+                  <div className="equipment-item">
+                    <span className="equipment-slot">武器:</span>
+                    <span className="equipment-name">
+                      {bootstrap.actor.equipped.weapon?.name || "无（徒手）"}
+                    </span>
+                    {bootstrap.actor.equipped.weapon?.damage_dice && (
+                      <span className="equipment-stat">({bootstrap.actor.equipped.weapon.damage_dice})</span>
+                    )}
+                  </div>
+                  <div className="equipment-item">
+                    <span className="equipment-slot">护甲:</span>
+                    <span className="equipment-name">
+                      {bootstrap.actor.equipped.armor?.name || "无"}
+                    </span>
+                    {bootstrap.actor.equipped.armor?.base_ac !== undefined && (
+                      <span className="equipment-stat">(AC {bootstrap.actor.equipped.armor.base_ac})</span>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {bootstrap.actor.inventory && bootstrap.actor.inventory.length > 0 && (
+              <section>
+                <h2>物品栏 ({bootstrap.actor.inventory.length})</h2>
+                <div className="inventory-list">
+                  {bootstrap.actor.inventory.map((item) => (
+                    <div key={item.id} className="inventory-item">
+                      <span className="inventory-icon">
+                        {item.type === "weapon" ? "⚔️" : "🛡️"}
+                      </span>
+                      <span className="inventory-name">{item.name}</span>
+                      {item.damage_dice && (
+                        <span className="inventory-stat">{item.damage_dice}</span>
+                      )}
+                      {item.base_ac !== undefined && (
+                        <span className="inventory-stat">AC{item.base_ac}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {bootstrap.actor.conditions && bootstrap.actor.conditions.length > 0 && (
               <section>

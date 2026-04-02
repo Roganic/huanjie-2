@@ -146,6 +146,52 @@ class TestItemUsageExploration:
             assert state_data["actor"]["inventory"] == initial_inventory
 
 
+class TestItemUsageEdgeCases:
+    """Test item usage edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_use_healing_potion_at_full_hp_does_not_exceed_max(self, client):
+        """Using healing potion at full HP should not exceed hp_max."""
+        async with client as c:
+            session_id, char = await _create_session_and_character(c)
+            hp_max = char["hp"]["max"]
+
+            # Ensure character is at full HP
+            from src.state import get_actor, _get_session, _resolve_session_id, _save_session, _SESSION_LOCK
+            with _SESSION_LOCK:
+                session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+                actor = session.actor
+                assert actor is not None
+                session.actor = actor.model_copy(update={"hp": hp_max})
+                _save_session(session)
+
+            # Use healing potion
+            resp = await c.post(
+                "/action",
+                json={
+                    "scene_id": "test-scene",
+                    "actor": char["name"],
+                    "intent": "使用治疗药水",
+                    "approach": "使用治疗药水",
+                },
+                headers={"X-Session-Id": session_id},
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+
+            # Verify item_use details
+            assert "item_use" in data
+            item_use = data["item_use"]
+            assert item_use is not None
+            assert item_use["hp_change"] == 0
+
+            # Verify HP did not exceed max
+            state_resp = await c.get("/state", headers={"X-Session-Id": session_id})
+            assert state_resp.status_code == 200
+            state_data = state_resp.json()
+            assert state_data["actor"]["hp"] == hp_max
+
+
 class TestItemUsageCombat:
     """Test item usage in combat phase."""
 

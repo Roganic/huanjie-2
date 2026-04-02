@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
-import { NarrativeHistory } from "./components/NarrativeHistory";
 
 interface Message {
   id: number;
@@ -120,6 +119,7 @@ interface BootstrapState {
   actor: Actor | null;
   scene: Scene;
   narrative_history: NarrativeHistoryEntry[];
+  action_history: { action: string; result: string; narrative_summary: string }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -751,6 +751,112 @@ function Timeline({
       {entries.map((entry) => (
         <TimelineItem key={entry.id} entry={entry} onToggle={onToggle} />
       ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scrollable Narrative History (shows all records, auto-scrolls)
+// ---------------------------------------------------------------------------
+
+function ScrollableNarrativeHistory({
+  messages,
+  streamingPreview,
+  sending,
+  gamePhase,
+}: {
+  messages: Message[];
+  streamingPreview: StreamingPreview | null;
+  sending: boolean;
+  gamePhase?: "exploration" | "combat" | "ended";
+}) {
+  const gmMessages = messages.filter((m) => m.role === "gm");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, sending, streamingPreview]);
+
+  const isCombat = gamePhase === "combat";
+
+  return (
+    <div className={`narrative-history ${isCombat ? "narrative-combat" : "narrative-exploration"}`}>
+      <div className="narrative-history-header">
+        <span className="narrative-history-icon">{isCombat ? "⚔️" : "📜"}</span>
+        <span className="narrative-history-title">{isCombat ? "战斗叙事" : "探索叙事"}</span>
+        {gmMessages.length > 0 && (
+          <span className="narrative-history-count">共 {gmMessages.length} 条记录</span>
+        )}
+      </div>
+      <div className="narrative-list">
+        {gmMessages.length === 0 && !sending && (
+          <div className="narrative-empty">{isCombat ? "战斗进行中…" : "输入一个行动开始冒险…"}</div>
+        )}
+        {gmMessages.map((message) => (
+          <div key={message.id} className={`narrative-item ${isCombat ? "narrative-combat-item" : ""}`}>
+            <div className="narrative-text">
+              {(message.resolution?.narration || message.text)
+                .split("\n")
+                .map((line, i) =>
+                  line.trim() ? <p key={i}>{line}</p> : null
+                )}
+            </div>
+            {message.resolution && (
+              <div className="compact-resolution">
+                <div className="compact-resolution-header">
+                  <span className={`outcome-badge-sm ${message.resolution.outcome === "success" ? "outcome-success" : "outcome-failure"}`}>
+                    {message.resolution.resolution_type === "check" ? "检定" : "自动"} · {message.resolution.outcome === "success" ? "成功" : "失败"}
+                  </span>
+                  {message.resolution.resolution_type === "check" && message.resolution.check && (
+                    <span className="check-summary-sm">
+                      {ABILITY_LABELS[message.resolution.check.ability] ?? message.resolution.check.ability} d20={message.resolution.check.roll}
+                      {message.resolution.check.modifier >= 0 ? "+" : ""}
+                      {message.resolution.check.modifier}
+                      {message.resolution.check.proficiency_bonus > 0 ? `+${message.resolution.check.proficiency_bonus}` : ""}
+                      {" = "}
+                      {message.resolution.check.total} / DC{message.resolution.check.dc}
+                    </span>
+                  )}
+                </div>
+                {message.resolution.effects.length > 0 && (
+                  <div className="effects-sm">
+                    {message.resolution.effects.map((eff, index) => (
+                      <span
+                        key={index}
+                        className={`effect-tag-sm ${
+                          typeof eff.delta === "number" && eff.delta > 0
+                            ? "positive"
+                            : typeof eff.delta === "number" && eff.delta < 0
+                              ? "negative"
+                              : ""
+                        }`}
+                      >
+                        {eff.description}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+        {sending && streamingPreview && (
+          <div className={`narrative-item streaming ${isCombat ? "narrative-combat-item" : ""}`}>
+            <div className="narrative-text">
+              {streamingPreview.narration
+                .split("\n")
+                .map((line, i) =>
+                  line.trim() ? <p key={i}>{line}</p> : null
+                )}
+            </div>
+            <div className="streaming-indicator">
+              <span className={`streaming-dot ${isCombat ? "combat-dot" : ""}`} />
+              GM 正在叙述…
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
     </div>
   );
 }
@@ -2340,10 +2446,11 @@ function App() {
           />
         ) : inAdventure ? (
           <>
-            <NarrativeHistory
+            <ScrollableNarrativeHistory
               messages={messages}
               streamingPreview={streamingPreview}
               sending={sending}
+              gamePhase={gamePhase}
             />
             <div className="input-bar">
               <input

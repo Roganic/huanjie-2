@@ -14,9 +14,11 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .models.action import CombatState, Effect
+from .models.action import Effect
 from .scene import SceneData, get_default_exploration_scene, get_scene_by_id
 from .models.state import (
+    NPC,
+    NPCType,
     AbilityScores,
     Actor,
     AdventurePhase,
@@ -37,13 +39,6 @@ from .models.state import (
     SceneHistoryEntry,
     Skill,
 )
-from .npc.dialogue_state import (
-    NPCDialogueState,
-    get_all_npc_dialogue_counts,
-    get_all_npc_dialogue_states,
-    reset_session_npc_states,
-)
-from .rest_system import initialize_actor_rest_resources
 
 _CHARACTER_CREATION_SCENE_INIT = dict(
     id="character-creation-01",
@@ -58,32 +53,13 @@ _CHARACTER_CREATION_SCENE_INIT = dict(
 def _get_adventure_scene_init() -> dict:
     """Get the initial adventure scene with NPCs."""
     scene = get_default_exploration_scene()
-    result = {
+    return {
         "id": scene.id,
         "name": scene.name,
         "description": scene.description,
         "actors": [],
         "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
     }
-    # Handle exits if available (SceneData may have exits or connected_scenes)
-    if hasattr(scene, 'exits') and scene.exits:
-        from .scenes.data import SceneExit
-        result["exits"] = [
-            SceneExit(direction=conn, target_scene_id=conn).model_dump(mode="json")
-            for conn in scene.connected_scenes
-        ]
-    elif hasattr(scene, 'connected_scenes') and scene.connected_scenes:
-        from .scenes.data import SceneExit
-        result["exits"] = [
-            SceneExit(direction=conn, target_scene_id=conn).model_dump(mode="json")
-            for conn in scene.connected_scenes
-        ]
-    else:
-        result["exits"] = []
-    return result
-
-
-_ADVENTURE_SCENE_INIT = _get_adventure_scene_init()
 
 _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
     CharacterClass.WARRIOR: {
@@ -154,23 +130,46 @@ _CLASS_SKILL_PROFICIENCIES: dict[CharacterClass, set[str]] = {
     CharacterClass.ROGUE: {"acrobatics", "sleight_of_hand", "stealth", "deception", "persuasion"},
 }
 
-_ENEMY_INIT = dict(
-    id="goblin-01",
-    name="哥布林斥候",
-    abilities=AbilityScores(**{
-        "str": 8,
-        "dex": 14,
-        "con": 10,
-        "int": 10,
-        "wis": 8,
-        "cha": 8,
-    }),
-    proficiency_bonus=2,
-    hp=7,
-    hp_max=7,
-    ac=12,
-    description="一只瘦小的哥布林，手持锈迹斑斑的匕首。",
-)
+def _npc_to_actor(npc: NPC) -> Actor:
+    """Convert an NPC to an Actor for combat."""
+    return Actor(
+        id=npc.id,
+        name=npc.name,
+        abilities=AbilityScores(**{
+            "str": npc.attributes.get("str", 10),
+            "dex": npc.attributes.get("dex", 10),
+            "con": npc.attributes.get("con", 10),
+            "int": npc.attributes.get("int", 10),
+            "wis": npc.attributes.get("wis", 10),
+            "cha": npc.attributes.get("cha", 10),
+        }),
+        proficiency_bonus=2,
+        hp=npc.hp,
+        hp_max=npc.hp_max,
+        ac=npc.ac,
+        description=npc.description,
+    )
+
+
+def _get_default_enemy() -> Actor:
+    """Get the default fallback enemy actor."""
+    from .scene import FOREST_PATH_SCENE
+    for npc in FOREST_PATH_SCENE.npcs:
+        if npc.type == NPCType.HOSTILE:
+            return _npc_to_actor(npc)
+    return Actor(
+        id="goblin-01",
+        name="哥布林斥候",
+        abilities=AbilityScores(**{
+            "str": 8, "dex": 14, "con": 10, "int": 10, "wis": 8, "cha": 8,
+        }),
+        proficiency_bonus=2,
+        hp=7,
+        hp_max=7,
+        ac=12,
+        description="一只瘦小的哥布林，手持锈迹斑斑的匕首。",
+    )
+
 
 _COMBAT_SCENE_INIT = dict(
     id="combat-01",
@@ -193,56 +192,16 @@ SESSION_STORE_DIR.mkdir(parents=True, exist_ok=True)
 _CURRENT_SESSION_ID: ContextVar[str | None] = ContextVar("current_session_id", default=None)
 _SESSION_LOCK = threading.RLock()
 
-# Module-level combat state for agent orchestration
-_combat_state: CombatState | None = None
-
-
-def get_combat_state() -> CombatState:
-    global _combat_state
-    if _combat_state is None:
-        _combat_state = CombatState()
-    return _combat_state
-
-
-def start_combat_session() -> None:
-    global _combat_state
-    _combat_state = CombatState(is_active=True)
-
-
-def end_combat_session(outcome: str) -> None:
-    global _combat_state
-    if _combat_state is not None:
-        _combat_state.is_active = False
-        _combat_state.combat_ended = True
-        _combat_state.outcome = outcome
-
-
-def advance_combat_round() -> None:
-    global _combat_state
-    if _combat_state is not None:
-        _combat_state.round_number += 1
-
-
-def update_combatant_hp(combatant_id: str, hp: int) -> None:
-    global _combat_state
-    if _combat_state is None:
-        _combat_state = CombatState()
-    _combat_state.combatant_hp[combatant_id] = hp
-
 
 class SessionData(BaseModel):
     session_id: str
     phase: GamePhase = GamePhase.CHARACTER_CREATION
     game_phase: AdventurePhase = AdventurePhase.EXPLORATION
     actor: Actor | None = None
-    enemy: Actor = Field(default_factory=lambda: Actor(**_ENEMY_INIT))
+    enemy: Actor = Field(default_factory=_get_default_enemy)
     scene: Scene = Field(default_factory=lambda: Scene(**_CHARACTER_CREATION_SCENE_INIT))
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
     scene_history: list[SceneHistoryEntry] = Field(default_factory=list)
-    npc_dialogue_states: dict[str, NPCDialogueState] = Field(
-        default_factory=dict,
-        description="NPC dialogue states by NPC ID"
-    )
     updated_at: float = Field(default_factory=time.time)
 
 
@@ -343,63 +302,6 @@ def append_narrative_history(
             entry,
         ][-MAX_STORED_NARRATIVE_HISTORY:]
         _save_session(session)
-        
-        # Persist to save file for session restoration after restart
-        try:
-            from . import game_state
-            game_state.save_current_game(session_id=resolved_session_id)
-        except Exception:
-            # Don't fail action if save fails
-            pass
-
-
-def append_action_history(
-    action_entry: dict,
-    session_id: str | None = None,
-) -> None:
-    """Append an action entry to the session's action history.
-    
-    Args:
-        action_entry: Dictionary containing action data
-        session_id: The session ID (uses current session if None)
-    """
-    # Currently stores in scene_history for simplicity
-    # This maintains compatibility with existing session structure
-    resolved_session_id = _resolve_session_id(session_id)
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=True)
-        # Convert to SceneHistoryEntry format for storage
-        history_entry = SceneHistoryEntry(
-            action_type=action_entry.get("action", "unknown"),
-            check_result={"result": action_entry.get("result", "unknown")},
-            narrative_keywords=[action_entry.get("narrative_summary", "")],
-        )
-        session.scene_history = [
-            *session.scene_history,
-            history_entry,
-        ][-MAX_SCENE_HISTORY:]
-        _save_session(session)
-
-
-def get_action_history(session_id: str | None = None) -> list[dict]:
-    """Get the action history for a session.
-    
-    Args:
-        session_id: The session ID (uses current session if None)
-        
-    Returns:
-        List of action history entries as dictionaries
-    """
-    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-    # Convert SceneHistoryEntry objects to dicts
-    return [
-        {
-            "action": entry.action_type,
-            "result": entry.check_result,
-            "narrative_keywords": entry.narrative_keywords,
-        }
-        for entry in session.scene_history
-    ]
 
 
 def get_narrative_context(
@@ -426,20 +328,22 @@ def set_combat_scene(session_id: str | None = None) -> None:
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:
         session = _get_session(resolved_session_id, create_if_missing=True)
-        actors = ["goblin-01"]
-        if session.actor is not None:
-            actors.insert(0, session.actor.id)
-        # Use combat scene from scene system with NPCs
-        from .scene import COMBAT_ENCOUNTER_SCENE
-        session.scene = Scene(
-            id=COMBAT_ENCOUNTER_SCENE.id,
-            name=COMBAT_ENCOUNTER_SCENE.name,
-            description=COMBAT_ENCOUNTER_SCENE.description,
-            actors=actors,
-            npcs=COMBAT_ENCOUNTER_SCENE.npcs,
-            time=session.scene.time,  # Preserve time from previous scene
-            exits=COMBAT_ENCOUNTER_SCENE.exits,
-        )
+        # Use current scene's hostile NPCs as enemies
+        hostile_npcs = [npc for npc in session.scene.npcs if npc.type == NPCType.HOSTILE]
+        if not hostile_npcs:
+            # Fallback to forest path scene if current scene has no hostiles
+            from .scene import FOREST_PATH_SCENE
+            hostile_npcs = [npc for npc in FOREST_PATH_SCENE.npcs if npc.type == NPCType.HOSTILE]
+            session.scene = Scene(
+                id=FOREST_PATH_SCENE.id,
+                name=FOREST_PATH_SCENE.name,
+                description=FOREST_PATH_SCENE.description,
+                actors=[session.actor.id] if session.actor else [],
+                npcs=FOREST_PATH_SCENE.npcs,
+            )
+        # Set first hostile NPC as the primary enemy for backward compatibility
+        if hostile_npcs:
+            session.enemy = _npc_to_actor(hostile_npcs[0])
         session.game_phase = AdventurePhase.COMBAT
         _save_session(session)
 
@@ -480,7 +384,6 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
             actors=actors,
             npcs=scene_data.npcs,
             time=session.scene.time,  # Preserve time from previous scene
-            exits=scene_data.exits,  # Include exits for navigation
         )
         _save_session(session)
     return True
@@ -615,8 +518,7 @@ def create_character(
 
         skills = _build_skills(abilities, req.character_class, proficiency_bonus=2)
 
-        # Create actor with rest resources initialized
-        actor = Actor(
+        session.actor = Actor(
             id=actor_id,
             name=req.name.strip(),
             character_class=req.character_class,
@@ -631,7 +533,6 @@ def create_character(
             inventory=inventory,
             equipped=equipped,
         )
-        session.actor = initialize_actor_rest_resources(actor)
         session.phase = GamePhase.ADVENTURE
         # Initialize scene with NPCs from scene system
         scene_data = get_default_exploration_scene()
@@ -641,20 +542,13 @@ def create_character(
             description=scene_data.description,
             actors=[session.actor.id],
             npcs=scene_data.npcs,
-            exits=scene_data.exits,
         )
-        session.enemy = Actor(**_ENEMY_INIT)
+        # Set enemy from current scene's first hostile NPC
+        hostile_npcs = [npc for npc in scene_data.npcs if npc.type == NPCType.HOSTILE]
+        session.enemy = _npc_to_actor(hostile_npcs[0]) if hostile_npcs else _get_default_enemy()
         session.narrative_history = []
         session.scene_history = []
         _save_session(session)
-        
-        # Persist to save file for session restoration after restart
-        try:
-            from . import game_state
-            game_state.save_current_game(session_id=resolved_session_id)
-        except Exception:
-            # Don't fail character creation if save fails
-            pass
     return get_bootstrap_state(session_id=resolved_session_id)
 
 
@@ -749,8 +643,6 @@ def reset_state(session_id: str | None = None) -> BootstrapState:
         session = _create_fresh_session(resolved_session_id)
         _sessions[resolved_session_id] = session
         _persist_session(session)
-        # Reset NPC dialogue states for the session
-        reset_session_npc_states(resolved_session_id)
     return _bootstrap_from_session(session)
 
 
@@ -802,26 +694,12 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
 
 
 def _bootstrap_from_session(session: SessionData) -> BootstrapState:
-    # Build scene with NPC dialogue counts
-    scene_npcs_with_counts = []
-    for npc in session.scene.npcs:
-        # Get dialogue count from session's npc_dialogue_states
-        dialogue_count = 0
-        if npc.id in session.npc_dialogue_states:
-            dialogue_count = session.npc_dialogue_states[npc.id].dialogue_count
-        # Create NPC copy with dialogue_count
-        npc_with_count = npc.model_copy(update={"dialogue_count": dialogue_count})
-        scene_npcs_with_counts.append(npc_with_count)
-    
-    # Create scene copy with updated NPCs
-    scene_with_counts = session.scene.model_copy(update={"npcs": scene_npcs_with_counts})
-    
     return BootstrapState(
         session_id=session.session_id,
         phase=session.phase,
         game_phase=session.game_phase,
         actor=session.actor,
-        scene=scene_with_counts,
+        scene=session.scene,
         narrative_history=list(session.narrative_history),
         scene_history=list(session.scene_history),
     )
@@ -862,8 +740,7 @@ def _create_fresh_session(session_id: str) -> SessionData:
         # Build skills for warrior
         warrior_skills = _build_skills(abilities, CharacterClass.WARRIOR, proficiency_bonus=2)
 
-        # Create Aldric with rest resources initialized
-        aldric = Actor(
+        session.actor = Actor(
             id=actor_id,
             name="Aldric",
             character_class=CharacterClass.WARRIOR,
@@ -878,7 +755,6 @@ def _create_fresh_session(session_id: str) -> SessionData:
             inventory=inventory,
             equipped=equipped,
         )
-        session.actor = initialize_actor_rest_resources(aldric)
         session.phase = GamePhase.ADVENTURE
         # Scene with actor in actors list for backward compatibility
         scene_data = get_default_exploration_scene()
@@ -888,7 +764,6 @@ def _create_fresh_session(session_id: str) -> SessionData:
             description=scene_data.description,
             actors=[actor_id],
             npcs=scene_data.npcs,
-            exits=scene_data.exits,
         )
 
     return session
@@ -961,427 +836,73 @@ def _delete_session(session_id: str) -> None:
 def _is_expired(session: SessionData) -> bool:
     return (time.time() - session.updated_at) > SESSION_TTL_SECONDS
 
-# ---------------------------------------------------------------------------
-# NPC Dialogue State Functions
-# ---------------------------------------------------------------------------
-
-def record_npc_dialogue(
-    npc_id: str,
-    npc_name: str,
-    speaker: str,
-    content: str,
-    session_id: str | None = None,
-) -> None:
-    """Record a dialogue entry for an NPC.
-    
-    Args:
-        npc_id: The NPC's unique ID
-        npc_name: The NPC's display name
-        speaker: Who spoke ('player' or NPC name)
-        content: What was said
-        session_id: The session ID (uses current session if None)
-    """
-    from .npc.dialogue_state import record_dialogue as _record_dialogue
-    resolved_session_id = _resolve_session_id(session_id)
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=True)
-        dialogue_state = _record_dialogue(npc_id, npc_name, speaker, content, resolved_session_id)
-        # Update session's npc_dialogue_states
-        session.npc_dialogue_states[npc_id] = dialogue_state
-        _save_session(session)
-
-
-def get_npc_dialogue_count(
-    npc_id: str,
-    session_id: str | None = None,
-) -> int:
-    """Get the dialogue count for a specific NPC.
-    
-    Args:
-        npc_id: The NPC's unique ID
-        session_id: The session ID (uses current session if None)
-        
-    Returns:
-        Number of dialogue interactions (0 if never spoken)
-    """
-    from .npc.dialogue_state import get_npc_dialogue_count as _get_count
-    resolved_session_id = _resolve_session_id(session_id)
-    return _get_count(npc_id, resolved_session_id)
-
-
-def get_npc_dialogue_history(
-    npc_id: str,
-    session_id: str | None = None,
-    max_entries: int = 5,
-) -> list:
-    """Get dialogue history for a specific NPC.
-    
-    Args:
-        npc_id: The NPC's unique ID
-        session_id: The session ID (uses current session if None)
-        max_entries: Maximum number of entries to return
-        
-    Returns:
-        List of dialogue entries
-    """
-    from .npc.dialogue_state import get_dialogue_history as _get_history
-    resolved_session_id = _resolve_session_id(session_id)
-    return _get_history(npc_id, resolved_session_id, max_entries)
-
-
-def build_npc_dialogue_context_for_prompt(
-    npc_id: str,
-    npc_name: str,
-    session_id: str | None = None,
-) -> str:
-    """Build dialogue context string for prompt injection.
-    
-    Args:
-        npc_id: The NPC's unique ID
-        npc_name: The NPC's display name
-        session_id: The session ID (uses current session if None)
-        
-    Returns:
-        Formatted dialogue context string for prompt injection
-    """
-    from .npc.dialogue_state import build_dialogue_context_for_prompt as _build_context
-    resolved_session_id = _resolve_session_id(session_id)
-    return _build_context(npc_id, npc_name, resolved_session_id)
-
-
-def is_first_npc_contact(
-    npc_id: str,
-    session_id: str | None = None,
-) -> bool:
-    """Check if this is the first interaction with an NPC.
-    
-    Args:
-        npc_id: The NPC's unique ID
-        session_id: The session ID (uses current session if None)
-        
-    Returns:
-        True if this is the first contact, False otherwise
-    """
-    return get_npc_dialogue_count(npc_id, session_id) == 0
-
 
 # ---------------------------------------------------------------------------
-# Loot System Functions
+# Combat state helpers (agent/orchestrator compatibility)
 # ---------------------------------------------------------------------------
 
-def add_items_to_inventory(
-    items: list[tuple[str, str, int]],  # (item_id, name, quantity)
-    session_id: str | None = None,
-) -> list[InventoryItem]:
-    """Add loot items to the character's inventory.
-    
-    Args:
-        items: List of (item_id, name, quantity) tuples
-        session_id: The session ID (uses current session if None)
-        
-    Returns:
-        List of InventoryItem that were added
-    """
-    from .models.state import ItemType
-    
-    resolved_session_id = _resolve_session_id(session_id)
-    added_items: list[InventoryItem] = []
-    
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=False)
-        if session.actor is None:
-            return added_items
-        
-        # Create new inventory items from loot
-        for item_id, name, quantity in items:
-            # Determine item type based on ID/name
-            item_type = _infer_item_type(item_id)
-            
-            # Create inventory item with appropriate defaults
-            item = InventoryItem(
-                id=f"{item_id}-{uuid.uuid4().hex[:8]}",
-                name=name,
-                type=item_type,
-                description=f"从敌人身上获得的{name}。",
-            )
-            
-            # Add weapon/armor properties if applicable
-            if item_type == ItemType.WEAPON:
-                item.damage_dice = _get_weapon_damage_dice(item_id)
-                item.attack_ability = _get_weapon_attack_ability(item_id)
-            
-            added_items.append(item)
-        
-        # Update actor's inventory
-        new_inventory = list(session.actor.inventory) + added_items
-        session.actor = session.actor.model_copy(
-            update={"inventory": new_inventory}
-        )
-        _save_session(session)
-        
-        # Persist to save file
-        try:
-            from . import game_state
-            game_state.save_current_game(session_id=resolved_session_id)
-        except Exception:
-            pass
-    
-    return added_items
+class CombatSessionState:
+    """Simple wrapper around CombatState for agent compatibility."""
+
+    def __init__(self, combat_state: "CombatState | None"):
+        self._state = combat_state
+
+    @property
+    def is_active(self) -> bool:
+        from combat.models import CombatOutcome
+        return self._state is not None and self._state.outcome == CombatOutcome.ONGOING
+
+    @property
+    def round_number(self) -> int:
+        return self._state.round_number if self._state else 0
+
+    @property
+    def turn_order(self) -> list[str]:
+        return self._state.turn_order if self._state else []
+
+    @property
+    def combatant_names(self) -> dict[str, str]:
+        if not self._state:
+            return {}
+        return {c.id: c.name for c in self._state.combatants}
 
 
-def _infer_item_type(item_id: str) -> ItemType:
-    """Infer item type from item ID."""
-    from .models.state import ItemType
-    
-    weapon_keywords = ["sword", "dagger", "axe", "spear", "staff", "bow", "mace", "剑", "匕首", "斧", "弓", "杖"]
-    armor_keywords = ["armor", "mail", "leather", "robe", "shield", "甲", "袍", "盾"]
-    
-    item_lower = item_id.lower()
-    
-    for keyword in weapon_keywords:
-        if keyword in item_lower:
-            return ItemType.WEAPON
-    
-    for keyword in armor_keywords:
-        if keyword in item_lower:
-            return ItemType.ARMOR
-    
-    # Default to armor for leather items (special case)
-    if "leather" in item_lower or "皮革" in item_lower:
-        return ItemType.ARMOR
-    
-    # Default to weapon for swords
-    if "sword" in item_lower or "剑" in item_lower:
-        return ItemType.WEAPON
-    
-    # Default to weapon (most loot items are weapons)
-    return ItemType.WEAPON
+def get_combat_state(session_id: str | None = None) -> CombatSessionState:
+    from combat import load_combat_state
+    resolved = _resolve_session_id(session_id)
+    cs = load_combat_state(resolved)
+    return CombatSessionState(cs)
 
 
-def _get_weapon_damage_dice(item_id: str) -> str:
-    """Get default damage dice for weapon items."""
-    damage_map = {
-        "shortsword": "1d6",
-        "dagger": "1d4",
-        "rusty_sword": "1d6",
-        "longsword": "1d8",
-        "greatsword": "2d6",
-        "短剑": "1d6",
-        "匕首": "1d4",
-        "生锈剑": "1d6",
-        "长剑": "1d8",
-    }
-    
-    item_lower = item_id.lower()
-    for key, damage in damage_map.items():
-        if key in item_lower:
-            return damage
-    
-    return "1d6"  # Default
+def start_combat_session(session_id: str | None = None) -> None:
+    """No-op placeholder; combat state is created in the combat start endpoint."""
+    pass
 
 
-def _get_weapon_attack_ability(item_id: str) -> str:
-    """Get default attack ability for weapon items."""
-    finesse_weapons = ["dagger", "shortsword", "rapier", "scimitar", "匕首", "短剑"]
-    
-    item_lower = item_id.lower()
-    for weapon in finesse_weapons:
-        if weapon in item_lower:
-            return "dex"
-    
-    return "str"
+def end_combat_session(reason: str | None = None, session_id: str | None = None) -> None:
+    from combat import clear_combat_state
+    resolved = _resolve_session_id(session_id)
+    clear_combat_state(resolved)
 
 
-# ---------------------------------------------------------------------------
-# Rest System Functions
-# ---------------------------------------------------------------------------
-
-def perform_short_rest(session_id: str | None = None) -> tuple[bool, dict]:
-    """执行短休，恢复HP并消耗生命骰
-    
-    Returns:
-        tuple: (是否成功, 结果信息)
-    """
-    from .rest_system import perform_short_rest as _do_short_rest, can_rest_in_current_phase
-    
-    resolved_session_id = _resolve_session_id(session_id)
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=False)
-        
-        if session.actor is None:
-            return False, {"error": "没有角色"}
-        
-        # 检查是否在探索阶段
-        can_rest, error_msg = can_rest_in_current_phase(session.game_phase.value)
-        if not can_rest:
-            return False, {"error": error_msg}
-        
-        # 执行短休
-        updated_actor, result = _do_short_rest(session.actor)
-        
-        if result["success"]:
-            session.actor = updated_actor
-            _save_session(session)
-            
-            # 添加叙事历史记录
-            append_narrative_history(
-                NarrativeHistoryEntry(
-                    action_summary="短休",
-                    resolution_summary={
-                        "resolution_type": "auto_success",
-                        "outcome": "success",
-                        "rest_result": result,
-                    },
-                    narration_summary=f"短休恢复 {result.get('hp_gained', 0)} 点HP",
-                    narration=result["message"],
-                    scene_progression="角色进行了短休，恢复了一些体力。",
-                    gm_prompt="短休结束，角色可以继续探索。",
-                    created_at=int(time.time() * 1000),
-                ),
-                session_id=resolved_session_id,
-            )
-        
-        return result["success"], result
+def update_combatant_hp(combatant_id: str, hp: int, session_id: str | None = None) -> None:
+    from combat import load_combat_state, save_combat_state
+    resolved = _resolve_session_id(session_id)
+    cs = load_combat_state(resolved)
+    if cs is None:
+        return
+    for c in cs.combatants:
+        if c.id == combatant_id:
+            c.hp = hp
+            break
+    save_combat_state(cs)
 
 
-def perform_long_rest(session_id: str | None = None) -> tuple[bool, dict]:
-    """执行长休，完全恢复HP、法术位和生命骰
-    
-    Returns:
-        tuple: (是否成功, 结果信息)
-    """
-    from .rest_system import perform_long_rest as _do_long_rest, can_rest_in_current_phase
-    
-    resolved_session_id = _resolve_session_id(session_id)
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=False)
-        
-        if session.actor is None:
-            return False, {"error": "没有角色"}
-        
-        # 检查是否在探索阶段
-        can_rest, error_msg = can_rest_in_current_phase(session.game_phase.value)
-        if not can_rest:
-            return False, {"error": error_msg}
-        
-        # 执行长休
-        updated_actor, result = _do_long_rest(session.actor)
-        
-        if result["success"]:
-            session.actor = updated_actor
-            _save_session(session)
-            
-            # 添加叙事历史记录
-            append_narrative_history(
-                NarrativeHistoryEntry(
-                    action_summary="长休",
-                    resolution_summary={
-                        "resolution_type": "auto_success",
-                        "outcome": "success",
-                        "rest_result": result,
-                    },
-                    narration_summary=f"长休完全恢复HP和生命骰",
-                    narration=result["message"],
-                    scene_progression="角色进行了长休，完全恢复了体力。",
-                    gm_prompt="长休结束，角色已经完全恢复，可以继续冒险。",
-                    created_at=int(time.time() * 1000),
-                ),
-                session_id=resolved_session_id,
-            )
-        
-        return result["success"], result
-
-
-def get_character_rest_status(session_id: str | None = None) -> dict | None:
-    """获取角色的休息状态信息
-    
-    Returns:
-        包含 hit_dice_remaining, hit_dice_total, spell_slots 的字典，如果没有角色则返回None
-    """
-    actor = get_actor(session_id=session_id)
-    if actor is None:
-        return None
-    
-    return {
-        "hit_dice_remaining": actor.hit_dice_remaining,
-        "hit_dice_total": actor.hit_dice_total,
-        "spell_slots": actor.spell_slots,
-        "spell_slots_max": actor.spell_slots_max,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Equipment Functions
-# ---------------------------------------------------------------------------
-
-def equip_item_for_actor(item_name: str, session_id: str | None = None) -> dict:
-    """Equip an item for the current actor.
-    
-    Args:
-        item_name: The name of the item to equip
-        session_id: The session ID (uses current session if None)
-        
-    Returns:
-        Dictionary with success status, equipped item info, and new AC
-    """
-    from .equipment import equip_item, ItemNotFoundError, InvalidItemTypeError
-    
-    resolved_session_id = _resolve_session_id(session_id)
-    
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=False)
-        if session.actor is None:
-            return {"success": False, "error": "没有角色"}
-        
-        try:
-            updated_actor, equipped_item, previous_item = equip_item(session.actor, item_name)
-            
-            # Persist the updated actor
-            session.actor = updated_actor
-            _save_session(session)
-            
-            return {
-                "success": True,
-                "item": {"id": equipped_item.id, "name": equipped_item.name, "type": equipped_item.type.value},
-                "previous_item": {"id": previous_item.id, "name": previous_item.name} if previous_item else None,
-                "ac": updated_actor.ac,
-            }
-        except ItemNotFoundError as e:
-            return {"success": False, "error": str(e)}
-        except InvalidItemTypeError as e:
-            return {"success": False, "error": str(e)}
-
-
-def unequip_item_from_actor(slot: str, session_id: str | None = None) -> dict:
-    """Unequip an item from the current actor.
-    
-    Args:
-        slot: The slot to unequip ("weapon" or "armor")
-        session_id: The session ID (uses current session if None)
-        
-    Returns:
-        Dictionary with success status, removed item info, and new AC
-    """
-    from .equipment import unequip_item
-    
-    resolved_session_id = _resolve_session_id(session_id)
-    
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=False)
-        if session.actor is None:
-            return {"success": False, "error": "没有角色"}
-        
-        try:
-            updated_actor, removed_item = unequip_item(session.actor, slot)
-            
-            # Persist the updated actor
-            session.actor = updated_actor
-            _save_session(session)
-            
-            return {
-                "success": True,
-                "removed_item": {"id": removed_item.id, "name": removed_item.name} if removed_item else None,
-                "ac": updated_actor.ac,
-            }
-        except ValueError as e:
-            return {"success": False, "error": str(e)}
+def advance_combat_round(session_id: str | None = None) -> None:
+    from combat import next_turn, load_combat_state, save_combat_state
+    resolved = _resolve_session_id(session_id)
+    cs = load_combat_state(resolved)
+    if cs is None:
+        return
+    next_turn(cs)
+    save_combat_state(cs)

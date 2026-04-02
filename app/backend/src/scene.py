@@ -9,13 +9,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .models.state import NPC, NPCType, SceneExit
-from .scenes.data import (
-    VILLAGE_SQUARE_SCENE as DATA_VILLAGE_SQUARE,
-    TAVERN_SCENE as DATA_TAVERN,
-    DUNGEON_ENTRANCE_SCENE as DATA_DUNGEON_ENTRANCE,
-    COMBAT_ENCOUNTER_SCENE as DATA_COMBAT_ENCOUNTER,
-)
+from .models.state import NPC, NPCType
 
 
 class SceneData(BaseModel):
@@ -38,10 +32,6 @@ class SceneData(BaseModel):
     connected_scenes: list[str] = Field(
         default_factory=list,
         description="IDs of scenes connected to this one"
-    )
-    exits: list[SceneExit] = Field(
-        default_factory=list,
-        description="Available exits from this scene with direction names"
     )
     
     model_config = {"populate_by_name": True}
@@ -74,21 +64,188 @@ class SceneData(BaseModel):
 # Pre-defined Scenes
 # -----------------------------------------------------------------------------
 
-# Re-export scenes from scenes.data to maintain a single source of truth
-VILLAGE_SQUARE_SCENE = DATA_VILLAGE_SQUARE
-TAVERN_SCENE = DATA_TAVERN
-DUNGEON_ENTRANCE_SCENE = DATA_DUNGEON_ENTRANCE
-COMBAT_ENCOUNTER_SCENE = DATA_COMBAT_ENCOUNTER
-
-# Scene registry and utilities from scenes.data (single source of truth)
-from .scenes.data import (
-    SCENE_REGISTRY,
-    SCENE_TRANSITION_KEYWORDS,
-    get_scene_by_id,
-    get_scene_transition,
-    get_default_exploration_scene,
-    get_all_scene_names,
+# Scene 1: The Tavern (starting exploration scene)
+TAVERN_SCENE = SceneData(
+    id="tavern-01",
+    name="锈迹斑斑的灯笼酒馆",
+    description=(
+        "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。"
+        "几个当地人默默地喝着酒，角落里传来轻柔的竖琴声。"
+        "酒保老马库斯在吧台后面擦拭着酒杯，不时用独眼打量着客人。"
+    ),
+    actors=[],
+    npcs=[
+        NPC(id="tavern-keeper-01", name="老马库斯", type=NPCType.FRIENDLY,
+            description="灯笼酒馆的老板，一位白发苍苍的老兵，瞎了一只眼但笑容温暖。",
+            race="人类", occupation="酒馆老板",
+            hp=12, hp_max=12, ac=14,
+            attributes={"str": 14, "dex": 12, "con": 14, "int": 10, "wis": 12, "cha": 12}),
+        NPC(id="tavern-bard-01", name="银弦艾拉", type=NPCType.NEUTRAL,
+            description="在角落演奏竖琴的吟游诗人，据说知道很多古老传说。",
+            race="精灵", occupation="吟游诗人",
+            hp=8, hp_max=8, ac=12,
+            attributes={"str": 8, "dex": 14, "con": 10, "int": 12, "wis": 12, "cha": 16}),
+        NPC(id="merchant-01", name="戴兜帽的商人", type=NPCType.NEUTRAL,
+            description="独自坐在阴影中的神秘商人，时不时打量着进出的客人。",
+            race="未知", occupation="商人",
+            hp=10, hp_max=10, ac=13,
+            attributes={"str": 10, "dex": 14, "con": 12, "int": 14, "wis": 12, "cha": 12}),
+    ],
+    available_actions=[
+        "与老马库斯交谈，打听消息",
+        "聆听银弦艾拉的演奏或询问传说",
+        "接近神秘的商人",
+        "离开酒馆，前往地下城入口",
+        "在酒馆休息",
+        "观察其他客人",
+    ],
+    connected_scenes=["dungeon-entrance-01"],
 )
+
+# Scene 2: Dungeon Entrance
+DUNGEON_ENTRANCE_SCENE = SceneData(
+    id="dungeon-entrance-01",
+    name="遗忘地下城入口",
+    description=(
+        "一座古老的石门半埋在藤蔓之中，门上刻满了风化的符文。"
+        "入口旁躺着一具石像守卫的残骸，似乎经历过激烈的战斗。"
+        "不远处，一个受伤的矮人靠在树干上，神情惊恐地看着地下城的方向。"
+        "阴冷的风从黑暗中吹出，带来腐朽和某种更危险的气息。"
+    ),
+    actors=[],
+    npcs=[
+        NPC(id="wounded-adventurer-01", name="托尔金", type=NPCType.FRIENDLY,
+            description="从地下城逃出来的受伤冒险者，神情惊恐。",
+            race="矮人", occupation="冒险者",
+            hp=6, hp_max=10, ac=15,
+            attributes={"str": 14, "dex": 10, "con": 14, "int": 8, "wis": 10, "cha": 8}),
+        NPC(id="guard-corpse-01", name="死去的守卫", type=NPCType.NEUTRAL,
+            description="倒在地下城入口旁的石像守卫，身上布满了战斗的痕迹。",
+            race="构造体", occupation="守卫",
+            hp=0, hp_max=15, ac=16,
+            attributes={"str": 16, "dex": 8, "con": 16, "int": 3, "wis": 10, "cha": 1}),
+    ],
+    available_actions=[
+        "与受伤的托尔金交谈，了解情况",
+        "检查死去的守卫尸体",
+        "检查石门上的符文",
+        "进入地下城",
+        "返回酒馆",
+        "在入口处搜索线索",
+    ],
+    connected_scenes=["tavern-01", "forest-path-01"],
+)
+
+# Scene 3: Forest Path (used when combat triggers)
+FOREST_PATH_SCENE = SceneData(
+    id="forest-path-01",
+    name="幽暗森林小径",
+    description=(
+        "一条蜿蜒穿过古老森林的小径，头顶的树枝遮蔽了天空。"
+        "潮湿的落叶在脚下发出沙沙声，远处传来不知名野兽的低吼。"
+        "前方小径被几只哥布林设下了埋伏，为首的萨满手持骨制法杖。"
+        "一只体型巨大的座狼伴随在它们身边，獠牙外露。"
+    ),
+    actors=[],
+    npcs=[
+        NPC(id="goblin-01", name="哥布林斥候", type=NPCType.HOSTILE,
+            description="一只瘦小的哥布林，手持锈迹斑斑的匕首，眼中闪烁着贪婪的光芒。",
+            race="哥布林", occupation="斥候",
+            hp=7, hp_max=7, ac=12,
+            attributes={"str": 8, "dex": 14, "con": 10, "int": 10, "wis": 8, "cha": 8}),
+        NPC(id="goblin-shaman-01", name="哥布林萨满", type=NPCType.HOSTILE,
+            description="头戴骨饰的哥布林施法者，正在低声念诵某种咒语。",
+            race="哥布林", occupation="萨满",
+            hp=9, hp_max=9, ac=13,
+            attributes={"str": 8, "dex": 12, "con": 12, "int": 12, "wis": 14, "cha": 10}),
+        NPC(id="wolf-01", name="座狼", type=NPCType.HOSTILE,
+            description="一只体型巨大的灰狼，獠牙外露，口水滴落在地上。",
+            race="野兽", occupation="战斗伙伴",
+            hp=11, hp_max=11, ac=13,
+            attributes={"str": 14, "dex": 14, "con": 12, "int": 3, "wis": 12, "cha": 6}),
+    ],
+    available_actions=[
+        "与哥布林战斗",
+        "尝试与哥布林谈判",
+        "悄悄后退，寻找其他路径",
+        "利用环境优势",
+    ],
+    connected_scenes=["dungeon-entrance-01"],
+)
+
+# Scene registry for lookups
+SCENE_REGISTRY: dict[str, SceneData] = {
+    TAVERN_SCENE.id: TAVERN_SCENE,
+    DUNGEON_ENTRANCE_SCENE.id: DUNGEON_ENTRANCE_SCENE,
+    FOREST_PATH_SCENE.id: FOREST_PATH_SCENE,
+}
+
+# Scene transition keywords
+# Maps keywords to target scene IDs
+SCENE_TRANSITION_KEYWORDS: dict[str, str] = {
+    # To tavern
+    "tavern": "tavern-01",
+    "酒馆": "tavern-01",
+    "返回酒馆": "tavern-01",
+    "回酒馆": "tavern-01",
+    "灯笼酒馆": "tavern-01",
+    "去酒馆": "tavern-01",
+    "回村里": "tavern-01",
+    
+    # To dungeon entrance
+    "dungeon": "dungeon-entrance-01",
+    "地下城": "dungeon-entrance-01",
+    "去地下城": "dungeon-entrance-01",
+    "前往地下城": "dungeon-entrance-01",
+    "入口": "dungeon-entrance-01",
+    "石门": "dungeon-entrance-01",
+    "去入口": "dungeon-entrance-01",
+    "离开酒馆": "dungeon-entrance-01",
+    
+    # To forest path
+    "forest": "forest-path-01",
+    "森林": "forest-path-01",
+    "森林小径": "forest-path-01",
+    "去森林": "forest-path-01",
+    "前往森林": "forest-path-01",
+    "combat": "forest-path-01",
+    "战斗": "forest-path-01",
+    "进入地下城": "forest-path-01",
+    "进入通道": "forest-path-01",
+    "深入": "forest-path-01",
+    "前进": "forest-path-01",
+}
+
+
+def get_scene_by_id(scene_id: str) -> Optional[SceneData]:
+    """Get scene data by ID."""
+    return SCENE_REGISTRY.get(scene_id)
+
+
+def get_scene_transition(intent: str) -> Optional[str]:
+    """Check if intent contains scene transition keywords.
+    
+    Args:
+        intent: The player's action intent
+        
+    Returns:
+        Target scene ID if transition keyword found, None otherwise
+    """
+    intent_lower = intent.lower()
+    for keyword, scene_id in SCENE_TRANSITION_KEYWORDS.items():
+        if keyword in intent_lower:
+            return scene_id
+    return None
+
+
+def get_default_exploration_scene() -> SceneData:
+    """Get the default starting exploration scene."""
+    return TAVERN_SCENE
+
+
+def get_all_scene_names() -> dict[str, str]:
+    """Get mapping of scene IDs to names for display."""
+    return {scene_id: scene.name for scene_id, scene in SCENE_REGISTRY.items()}
 
 
 def build_scene_context_for_prompt(scene: SceneData) -> str:

@@ -219,22 +219,6 @@ class Actor(BaseModel):
     # Inventory and equipment
     inventory: list[InventoryItem] = Field(default_factory=list)
     equipped: EquippedItems = Field(default_factory=EquippedItems)
-    # Rest system: hit dice for short rest recovery
-    hit_dice_remaining: int = Field(default=1, description="Remaining hit dice for short rest")
-    hit_dice_total: int = Field(default=1, description="Total hit dice (equals level)")
-    # Spell slots for mages (use default dict to handle migration from old data)
-    spell_slots: dict[str, int] = Field(default_factory=dict, description="Available spell slots by level")
-    spell_slots_max: dict[str, int] = Field(default_factory=dict, description="Maximum spell slots by level")
-    
-    @field_validator("spell_slots", "spell_slots_max", mode="before")
-    @classmethod
-    def _ensure_dict(cls, v: Any) -> dict[str, int]:
-        """Ensure spell_slots is always a dict (handles migration from old list data)."""
-        if isinstance(v, list):
-            return {}
-        if v is None:
-            return {}
-        return v
 
 
 class NPCType(str, Enum):
@@ -255,15 +239,13 @@ class NPC(BaseModel):
     description: str = Field(default="", description="Brief description of the NPC")
     race: Optional[str] = Field(default=None, description="NPC race/species")
     occupation: Optional[str] = Field(default=None, description="NPC occupation or role")
-    dialogue_count: int = Field(default=0, description="Number of dialogue interactions with this NPC")
-
-
-class SceneExit(BaseModel):
-    """A scene exit direction and target."""
-    direction: str = Field(description="Display name for the exit direction")
-    target_scene_id: str = Field(description="ID of the target scene")
-    
-    model_config = {"populate_by_name": True}
+    hp: int = Field(default=7, description="Current HP")
+    hp_max: int = Field(default=7, description="Maximum HP")
+    ac: int = Field(default=12, description="Armor Class")
+    attributes: dict[str, int] = Field(
+        default_factory=dict,
+        description="Combat attributes: str, dex, con, int, wis, cha",
+    )
 
 
 class Scene(BaseModel):
@@ -274,7 +256,6 @@ class Scene(BaseModel):
     npcs: list[NPC] = Field(default_factory=list, description="NPCs present in this scene")
     time: int = Field(default=0, description="Abstract time ticks elapsed")
     flags: list[str] = Field(default_factory=list, description="Mutable scene state flags")
-    exits: list[SceneExit] = Field(default_factory=list, description="Available exits from this scene")
 
 
 class NarrativeHistoryEntry(BaseModel):

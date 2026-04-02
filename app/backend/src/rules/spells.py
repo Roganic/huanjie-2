@@ -144,6 +144,7 @@ def register_extended_spells() -> None:
             available_to=["cleric"],
         )
         SPELLS["cure_wounds_cleric"] = cure_wounds_cleric
+        # 治疗术别名指向牧师专属版本（扩展注册表）
         SPELLS["治疗术"] = cure_wounds_cleric
 
     except ImportError:

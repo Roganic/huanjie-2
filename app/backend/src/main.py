@@ -200,9 +200,11 @@ async def state(request: Request):
         get_action_history,
         get_bootstrap_state,
         require_bootstrap_state,
+        get_enemy,
         DEFAULT_SESSION_ID,
     )
     from .rules.experience import get_xp_progress
+    from .game.state import get_character_rest_status
 
     session_id = request.headers.get("X-Session-Id") or request.query_params.get("session_id")
     provided_session_id = session_id
@@ -225,6 +227,21 @@ async def state(request: Request):
         progress = get_xp_progress(xp, level)
         actor["xp"] = xp
         actor["xp_to_next_level"] = progress.get("xp_for_next_level", 0)
+
+        # Include character rest status (spell_slots)
+        rest_status = get_character_rest_status(session_id)
+        if rest_status:
+            actor["hit_dice_remaining"] = rest_status["hit_dice_remaining"]
+            actor["hit_dice_total"] = rest_status["hit_dice_total"]
+            actor["spell_slots"] = rest_status["spell_slots"]
+            actor["spell_slots_max"] = rest_status["spell_slots_max"]
+
+    # Include enemy state for combat tracking
+    try:
+        enemy = get_enemy(session_id=session_id)
+        result["enemy"] = enemy.model_dump(mode="json")
+    except Exception:
+        pass
 
     return result
 

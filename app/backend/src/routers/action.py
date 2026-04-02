@@ -24,7 +24,11 @@ from ..scenes import (
     is_movement_action,
     handle_movement,
     get_available_exits,
+    MOVEMENT_VERBS as _MOVEMENT_KEYWORDS,
 )
+
+# Backward-compatible aliases for tests
+_is_movement_action = is_movement_action
 from ..state import (
     apply_effects,
     append_action_history,

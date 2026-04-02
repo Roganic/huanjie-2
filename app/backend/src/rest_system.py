@@ -6,7 +6,9 @@ import random
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .models.state import Actor, CharacterClass
+    from .models.state import Actor, CharacterClass, SpellSlot
+else:
+    from .models.state import SpellSlot
 
 
 # 职业生命骰大小 (D&D 5e 标准)
@@ -123,7 +125,10 @@ def perform_long_rest(actor: Actor) -> tuple[Actor, dict]:
     
     # 恢复法术位
     if actor.spell_slots_max:
-        updates["spell_slots"] = dict(actor.spell_slots_max)
+        updates["spell_slots"] = [
+            slot.model_copy(update={"current": slot.max})
+            for slot in actor.spell_slots_max
+        ]
         result_info["spell_slots_restored"] = True
         result_info["message"] += "，法术位已完全恢复"
     
@@ -147,8 +152,12 @@ def initialize_actor_rest_resources(actor: Actor) -> Actor:
     # 法师初始化法术位
     if actor.character_class and actor.character_class.value == "mage":
         max_slots = MAGE_SPELL_SLOTS.get(min(level, 3), {"1": 2})
-        updates["spell_slots_max"] = dict(max_slots)
-        updates["spell_slots"] = dict(max_slots)
+        slots = [
+            SpellSlot(level=int(spell_level), max=max_count, current=max_count)
+            for spell_level, max_count in sorted(max_slots.items())
+        ]
+        updates["spell_slots_max"] = slots
+        updates["spell_slots"] = slots
     
     return actor.model_copy(update=updates)
 

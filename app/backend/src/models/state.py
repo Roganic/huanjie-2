@@ -269,8 +269,19 @@ class Actor(BaseModel):
     equipped: EquippedItems = Field(default_factory=EquippedItems)
     # Spell slots for spellcasting classes
     spell_slots: list[SpellSlot] = Field(default_factory=list)
+    spell_slots_max: list[SpellSlot] = Field(default_factory=list)
+    # Rest resources
+    hit_dice_total: int = 1
+    hit_dice_remaining: int = 1
     # Class feature tracking
     class_features: ClassFeatures = Field(default_factory=ClassFeatures)
+
+    @field_validator("spell_slots", "spell_slots_max", mode="before")
+    @classmethod
+    def _normalize_spell_slots(cls, v):
+        if isinstance(v, dict):
+            return []
+        return v
 
 
 class NPCType(str, Enum):

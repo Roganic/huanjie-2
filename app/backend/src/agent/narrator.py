@@ -24,7 +24,8 @@ from ..models.action import (
     Outcome,
 )
 from ..models.state import Actor, NarrativeHistoryEntry, Scene
-from .providers import get_provider
+from ..config import get_llm_config
+from ..llm_client import OpenAICompatibleClient
 from .resolution_constraints import (
     NarrationConstraintContext,
     ValidationResult,
@@ -390,18 +391,20 @@ def _narration_respects_constraints(
 
 
 async def _call_kimi_api(prompt: str) -> Optional[NarrationBundle]:
-    provider = get_provider("kimi")
-    if provider is None:
+    config = get_llm_config("kimi")
+    if config is None:
         return None
-    generated = await provider.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
+    client = OpenAICompatibleClient(config)
+    generated = await client.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
     return _parse_narration_bundle(generated) if generated else None
 
 
 async def _call_openai_api(prompt: str) -> Optional[NarrationBundle]:
-    provider = get_provider("openai")
-    if provider is None:
+    config = get_llm_config("openai")
+    if config is None:
         return None
-    generated = await provider.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
+    client = OpenAICompatibleClient(config)
+    generated = await client.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
     return _parse_narration_bundle(generated) if generated else None
 
 
@@ -498,13 +501,7 @@ def generate_narration(
                 return asyncio.run(_call_openai_api(current_prompt))
             if req.provider == "kimi" or KIMI_API_KEY:
                 return asyncio.run(_call_kimi_api(current_prompt))
-
-            provider = get_provider(req.provider)
-            if provider is None:
-                return None
-
-            generated = asyncio.run(provider.generate(NARRATIVE_SYSTEM_PROMPT, current_prompt))
-            return _parse_narration_bundle(generated) if generated else None
+            return None
         except Exception:
             return None
 

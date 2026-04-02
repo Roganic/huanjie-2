@@ -100,6 +100,9 @@ def load_saved_game(save_id: str | None = None) -> BootstrapState | None:
         session.scene = save_data.scene if save_data.scene else persistence.create_fresh_character_creation_scene()
         session.narrative_history = save_data.action_history
         session.scene_history = save_data.scene_history
+        # Initialize visited_scenes from loaded scene if not present in save
+        if session.scene and session.scene.id:
+            session.visited_scenes = {session.scene.id: session.scene.visited_count}
         _save_session(session)
         
         # Also copy to default session so clients without session_id get the saved state
@@ -112,6 +115,8 @@ def load_saved_game(save_id: str | None = None) -> BootstrapState | None:
         default_session.scene = save_data.scene if save_data.scene else persistence.create_fresh_character_creation_scene()
         default_session.narrative_history = save_data.action_history
         default_session.scene_history = save_data.scene_history
+        if default_session.scene and default_session.scene.id:
+            default_session.visited_scenes = {default_session.scene.id: default_session.scene.visited_count}
         _save_session(default_session)
     
     return get_bootstrap_state(session_id=save_data.session_id)

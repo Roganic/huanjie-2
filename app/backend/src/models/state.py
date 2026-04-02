@@ -302,6 +302,7 @@ class Scene(BaseModel):
     time: int = Field(default=0, description="Abstract time ticks elapsed")
     flags: list[str] = Field(default_factory=list, description="Mutable scene state flags")
     exits: list[SceneExit] = Field(default_factory=list, description="Available exits from this scene")
+    visited_count: int = Field(default=1, description="Number of times this scene has been visited")
 
 
 class NarrativeHistoryEntry(BaseModel):

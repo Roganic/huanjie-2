@@ -5,12 +5,12 @@ Scenes are the primary locations where gameplay takes place.
 """
 
 from .data import (
+    InteractiveElement,
     SceneData,
     VILLAGE_SQUARE_SCENE,
     TAVERN_SCENE,
     DUNGEON_ENTRANCE_SCENE,
     COMBAT_ENCOUNTER_SCENE,
-    VAULT_SCENE,
     SCENE_REGISTRY,
     SCENE_TRANSITION_KEYWORDS,
     get_scene_by_id,
@@ -19,7 +19,8 @@ from .data import (
     get_all_scene_names,
     build_scene_context_for_prompt,
 )
-from ..action_handler import (
+from .movement import (
+    MovementResult,
     is_movement_action,
     can_move_in_current_state,
     handle_movement,
@@ -30,12 +31,12 @@ from ..action_handler import (
 )
 
 __all__ = [
+    "InteractiveElement",
     "SceneData",
     "VILLAGE_SQUARE_SCENE",
     "TAVERN_SCENE",
     "DUNGEON_ENTRANCE_SCENE",
     "COMBAT_ENCOUNTER_SCENE",
-    "VAULT_SCENE",
     "SCENE_REGISTRY",
     "SCENE_TRANSITION_KEYWORDS",
     "get_scene_by_id",
@@ -43,6 +44,7 @@ __all__ = [
     "get_default_exploration_scene",
     "get_all_scene_names",
     "build_scene_context_for_prompt",
+    "MovementResult",
     "is_movement_action",
     "can_move_in_current_state",
     "handle_movement",

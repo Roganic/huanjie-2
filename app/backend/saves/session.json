@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "saved_at": "2026-04-02T11:51:47.747941",
-  "session_id": "28528e9505f545e28ebd982cfdf37106",
+  "saved_at": "2026-04-02T12:00:03.627531",
+  "session_id": "c41e4a6e98c34f16b5118438659bf29f",
   "phase": "adventure",
   "game_phase": "exploration",
   "character": {
-    "id": "warrior-testhero",
-    "name": "TestHero",
+    "id": "warrior-aldric",
+    "name": "Aldric",
     "character_class": "warrior",
     "abilities": {
       "str": 15,
@@ -18,7 +18,7 @@
     },
     "proficiency_bonus": 2,
     "level": 1,
-    "hp": 12,
+    "hp": 11,
     "hp_max": 12,
     "ac": 16,
     "conditions": [],
@@ -213,7 +213,7 @@
     "name": "锈迹斑斑的灯笼酒馆",
     "description": "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒，角落里传来轻柔的竖琴声。酒保老马库斯在吧台后面擦拭着酒杯，不时用独眼打量着客人。",
     "actors": [
-      "warrior-testhero"
+      "warrior-aldric"
     ],
     "npcs": [
       {
@@ -222,7 +222,8 @@
         "type": "friendly",
         "description": "灯笼酒馆的老板，一位白发苍苍的老兵，瞎了一只眼但笑容温暖。",
         "race": "人类",
-        "occupation": "酒馆老板"
+        "occupation": "酒馆老板",
+        "role": "merchant"
       },
       {
         "id": "tavern-bard-01",
@@ -230,7 +231,8 @@
         "type": "neutral",
         "description": "在角落演奏竖琴的吟游诗人，据说知道很多古老传说。",
         "race": "精灵",
-        "occupation": "吟游诗人"
+        "occupation": "吟游诗人",
+        "role": "quest_giver"
       },
       {
         "id": "merchant-01",
@@ -238,18 +240,15 @@
         "type": "neutral",
         "description": "独自坐在阴影中的神秘商人，时不时打量着进出的客人。",
         "race": "未知",
-        "occupation": "商人"
+        "occupation": "商人",
+        "role": "merchant"
       }
     ],
     "time": 1,
     "flags": [],
     "exits": [
       {
-        "direction": "村庄广场",
-        "target_scene_id": "village-square-01"
-      },
-      {
-        "direction": "森林入口",
+        "direction": "地下城入口",
         "target_scene_id": "dungeon-entrance-01"
       }
     ]
@@ -257,16 +256,19 @@
   "combat_state": null,
   "action_history": [
     {
-      "action_summary": "TestHero attempts to search the room by look under tables and behind barrels",
+      "action_summary": "Aldric uses athletics to do the impossible",
       "resolution_summary": {
         "resolution_type": "check",
-        "outcome": "success",
+        "outcome": "failure",
         "check": {
           "ability": "str",
+          "skill": "athletics",
+          "proficient": true,
           "modifier": 2,
-          "dc": 15,
-          "roll": 15,
-          "total": 17
+          "proficiency_bonus": 2,
+          "dc": 50,
+          "roll": 4,
+          "total": 8
         },
         "attack": null,
         "saving_throw": null,
@@ -276,14 +278,20 @@
             "field": "time",
             "delta": 1,
             "description": "时间流逝。"
+          },
+          {
+            "target": "warrior-aldric",
+            "field": "hp",
+            "delta": -1,
+            "description": "体力消耗造成轻微伤害。"
           }
         ]
       },
-      "narration_summary": "TestHero sets out to search the room. Through skill and determination, the attempt succeeds, bringing the desired result. A ripple of response moves through 锈迹斑斑的灯笼酒馆 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed. A fresh opening has appeared in 锈迹斑斑的灯笼酒馆, but it will not stay open for long. Time ",
-      "narration": "TestHero sets out to search the room. Through skill and determination, the attempt succeeds, bringing the desired result.",
-      "scene_progression": "A ripple of response moves through 锈迹斑斑的灯笼酒馆 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed.",
-      "gm_prompt": "A fresh opening has appeared in 锈迹斑斑的灯笼酒馆, but it will not stay open for long. Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 1. Do you exploit that opening immediately, question whoever reacts, or examine what just shifted?",
-      "created_at": 1775101907745
+      "narration_summary": "Aldric attempts to do the impossible, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Aldric. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. Time in",
+      "narration": "Aldric attempts to do the impossible, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Aldric. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
+      "gm_prompt": "The failed attempt gives the scene permission to push back. Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 1. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
+      "created_at": 1775102403626
     }
   ],
   "scene_history": []

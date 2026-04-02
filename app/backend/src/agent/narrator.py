@@ -24,6 +24,7 @@ from ..models.action import (
     Outcome,
 )
 from ..models.state import Actor, NarrativeHistoryEntry, Scene
+from ..memory_manager import format_recent_events_for_prompt
 from .providers import get_provider
 from .resolution_constraints import (
     NarrationConstraintContext,
@@ -472,7 +473,15 @@ def generate_narration(
         combat_outcome=combat_outcome,
     )
 
-    # Log combat narrative prompts for observability
+    # Log narrative prompts with memory context for observability
+    # Build memory context summary for logging
+    memory_context = format_recent_events_for_prompt(
+        narrative_history or [],
+        current_scene_name=scene.name,
+        max_events=5,
+    )
+    memory_entry_count = len(narrative_history) if narrative_history else 0
+    
     if attack_result:
         logger.info(
             "Combat narrative prompt generated for %s vs %s (round=%s, hit=%s, damage=%s)",
@@ -486,7 +495,23 @@ def generate_narration(
                 "target_hp": target.hp if target else None,
                 "combat_round": combat_round,
                 "is_combat_ended": is_combat_ended,
+                "memory_entries": memory_entry_count,
+                "memory_context": memory_context[:500] if memory_context else None,
                 "prompt_preview": prompt[:800],
+            },
+        )
+    else:
+        # Log non-combat narrative prompts with memory context
+        logger.info(
+            "Narrative prompt generated for %s action (outcome=%s)",
+            actor.name,
+            outcome.value,
+            extra={
+                "actor_hp": actor.hp,
+                "action_intent": req.intent,
+                "memory_entries": memory_entry_count,
+                "memory_context": memory_context[:500] if memory_context else None,
+                "prompt_preview": prompt[:600],
             },
         )
 

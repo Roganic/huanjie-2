@@ -15,6 +15,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from .models.action import Effect
+from .scene import SceneData, get_default_exploration_scene, get_scene_by_id
 from .models.state import (
     AbilityScores,
     Actor,
@@ -47,12 +48,16 @@ _CHARACTER_CREATION_SCENE_INIT = dict(
     actors=[],
 )
 
-_ADVENTURE_SCENE_INIT = dict(
-    id="tavern-01",
-    name="锈迹斑斑的灯笼酒馆",
-    description="十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒。",
-    actors=[],
-)
+def _get_adventure_scene_init() -> dict:
+    """Get the initial adventure scene with NPCs."""
+    scene = get_default_exploration_scene()
+    return {
+        "id": scene.id,
+        "name": scene.name,
+        "description": scene.description,
+        "actors": [],
+        "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
+    }
 
 _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
     CharacterClass.WARRIOR: {
@@ -301,7 +306,15 @@ def set_combat_scene(session_id: str | None = None) -> None:
         actors = ["goblin-01"]
         if session.actor is not None:
             actors.insert(0, session.actor.id)
-        session.scene = Scene(**{**_COMBAT_SCENE_INIT, "actors": actors})
+        # Use combat scene from scene system with NPCs
+        from .scene import COMBAT_ENCOUNTER_SCENE
+        session.scene = Scene(
+            id=COMBAT_ENCOUNTER_SCENE.id,
+            name=COMBAT_ENCOUNTER_SCENE.name,
+            description=COMBAT_ENCOUNTER_SCENE.description,
+            actors=actors,
+            npcs=COMBAT_ENCOUNTER_SCENE.npcs,
+        )
         session.game_phase = AdventurePhase.COMBAT
         _save_session(session)
 
@@ -312,6 +325,39 @@ def set_exploration_phase(session_id: str | None = None) -> None:
         session = _get_session(resolved_session_id, create_if_missing=True)
         session.game_phase = AdventurePhase.EXPLORATION
         _save_session(session)
+
+
+def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
+    """Switch to a different scene.
+    
+    Args:
+        scene_id: The ID of the scene to switch to
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        True if scene was switched, False if scene_id not found
+    """
+    from .scene import get_scene_by_id
+    
+    scene_data = get_scene_by_id(scene_id)
+    if scene_data is None:
+        return False
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        # Preserve the player actor in the actors list
+        actors = [session.actor.id] if session.actor else []
+        session.scene = Scene(
+            id=scene_data.id,
+            name=scene_data.name,
+            description=scene_data.description,
+            actors=actors,
+            npcs=scene_data.npcs,
+            time=session.scene.time,  # Preserve time from previous scene
+        )
+        _save_session(session)
+    return True
 
 
 def get_game_phase(session_id: str | None = None) -> AdventurePhase:
@@ -459,7 +505,15 @@ def create_character(
             equipped=equipped,
         )
         session.phase = GamePhase.ADVENTURE
-        session.scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [session.actor.id]})
+        # Initialize scene with NPCs from scene system
+        scene_data = get_default_exploration_scene()
+        session.scene = Scene(
+            id=scene_data.id,
+            name=scene_data.name,
+            description=scene_data.description,
+            actors=[session.actor.id],
+            npcs=scene_data.npcs,
+        )
         session.enemy = Actor(**_ENEMY_INIT)
         session.narrative_history = []
         session.scene_history = []
@@ -672,7 +726,14 @@ def _create_fresh_session(session_id: str) -> SessionData:
         )
         session.phase = GamePhase.ADVENTURE
         # Scene with actor in actors list for backward compatibility
-        session.scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [actor_id]})
+        scene_data = get_default_exploration_scene()
+        session.scene = Scene(
+            id=scene_data.id,
+            name=scene_data.name,
+            description=scene_data.description,
+            actors=[actor_id],
+            npcs=scene_data.npcs,
+        )
 
     return session
 

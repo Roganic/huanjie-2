@@ -221,11 +221,32 @@ class Actor(BaseModel):
     equipped: EquippedItems = Field(default_factory=EquippedItems)
 
 
+class NPCType(str, Enum):
+    """NPC disposition types."""
+    FRIENDLY = "friendly"
+    NEUTRAL = "neutral"
+    HOSTILE = "hostile"
+
+
+class NPC(BaseModel):
+    """Non-player character data model.
+    
+    NPCs populate scenes and provide interaction opportunities for players.
+    """
+    id: str
+    name: str
+    type: NPCType = Field(default=NPCType.NEUTRAL, description="NPC disposition type")
+    description: str = Field(default="", description="Brief description of the NPC")
+    race: Optional[str] = Field(default=None, description="NPC race/species")
+    occupation: Optional[str] = Field(default=None, description="NPC occupation or role")
+
+
 class Scene(BaseModel):
     id: str
     name: str
     description: str
     actors: list[str] = Field(default_factory=list, description="Actor IDs present")
+    npcs: list[NPC] = Field(default_factory=list, description="NPCs present in this scene")
     time: int = Field(default=0, description="Abstract time ticks elapsed")
     flags: list[str] = Field(default_factory=list, description="Mutable scene state flags")
 

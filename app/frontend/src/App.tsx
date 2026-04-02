@@ -91,11 +91,21 @@ interface Actor {
   equipped?: EquippedItems;
 }
 
+interface NPC {
+  id: string;
+  name: string;
+  type: "friendly" | "neutral" | "hostile";
+  description: string;
+  race?: string;
+  occupation?: string;
+}
+
 interface Scene {
   id: string;
   name: string;
   description: string;
   actors: string[];
+  npcs: NPC[];
   time?: number;
 }
 
@@ -727,6 +737,22 @@ function CharacterCard({
 function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerName?: string; previousScene?: Scene | null }) {
   const timeChanged = previousScene !== undefined && previousScene !== null && previousScene.time !== scene.time;
 
+  const getNPCTypeLabel = (type: string) => {
+    switch (type) {
+      case "friendly": return "友好";
+      case "hostile": return "敌对";
+      default: return "中立";
+    }
+  };
+
+  const getNPCTypeClass = (type: string) => {
+    switch (type) {
+      case "friendly": return "npc-friendly";
+      case "hostile": return "npc-hostile";
+      default: return "npc-neutral";
+    }
+  };
+
   return (
     <div className="scene-card">
       <div className="scene-name">{scene.name}</div>
@@ -736,6 +762,21 @@ function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerN
         <div className={`scene-time ${timeChanged ? "changed" : ""}`}>
           <span className="scene-time-label">⏱️ 场景时间</span>
           <span className="scene-time-value">{scene.time}</span>
+        </div>
+      )}
+
+      {scene.npcs && scene.npcs.length > 0 && (
+        <div className="scene-npcs">
+          <div className="scene-npcs-label">场景中的NPC</div>
+          <div className="npc-list">
+            {scene.npcs.map((npc, index) => (
+              <div key={index} className={`npc-item ${getNPCTypeClass(npc.type)}`}>
+                <span className="npc-name">{npc.name}</span>
+                <span className="npc-type">[{getNPCTypeLabel(npc.type)}]</span>
+                <span className="npc-desc">{npc.description}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

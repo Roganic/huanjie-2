@@ -282,6 +282,17 @@ def build_narrative_prompt(
     lines.append(f"场景描述 / Scene Description: {scene.description}")
     if scene.flags:
         lines.append(f"场景状态 / Scene Flags: {', '.join(scene.flags)}")
+    # Add NPC information to the prompt
+    if scene.npcs:
+        lines.append("")
+        lines.append("场景中的NPC / NPCs in Scene:")
+        for npc in scene.npcs:
+            type_label = {
+                "friendly": "友好",
+                "neutral": "中立", 
+                "hostile": "敌对",
+            }.get(npc.type.value, npc.type.value)
+            lines.append(f"  - {npc.name} [{type_label}]: {npc.description}")
     lines.append("")
     lines.append(f"角色 / Character: {actor.name}")
     lines.append(f"角色描述 / Character Description: {actor.description}")

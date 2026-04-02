@@ -77,13 +77,13 @@ TAVERN_SCENE = SceneData(
     npcs=[
         NPC(id="tavern-keeper-01", name="老马库斯", type=NPCType.FRIENDLY,
             description="灯笼酒馆的老板，一位白发苍苍的老兵，瞎了一只眼但笑容温暖。",
-            race="人类", occupation="酒馆老板"),
+            race="人类", occupation="酒馆老板", role="merchant"),
         NPC(id="tavern-bard-01", name="银弦艾拉", type=NPCType.NEUTRAL,
             description="在角落演奏竖琴的吟游诗人，据说知道很多古老传说。",
-            race="精灵", occupation="吟游诗人"),
+            race="精灵", occupation="吟游诗人", role="quest_giver"),
         NPC(id="merchant-01", name="戴兜帽的商人", type=NPCType.NEUTRAL,
             description="独自坐在阴影中的神秘商人，时不时打量着进出的客人。",
-            race="未知", occupation="商人"),
+            race="未知", occupation="商人", role="merchant"),
     ],
     available_actions=[
         "与老马库斯交谈，打听消息",
@@ -110,10 +110,10 @@ DUNGEON_ENTRANCE_SCENE = SceneData(
     npcs=[
         NPC(id="wounded-adventurer-01", name="托尔金", type=NPCType.FRIENDLY,
             description="从地下城逃出来的受伤冒险者，神情惊恐。",
-            race="矮人", occupation="冒险者"),
+            race="矮人", occupation="冒险者", role="quest_giver"),
         NPC(id="guard-corpse-01", name="死去的守卫", type=NPCType.NEUTRAL,
             description="倒在地下城入口旁的石像守卫，身上布满了战斗的痕迹。",
-            race="构造体", occupation="守卫"),
+            race="构造体", occupation="守卫", role="guard"),
     ],
     available_actions=[
         "与受伤的托尔金交谈，了解情况",
@@ -140,13 +140,13 @@ COMBAT_ENCOUNTER_SCENE = SceneData(
     npcs=[
         NPC(id="goblin-01", name="哥布林斥候", type=NPCType.HOSTILE,
             description="一只瘦小的哥布林，手持锈迹斑斑的匕首，眼中闪烁着贪婪的光芒。",
-            race="哥布林", occupation="斥候"),
+            race="哥布林", occupation="斥候", role="enemy"),
         NPC(id="goblin-shaman-01", name="哥布林萨满", type=NPCType.HOSTILE,
             description="头戴骨饰的哥布林施法者，正在低声念诵某种咒语。",
-            race="哥布林", occupation="萨满"),
+            race="哥布林", occupation="萨满", role="enemy"),
         NPC(id="wolf-01", name="座狼", type=NPCType.HOSTILE,
             description="一只体型巨大的灰狼，獠牙外露，口水滴落在地上。",
-            race="野兽", occupation="战斗伙伴"),
+            race="野兽", occupation="战斗伙伴", role="enemy"),
     ],
     available_actions=[
         "与哥布林战斗",

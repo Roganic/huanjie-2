@@ -577,6 +577,36 @@ function getXpProgress(currentXp: number, level: number): { current: number; nee
   };
 }
 
+function SpellSlotsDisplay({ slots }: { slots?: SpellSlot[] }) {
+  if (!slots || slots.length === 0) return null;
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>法术位</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {slots.map((slot) => (
+          <div
+            key={slot.level}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "2px 8px",
+              background: "rgba(99,102,241,0.15)",
+              borderRadius: 12,
+              fontSize: 12,
+            }}
+          >
+            <span style={{ color: "var(--text-muted)" }}>{slot.level}环</span>
+            <span style={{ fontWeight: 600, color: slot.current === 0 ? "#ef4444" : "#22c55e" }}>
+              {slot.current}/{slot.max}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MiniCharacterCard({ actor }: { actor: Actor }) {
   const hpPercent = Math.round((actor.hp / actor.hp_max) * 100);
   let hpStatus: "high" | "medium" | "low" = "high";
@@ -613,6 +643,7 @@ function MiniCharacterCard({ actor }: { actor: Actor }) {
           <span className="mini-xp-stat">{xp}</span>
         </div>
       </div>
+      {actor.character_class === "mage" && <SpellSlotsDisplay slots={actor.spell_slots} />}
     </div>
   );
 }
@@ -763,6 +794,9 @@ function CharacterCard({
           </div>
         </div>
       )}
+
+      {/* Spell Slots */}
+      {actor.character_class === "mage" && <SpellSlotsDisplay slots={actor.spell_slots} />}
     </div>
   );
 }
@@ -1653,6 +1687,7 @@ function createPreviewActor(draft: CharacterDraft): Actor | null {
     description: CLASS_SUMMARIES[draft.characterClass],
     conditions: [],
     skills,
+    spell_slots: draft.characterClass === "mage" ? [{ level: 1, max: 2, current: 2 }] : undefined,
   };
 }
 

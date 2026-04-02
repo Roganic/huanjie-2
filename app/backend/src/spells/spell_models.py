@@ -85,6 +85,9 @@ class Spell(BaseModel):
     range_ft: int = 60              # Range in feet
     casting_time: str = "1 action"
     description: str = ""
+    # Healing spells
+    healing_dice: Optional[str] = None     # e.g., "1d8"
+    healing_bonus_ability: Optional[str] = None  # Ability for healing bonus (int/wis/etc)
     
     # Class spell lists this spell belongs to
     available_to: list[str] = []    # ["mage", "cleric", etc.]

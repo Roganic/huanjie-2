@@ -880,6 +880,92 @@ def get_actor_equipment(session_id: str | None = None) -> dict:
     return format_equipment_for_response(actor)
 
 
+def consume_actor_spell_slot(slot_level: int, session_id: str | None = None) -> dict:
+    """Consume a spell slot for the current actor and persist.
+    
+    Args:
+        slot_level: The level of the spell slot to consume
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        A dictionary with success status and updated spell_slots
+    """
+    from .spells.spell_resolver import consume_spell_slot
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.actor is None:
+            return {"success": False, "error": "No character found", "spell_slots": []}
+        
+        consumed = consume_spell_slot(session.actor, slot_level)
+        if not consumed:
+            spell_slots_info = [
+                {"level": s.level, "max": s.max, "current": s.current}
+                for s in session.actor.spell_slots
+            ]
+            return {
+                "success": False,
+                "error": f"没有剩余的 {slot_level} 环法术位",
+                "spell_slots": spell_slots_info,
+            }
+        
+        _save_session(session)
+        
+        # Persist to save file
+        try:
+            from . import game_state
+            game_state.save_current_game(session_id=resolved_session_id)
+        except Exception:
+            pass
+        
+        spell_slots_info = [
+            {"level": s.level, "max": s.max, "current": s.current}
+            for s in session.actor.spell_slots
+        ]
+        return {"success": True, "spell_slots": spell_slots_info}
+
+
+def restore_actor_spell_slots(rest_type: str = "long", session_id: str | None = None) -> dict:
+    """Restore spell slots for the current actor after rest and persist.
+    
+    Args:
+        rest_type: "short" or "long"
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        A dictionary with success status, whether any slots were restored, and updated spell_slots
+    """
+    from .spells.spell_resolver import restore_spell_slots
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.actor is None:
+            return {"success": False, "error": "No character found", "spell_slots": [], "restored": False}
+        
+        restored = restore_spell_slots(session.actor, rest_type)
+        _save_session(session)
+        
+        # Persist to save file
+        try:
+            from . import game_state
+            game_state.save_current_game(session_id=resolved_session_id)
+        except Exception:
+            pass
+        
+        spell_slots_info = [
+            {"level": s.level, "max": s.max, "current": s.current}
+            for s in session.actor.spell_slots
+        ]
+        return {
+            "success": True,
+            "restored": restored,
+            "rest_type": rest_type,
+            "spell_slots": spell_slots_info,
+        }
+
+
 def reset_state(session_id: str | None = None) -> BootstrapState:
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:

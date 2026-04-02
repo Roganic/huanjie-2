@@ -5,7 +5,6 @@ Scenes are the primary locations where gameplay takes place.
 """
 
 from .data import (
-    InteractiveElement,
     SceneData,
     VILLAGE_SQUARE_SCENE,
     TAVERN_SCENE,
@@ -22,12 +21,15 @@ from .data import (
 )
 from ..action_handler import (
     is_movement_action,
+    can_move_in_current_state,
     handle_movement,
     get_available_exits,
+    get_current_scene_info,
+    MOVEMENT_VERBS,
+    COMBAT_KEYWORDS,
 )
 
 __all__ = [
-    "InteractiveElement",
     "SceneData",
     "VILLAGE_SQUARE_SCENE",
     "TAVERN_SCENE",
@@ -42,6 +44,10 @@ __all__ = [
     "get_all_scene_names",
     "build_scene_context_for_prompt",
     "is_movement_action",
+    "can_move_in_current_state",
     "handle_movement",
     "get_available_exits",
+    "get_current_scene_info",
+    "MOVEMENT_VERBS",
+    "COMBAT_KEYWORDS",
 ]

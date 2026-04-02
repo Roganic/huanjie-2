@@ -68,10 +68,16 @@ def restore_spell_slots(actor: Actor, rest_type: str = "long") -> bool:
     if actor.spell_slots is None:
         return False
     
-    # Short rest does not restore spell slots for mages in D&D 5e
-    # (unless they have features like Arcane Recovery, which we skip for now)
     if rest_type == "short":
-        return False
+        # Short rest restores half of missing slots (rounded down), min 1
+        restored = False
+        for slot in actor.spell_slots:
+            missing = slot.max - slot.current
+            if missing > 0:
+                recover = max(1, missing // 2)
+                slot.current = min(slot.max, slot.current + recover)
+                restored = True
+        return restored
     
     # Long rest restores all spell slots
     restored = False
@@ -129,8 +135,8 @@ def cast_spell(
         )
     
     # Check if can cast
-    can_cast, error = can_cast_spell(caster, spell)
-    if not can_cast:
+    can_cast_result, error = can_cast_spell(caster, spell)
+    if not can_cast_result:
         return SpellCastResult(
             success=False,
             spell_name=spell.name_cn,
@@ -157,6 +163,31 @@ def cast_spell(
         target=target.name if target else None,
         auto_hit=spell.auto_hit,
     )
+    
+    # Handle healing spells
+    if spell.healing_dice:
+        healing_bonus = 0
+        if spell.healing_bonus_ability:
+            healing_bonus = caster.abilities.modifier(spell.healing_bonus_ability)
+        heal_amount, rolls = roll_damage(spell.healing_dice)
+        total_healing = heal_amount + healing_bonus
+        
+        result.damage = -total_healing  # Negative damage = healing
+        result.damage_rolls = rolls
+        result.damage_type = None
+        
+        if target:
+            result.narrative = (
+                f"{caster.name} 施放 {spell.name_cn}，"
+                f"{target.name} 恢复 {total_healing} 点生命值。"
+            )
+        else:
+            result.narrative = (
+                f"{caster.name} 施放 {spell.name_cn}，"
+                f"恢复 {total_healing} 点生命值。"
+            )
+        
+        return result
     
     # Handle auto-hit spells (like Magic Missile)
     if spell.auto_hit and spell.damage_dice:
@@ -220,30 +251,44 @@ def cast_spell(
         
         return result
     
-    # Handle saving throw spells (like Burning Hands)
+    # Handle saving throw spells (like Fireball, Burning Hands)
     if spell.saving_throw_ability and spell.damage_dice:
         dc = _calculate_spell_dc(caster, spell)
         result.saving_throw_required = True
         result.saving_throw_ability = spell.saving_throw_ability
         result.saving_throw_dc = dc
         
-        # For simplicity, assume target fails save (or we could roll)
-        # In a real implementation, we'd roll the target's saving throw
+        # Roll target's saving throw if target exists
+        if target:
+            save_modifier = target.abilities.modifier(spell.saving_throw_ability)
+            save_roll = roll_d20()
+            total_save = save_roll + save_modifier
+            save_success = total_save >= dc
+        else:
+            save_success = False
+            save_roll = 0
+            total_save = 0
+        
         dmg, rolls = roll_damage(spell.damage_dice)
-        result.damage = dmg
+        # Half damage on successful save
+        damage_total = dmg // 2 if save_success else dmg
+        result.damage = damage_total
         result.damage_rolls = rolls
         result.damage_type = spell.damage_type
         
         if target:
+            save_result_text = "成功" if save_success else "失败"
             result.narrative = (
                 f"{caster.name} 施放 {spell.name_cn}，"
-                f"{target.name} 尝试 {spell.saving_throw_ability.upper()} 豁免 (DC {dc})... 失败！"
-                f"受到 {dmg} 点 {spell.damage_type.value if spell.damage_type else ''}伤害！"
+                f"{target.name} 尝试 {spell.saving_throw_ability.upper()} 豁免 (DC {dc})... "
+                f"d20={save_roll} + {save_modifier} = {total_save} {save_result_text}！"
+                f"受到 {damage_total} 点 {spell.damage_type.value if spell.damage_type else ''}伤害"
+                f"{' (减半)' if save_success else ''}。"
             )
         else:
             result.narrative = (
                 f"{caster.name} 施放 {spell.name_cn}，"
-                f"造成 {dmg} 点伤害！"
+                f"造成 {damage_total} 点伤害！"
             )
         
         return result
@@ -280,7 +325,10 @@ def parse_cast_command(intent: str) -> tuple[Optional[str], Optional[str]]:
 def is_cast_command(intent: str) -> bool:
     """Check if the intent is a spell cast command."""
     cast_keywords = ["施放", "cast", "使用", "use"]
-    spell_names = ["魔法飞弹", "燃烧之手", "寒冰射线", "magic missile", "burning hands", "ray of frost"]
+    spell_names = [
+        "魔法飞弹", "燃烧之手", "火球术", "治疗之触", "寒冰射线",
+        "magic missile", "burning hands", "fireball", "cure wounds", "ray of frost",
+    ]
     
     intent_lower = intent.lower()
     
@@ -301,16 +349,16 @@ def is_rest_command(intent: str) -> tuple[bool, str]:
     """
     intent_lower = intent.lower()
     
-    # Long rest patterns
-    long_rest_patterns = ["长休", "long rest", "休息", "rest"]
-    for pattern in long_rest_patterns:
-        if pattern in intent_lower:
-            return True, "long"
-    
-    # Short rest patterns
+    # Short rest patterns - check first so they take precedence
     short_rest_patterns = ["短休", "short rest"]
     for pattern in short_rest_patterns:
         if pattern in intent_lower:
             return True, "short"
+    
+    # Long rest patterns
+    long_rest_patterns = ["长休", "long rest"]
+    for pattern in long_rest_patterns:
+        if pattern in intent_lower:
+            return True, "long"
     
     return False, ""

@@ -29,7 +29,7 @@
 - ✅ 职业特性：战士 second_wind/action_surge、盗贼偷袭
 - ✅ 战斗先攻：initiative_order 正确排序，current_turn 正确推进
 - ✅ 地图系统：场景切换后 current_node 和 explored_nodes 正确同步
-- ✅ 法师施法：法术槽消耗、伤害/治疗效果
+- ✅ 法师施法：法术槽消耗、伤害/治疗效果、长休恢复、完整施法循环测试
 
 ## Later
 

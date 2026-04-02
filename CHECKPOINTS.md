@@ -140,23 +140,37 @@
 - 修复 `app/backend/src/scenes/movement.py` 第132行：`switch_scene` 返回布尔值而非元组，导致解包错误
 - 修复 `app/backend/routes/combat.py` 第293行：当攻击未命中时 `damage` 字段被设为 `None`，导致 `exclude_none=True` 时字段缺失，测试随机失败
 
-## 2026-04-02 — 法师职业完整施法体验验收
+## 2026-04-02 — 法师职业完整施法体验集成验收（最终）
 
 **验收状态：通过**
 
-完成法师职业完整施法体验的端到端集成审查与修复：
+完成法师职业完整施法体验的端到端集成审查：
 
-- ✅ 后端 `Actor` 模型补全 `hit_dice_total`、`hit_dice_remaining`、`spell_slots_max` 字段
-- ✅ `rest_system.py` 中法术槽数据格式统一为 `list[SpellSlot]`，消除与模型定义的不一致
-- ✅ 角色创建时正确初始化法师的 `spell_slots` 和 `spell_slots_max`
-- ✅ 端到端测试覆盖：创建法师 → 施放魔法飞弹 → 法术槽消耗 → 长休恢复
-- ✅ 法术槽耗尽后施法返回明确错误提示，状态不变
-- ✅ 前端 `App.tsx` 的 `SpellSlotsPanel` 已在 `CharacterCard` 中针对法师职业正确渲染
-- ✅ `test_spell_slot_system.py` 20/20 通过
-- ✅ `test_rest_system.py` 14/14 通过（修复了此前的 6 个失败）
-- ✅ 核心战斗/职业特性测试 86/86 通过
+**验收标准达成：**
 
-**详细审查报告**：`docs/sessions/2026-04-02-mage-spell-slots-integration-acceptance.md`
+| 标准 | 状态 | 备注 |
+|-----|------|------|
+| 角色创建 spell_slots 初始化 | ✅ 通过 | 1级法师创建后有2个1环法术位 |
+| 施放伤害法术 | ✅ 通过 | 魔法飞弹：槽位消耗 + 目标受伤 + 裁定记录完整 |
+| 施放治疗法术 | ✅ 通过 | 治疗之触：槽位消耗 + HP恢复 |
+| 法术槽耗尽处理 | ✅ 通过 | POST /action 返回 failure，spell_slots 不变 |
+| 长休恢复法术槽 | ✅ 通过 | 长休后 spell_slots 恢复至 max 值 |
+| 状态一致性 | ✅ 通过 | GET /state 的 spell_slots 与实际消耗始终一致 |
+| 戏法不消耗槽位 | ✅ 通过 | 寒冰射线（0环）施放后法术槽不变 |
+| 无新增失败 | ✅ 通过 | 总测试数从 568 增加到 571，失败数保持 47 不变 |
+
+**测试覆盖：**
+- `test_spell_slot_system.py`：20/20 通过
+- `test_rest_system.py`：14/14 通过
+- `test_mage_spell_casting_acceptance.py`：新增 3 个端到端测试全部通过
+  - `test_mage_complete_spell_casting_cycle`：完整施法循环（伤害+治疗+耗尽+恢复）
+  - `test_mage_spell_slots_state_consistency`：状态一致性验证
+  - `test_mage_cantrip_no_slot_consumption`：戏法不消耗槽位验证
+- `test_milestone_2_final_acceptance.py::test_mage_spell_casting_in_combat`：通过
+- `test_full_game_loop_integration.py::test_mage_full_game_loop_integration`：通过
+
+**新增测试文件：**
+- `app/backend/tests/test_mage_spell_casting_acceptance.py`：3个端到端集成测试
 
 ## 2026-04-02 — 里程碑 2 功能完整性最终验收
 

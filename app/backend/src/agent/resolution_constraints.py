@@ -1,4 +1,12 @@
-"""Mapping and validation helpers for narration hard constraints."""
+"""Mapping and validation helpers for narration hard constraints.
+
+This module implements the AI Narrative Constraint System that ensures:
+1. Numeric Authority: AI cannot declare or modify numeric values (HP, damage, etc.)
+2. Plot Control: AI cannot force story progression beyond rule-engine results
+3. Combat Integrity: AI cannot contradict combat outcomes (hit/miss, defeat, etc.)
+
+Constraint violations are logged and trigger fallback to safe narrative templates.
+"""
 
 from __future__ import annotations
 
@@ -57,8 +65,13 @@ DEFEAT_INDICATORS = (
     " slain",
     " kills ",
     " killed ",
+    " killing",
+    " kill ",
     " dead",
     " collapses lifeless",
+    " dies",
+    " dying",
+    " lifeless",
 )
 
 # Patterns for detecting unauthorized numeric declarations in narrative
@@ -123,6 +136,35 @@ UNAUTHORIZED_AC_PATTERNS = [
     re.compile(r"armor\s*class\s*(?:becomes?|is\s*now)\s*\d+"),
 ]
 
+# Patterns for detecting unauthorized plot advancement / story forcing
+# These patterns indicate AI trying to bypass rule engine by auto-resolving events
+UNAUTHORIZED_PLOT_ADVANCE_PATTERNS = [
+    # Chinese plot forcing patterns - auto-resolution without checks
+    re.compile(r"(?:你|你们)\s*(?:成功|顺利|轻松)\s*(?:地)?\s*(?:通过|穿过|越过|解开|解决|击败|说服)"),
+    re.compile(r"(?:敌人|怪物|对手)\s*(?:被击败|被消灭|被杀死|投降|逃跑|撤退)"),
+    re.compile(r"(?:谜题|陷阱|门|锁)\s*(?:自动|自己|轻易)\s*(?:解开|打开|破解|解除)"),
+    re.compile(r"(?:场景|剧情|故事)\s*(?:直接|立刻|马上)\s*(?:进入|跳转到|转换到)"),
+    re.compile(r"(?:无需|不用)\s*(?:检定|判定|投骰|检查)"),
+    # English plot forcing patterns
+    re.compile(r"(?:you|the\s+party)\s+(?:automatically|easily|successfully)\s+(?:defeat|kill|persuade|unlock|solve)", re.IGNORECASE),
+    re.compile(r"(?:the\s+enemy|monster|boss)\s+(?:is\s+defeated|dies|surrenders|flees|retreats)", re.IGNORECASE),
+    re.compile(r"(?:puzzle|trap|door|lock)\s+(?:unlocks|opens|disarms|solves)\s+(?:automatically|itself|easily)", re.IGNORECASE),
+    re.compile(r"(?:scene|story|plot)\s+(?:jumps|skips|advances|moves)\s+(?:directly|immediately|to)", re.IGNORECASE),
+    re.compile(r"(?:no\s+(?:check|roll)|without\s+(?:checking|rolling)|skip\s+the\s+check)", re.IGNORECASE),
+]
+
+# Patterns for detecting unauthorized state changes not from rule engine
+UNAUTHORIZED_STATE_CHANGE_PATTERNS = [
+    # Chinese unauthorized state changes
+    re.compile(r"(?:获得|得到|失去)\s*(?:了)?\s*(?:\w+)?\s*(?:状态|condition|buff|debuff)"),
+    re.compile(r"(?:状态|condition)\s*(?:变为|改成|设置为)"),
+    re.compile(r"(?:获得|得到)\s*(?:了)?\s*(?:中毒|恐惧|麻痹|眩晕|昏迷| restrained|prone|poisoned|frightened)"),
+    # English unauthorized state changes
+    re.compile(r"(?:gain|lose|receive)\s+(?:the\s+)?\w+\s+(?:condition|status|state)", re.IGNORECASE),
+    re.compile(r"(?:condition|status|state)\s+(?:becomes?|changes?\s+to|is\s+set\s+to)", re.IGNORECASE),
+    re.compile(r"(?:gain|receive|afflicted\s+by)\s+(?:the\s+)?(?:poisoned|frightened|paralyzed|stunned|restrained|prone)", re.IGNORECASE),
+]
+
 ALL_UNAUTHORIZED_PATTERNS = (
     UNAUTHORIZED_HP_PATTERNS
     + UNAUTHORIZED_RESOURCE_GAIN_PATTERNS
@@ -130,6 +172,8 @@ ALL_UNAUTHORIZED_PATTERNS = (
     + UNAUTHORIZED_DAMAGE_ANNOUNCEMENT_PATTERNS
     + UNAUTHORIZED_HEALING_ANNOUNCEMENT_PATTERNS
     + UNAUTHORIZED_AC_PATTERNS
+    + UNAUTHORIZED_PLOT_ADVANCE_PATTERNS
+    + UNAUTHORIZED_STATE_CHANGE_PATTERNS
 )
 
 
@@ -390,10 +434,18 @@ def detect_unauthorized_numeric_declarations(text: str) -> list[dict]:
         List of violation dictionaries with pattern type and matched text
     """
     violations: list[dict] = []
-    text_normalized = text.lower().replace("", "").replace("", "")
     
-    # Check all unauthorized patterns
-    for pattern in ALL_UNAUTHORIZED_PATTERNS:
+    # Check numeric-related unauthorized patterns
+    numeric_patterns = (
+        UNAUTHORIZED_HP_PATTERNS
+        + UNAUTHORIZED_RESOURCE_GAIN_PATTERNS
+        + UNAUTHORIZED_RESOURCE_LOSS_PATTERNS
+        + UNAUTHORIZED_DAMAGE_ANNOUNCEMENT_PATTERNS
+        + UNAUTHORIZED_HEALING_ANNOUNCEMENT_PATTERNS
+        + UNAUTHORIZED_AC_PATTERNS
+    )
+    
+    for pattern in numeric_patterns:
         for match in pattern.finditer(text):
             violations.append({
                 "type": "unauthorized_numeric_declaration",
@@ -433,17 +485,105 @@ def detect_unauthorized_numeric_declarations(text: str) -> list[dict]:
     return violations
 
 
+def detect_unauthorized_plot_advancement(text: str) -> list[dict]:
+    """Detect unauthorized plot advancement / story forcing in narrative text.
+    
+    This function scans for patterns where the AI attempts to bypass the rule
+    engine by auto-resolving challenges, skipping required checks, or forcing
+    story progression without proper resolution.
+    
+    Args:
+        text: The narrative text to scan
+        
+    Returns:
+        List of violation dictionaries with pattern type and matched text
+    """
+    violations: list[dict] = []
+    text_lower = text.lower()
+    
+    # Check plot advancement patterns
+    for pattern in UNAUTHORIZED_PLOT_ADVANCE_PATTERNS:
+        for match in pattern.finditer(text):
+            violations.append({
+                "type": "unauthorized_plot_advancement",
+                "pattern": pattern.pattern[:50] + "..." if len(pattern.pattern) > 50 else pattern.pattern,
+                "matched_text": match.group(0),
+                "position": match.start(),
+            })
+    
+    # Additional contextual checks for story forcing
+    plot_forcing_indicators = [
+        # Chinese indicators
+        ("任务完成", "quest_auto_complete"),
+        ("自动成功", "auto_success_claim"),
+        ("直接胜利", "direct_victory_claim"),
+        ("剧情跳过", "story_skip"),
+        ("直接进入", "direct_entry_without_resolution"),
+        ("无需战斗", "combat_avoidance_without_rules"),
+        # English indicators
+        ("quest completes", "quest_auto_complete"),
+        ("mission accomplished", "mission_auto_complete"),
+        ("instant success", "auto_success_claim"),
+        ("automatic victory", "direct_victory_claim"),
+        ("skip to", "story_skip"),
+        ("bypass the", "mechanic_bypass"),
+    ]
+    
+    for indicator, violation_type in plot_forcing_indicators:
+        if indicator in text_lower:
+            idx = text_lower.find(indicator)
+            violations.append({
+                "type": violation_type,
+                "pattern": indicator,
+                "matched_text": text[idx:idx + len(indicator)],
+                "position": idx,
+            })
+    
+    return violations
+
+
+def detect_unauthorized_state_changes(text: str) -> list[dict]:
+    """Detect unauthorized state changes declared in narrative text.
+    
+    This function scans for patterns where the AI attempts to declare state
+    changes (conditions, buffs, debuffs) that should only come from the rule engine.
+    
+    Args:
+        text: The narrative text to scan
+        
+    Returns:
+        List of violation dictionaries with pattern type and matched text
+    """
+    violations: list[dict] = []
+    
+    for pattern in UNAUTHORIZED_STATE_CHANGE_PATTERNS:
+        for match in pattern.finditer(text):
+            violations.append({
+                "type": "unauthorized_state_change",
+                "pattern": pattern.pattern[:50] + "..." if len(pattern.pattern) > 50 else pattern.pattern,
+                "matched_text": match.group(0),
+                "position": match.start(),
+            })
+    
+    return violations
+
+
 def validate_narrative_for_overreach(
     action_result: str,
     scene_progression: str,
     gm_prompt: str,
     context: NarrationConstraintContext | None = None,
 ) -> ValidationResult:
-    """Validate narrative text for AI overreach on numeric authority.
+    """Validate narrative text for AI overreach across all constraint categories.
     
-    This is the main post-processing validation function that checks if the AI
-    has attempted to declare numerical values without authorization from the
-    rule engine.
+    This is the main post-processing validation function that implements
+    the three-tier constraint system:
+    1. Numeric Authority: AI cannot declare/modify numeric values (HP, damage, etc.)
+    2. Plot Control: AI cannot force story progression beyond rule engine results
+    3. Combat Integrity: AI cannot contradict combat outcomes (hit/miss, defeat, etc.)
+    
+    When violations are detected, they are logged and the narrative is marked
+    for fallback to safe templates.
     
     Args:
         action_result: The action_result field from narration
@@ -457,12 +597,22 @@ def validate_narrative_for_overreach(
     all_violations: list[str] = []
     combined_text = f"{action_result} {scene_progression} {gm_prompt}"
     
-    # Check for unauthorized numeric declarations
+    # Category 1: Numeric Authority Violations
     numeric_violations = detect_unauthorized_numeric_declarations(combined_text)
     for v in numeric_violations:
-        all_violations.append(f"{v['type']}: '{v['matched_text']}' at position {v['position']}")
+        all_violations.append(f"numeric_overreach[{v['type']}]: '{v['matched_text']}'")
     
-    # Also run the contradiction checks if context is provided
+    # Category 2: Plot Advancement / Story Forcing Violations
+    plot_violations = detect_unauthorized_plot_advancement(combined_text)
+    for v in plot_violations:
+        all_violations.append(f"plot_forcing[{v['type']}]: '{v['matched_text']}'")
+    
+    # Category 3: Unauthorized State Changes
+    state_violations = detect_unauthorized_state_changes(combined_text)
+    for v in state_violations:
+        all_violations.append(f"state_overreach[{v['type']}]: '{v['matched_text']}'")
+    
+    # Category 4: Combat Result / Outcome Contradictions
     if context:
         contradictions = find_contradictions(action_result, scene_progression, context)
         all_violations.extend(contradictions)
@@ -472,12 +622,13 @@ def validate_narrative_for_overreach(
     # Log warnings for any violations
     if not is_valid:
         logger.warning(
-            "Narrative validation detected %d violations: %s",
+            "Narrative constraint validation detected %d violations: %s",
             len(all_violations),
             "; ".join(all_violations),
             extra={
                 "violations": all_violations,
                 "action_result_preview": action_result[:100] if action_result else "",
+                "scene_progression_preview": scene_progression[:100] if scene_progression else "",
             },
         )
     
@@ -485,7 +636,12 @@ def validate_narrative_for_overreach(
     marked_narrative = None
     if not is_valid:
         violation_marker = "\n\n[VALIDATION WARNING - 校验警告]\n"
-        violation_marker += "以下叙事内容违反数值约束规则，已被标记：\n"
+        violation_marker += "以下叙事内容违反约束规则，已被标记：\n"
+        violation_marker += "违规类型说明：\n"
+        violation_marker += "- numeric_overreach: 数值越权（AI试图声明HP/伤害等数值）\n"
+        violation_marker += "- plot_forcing: 剧情强推（AI试图绕过规则引擎推进剧情）\n"
+        violation_marker += "- state_overreach: 状态越权（AI试图声明状态变化）\n"
+        violation_marker += "- contradiction: 结果矛盾（叙事与裁定结果矛盾）\n\n"
         for i, v in enumerate(all_violations, 1):
             violation_marker += f"{i}. {v}\n"
         marked_narrative = combined_text + violation_marker

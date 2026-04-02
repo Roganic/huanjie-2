@@ -153,6 +153,14 @@ class AttackDetail(BaseModel):
     damage: Optional[DamageDetail] = None
 
 
+class ItemUseDetail(BaseModel):
+    """Details of an item use resolution."""
+    item_name: str
+    effect_type: str
+    roll_result: int
+    hp_change: int
+
+
 class SavingThrowDetail(BaseModel):
     """Details of a saving throw (for multi-step actions)."""
     target: str
@@ -188,6 +196,7 @@ class ActionResponse(BaseModel):
     skill_check: Optional[SkillCheckDetail] = None
     attack: Optional[AttackDetail] = None
     saving_throw: Optional[SavingThrowDetail] = None
+    item_use: Optional[ItemUseDetail] = None
     outcome: Outcome
     effects: list[Effect] = Field(default_factory=list)
     combat_state: Optional[CombatState] = Field(default=None, description="Combat context if in combat")

@@ -11,7 +11,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from ..agent.orchestrator import resolve_action_with_agent
-from ..models.action import ActionRequest, ActionResponse
+from ..items import resolve_item_use
+from ..models.action import ActionRequest, ActionResponse, Effect, Outcome, ResolutionType
 from ..models.state import AdventurePhase
 from ..scene import get_scene_transition, build_scene_context_for_prompt, get_scene_by_id
 from ..scenes import (
@@ -20,13 +21,16 @@ from ..scenes import (
     get_available_exits,
 )
 from ..state import (
+    apply_effects,
     append_action_history,
+    get_actor,
     has_character,
     require_bootstrap_state,
     reset_current_session,
     set_combat_scene,
     set_current_session,
     switch_scene,
+    update_combatant_hp,
     _get_session,
     _resolve_session_id,
     _save_session,
@@ -49,6 +53,52 @@ def _should_trigger_combat(intent: str, approach: str) -> bool:
     if is_movement_action(intent, approach):
         return False
     return any(keyword in text for keyword in _COMBAT_TRIGGER_KEYWORDS)
+
+
+# Item use keywords
+_ITEM_USE_PREFIXES = [
+    "使用", "用", "use", "consume", "drink", "喝",
+]
+
+
+def _is_item_use_action(intent: str, approach: str) -> bool:
+    """Check if an action is an item use action."""
+    text = f"{intent} {approach}".lower().strip()
+    for prefix in _ITEM_USE_PREFIXES:
+        if prefix.isascii():
+            # English prefixes: require word boundary or space
+            if text.startswith(prefix.lower()) or f" {prefix.lower()}" in text:
+                return True
+        else:
+            # Chinese prefixes
+            if text.startswith(prefix) or text.startswith(f"{prefix}"):
+                return True
+    return False
+
+
+def _parse_item_name(intent: str, approach: str) -> str:
+    """Parse item name from an item use action text."""
+    text = f"{intent} {approach}".strip()
+    
+    # Try Chinese "使用X"
+    if text.startswith("使用"):
+        return text[2:].strip()
+    if text.startswith("用"):
+        return text[1:].strip()
+    if text.startswith("喝"):
+        return text[1:].strip()
+    
+    # Try English "use X", "consume X", "drink X"
+    lower = text.lower()
+    for prefix in ("use ", "consume ", "drink "):
+        if lower.startswith(prefix):
+            return text[len(prefix):].strip()
+    
+    # Fallback: remove the first word/prefix and return the rest
+    parts = text.split(None, 1)
+    if len(parts) > 1:
+        return parts[1].strip()
+    return text
 
 
 def _sse_event(event: str, data: dict) -> str:
@@ -109,6 +159,63 @@ async def submit_action(req: ActionRequest, request: Request):
             create_character(
                 CharacterCreateRequest(name="Aldric", character_class="warrior"),
                 session_id=session_id,
+            )
+
+        # Check for item use actions before routing to agent
+        if _is_item_use_action(req.intent, req.approach):
+            actor = get_actor(session_id=session_id)
+            if actor is None:
+                raise HTTPException(status_code=400, detail="No character found.")
+            
+            item_name = _parse_item_name(req.intent, req.approach)
+            item_result = resolve_item_use(actor, item_name)
+            
+            if not item_result.success:
+                raise HTTPException(status_code=400, detail=item_result.error_message)
+            
+            # Apply effects (HP change and inventory removal)
+            apply_effects(item_result.effects or [], session_id=session_id)
+            
+            # Refresh actor to get updated HP
+            actor = get_actor(session_id=session_id) or actor
+            
+            # Update combat state HP if in combat
+            session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+            if session.game_phase == AdventurePhase.COMBAT:
+                update_combatant_hp(actor.id, actor.hp)
+            
+            result = ActionResponse(
+                action_summary=item_result.action_summary,
+                resolution_type=ResolutionType.AUTO_SUCCESS,
+                outcome=Outcome.SUCCESS,
+                effects=item_result.effects or [],
+                item_use=item_result.item_use,
+                narration=item_result.narration,
+                scene_progression=item_result.scene_progression,
+                gm_prompt=item_result.gm_prompt,
+            )
+            
+            append_action_history(
+                {
+                    "action": result.action_summary,
+                    "result": result.outcome.value,
+                    "narrative_summary": (result.narration or "")[:400],
+                },
+                session_id=session_id,
+            )
+            
+            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
+            if not accepts_stream:
+                return result
+            
+            return StreamingResponse(
+                _stream_action_response(result),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
             )
 
         try:

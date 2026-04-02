@@ -43,11 +43,19 @@ interface Effect {
   description: string;
 }
 
+interface ItemUseDetail {
+  item_name: string;
+  effect_type: string;
+  roll_result: number;
+  hp_change: number;
+}
+
 interface ActionResponse {
   action_summary: string;
   resolution_type: "auto_success" | "check";
   check: CheckDetail | null;
   skill_check: SkillCheckDetail | null;
+  item_use: ItemUseDetail | null;
   outcome: "success" | "failure";
   effects: Effect[];
   narration: string;
@@ -962,6 +970,16 @@ function ScrollableNarrativeHistory({
                     </span>
                   )}
                 </div>
+                {message.resolution.item_use && (
+                  <div className="item-use-sm">
+                    <span className="item-use-icon">🧪</span>
+                    <span className="item-use-name">{message.resolution.item_use.item_name}</span>
+                    <span className={`item-use-effect ${message.resolution.item_use.hp_change > 0 ? "positive" : message.resolution.item_use.hp_change < 0 ? "negative" : ""}`}>
+                      {message.resolution.item_use.effect_type === "heal" ? "恢复" : ""} {message.resolution.item_use.hp_change} HP
+                    </span>
+                    <span className="item-use-roll">(roll: {message.resolution.item_use.roll_result})</span>
+                  </div>
+                )}
                 {message.resolution.effects.length > 0 && (
                   <div className="effects-sm">
                     {message.resolution.effects.map((eff, index) => (

@@ -16,6 +16,7 @@ class ItemType(str, Enum):
     """Types of items."""
     WEAPON = "weapon"
     ARMOR = "armor"
+    CONSUMABLE = "consumable"
 
 
 class Weapon(BaseModel):
@@ -36,6 +37,17 @@ class Armor(BaseModel):
     base_ac: int  # Base AC value (e.g., 16 for chain mail)
     add_dex_modifier: bool = True  # Whether to add DEX modifier
     max_dex_bonus: int | None = None  # Max DEX bonus (None = no limit)
+    description: str = ""
+    
+    model_config = {"populate_by_name": True}
+
+
+class Consumable(BaseModel):
+    """Consumable item definition."""
+    id: str
+    name: str
+    effect_type: str = "heal"  # e.g., "heal", "buff"
+    effect_dice: str | None = None  # e.g., "2d4+2"
     description: str = ""
     
     model_config = {"populate_by_name": True}
@@ -78,6 +90,15 @@ class InventoryItem(BaseModel):
             add_dex_modifier=armor.add_dex_modifier,
             max_dex_bonus=armor.max_dex_bonus,
             description=armor.description,
+        )
+    
+    @classmethod
+    def from_consumable(cls, consumable: Consumable) -> "InventoryItem":
+        return cls(
+            id=consumable.id,
+            name=consumable.name,
+            type=ItemType.CONSUMABLE,
+            description=consumable.description,
         )
 
 
@@ -140,6 +161,16 @@ DEFAULT_ARMORS: dict[str, Armor] = {
         add_dex_modifier=True,
         max_dex_bonus=None,
         description="普通的布制长袍，几乎没有防护能力。",
+    ),
+}
+
+DEFAULT_CONSUMABLES: dict[str, Consumable] = {
+    "healing_potion": Consumable(
+        id="healing_potion",
+        name="治疗药水",
+        effect_type="heal",
+        effect_dice="2d4+2",
+        description="一瓶红色的治疗药水，饮用后可恢复生命值。",
     ),
 }
 

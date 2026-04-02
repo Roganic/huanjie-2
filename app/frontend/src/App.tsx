@@ -71,6 +71,12 @@ interface AbilityScores {
   cha: number;
 }
 
+interface SpellSlot {
+  level: number;
+  max: number;
+  current: number;
+}
+
 interface Actor {
   id: string;
   name: string;
@@ -84,6 +90,7 @@ interface Actor {
   description: string;
   conditions?: string[];
   skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
+  spell_slots?: SpellSlot[];
 }
 
 interface NPC {
@@ -554,6 +561,9 @@ function CharacterCard({
   previousActor?: Actor | null;
   newConditions?: string[];
 }) {
+  // Check if character has spell slots
+  const hasSpellSlots = actor.character_class === "mage" && actor.spell_slots && actor.spell_slots.length > 0;
+
   return (
     <div className="character-card">
       <div className="character-header">
@@ -581,6 +591,24 @@ function CharacterCard({
           {actor.conditions.map((condition, index) => (
             <StatusEffect key={index} name={condition} isNew={newConditions?.includes(condition)} />
           ))}
+        </div>
+      )}
+
+      {hasSpellSlots && (
+        <div className="spell-slots">
+          <div className="spell-slots-label">🔮 法术位</div>
+          <div className="spell-slots-list">
+            {actor.spell_slots!.map((slot, index) => (
+              <div key={index} className="spell-slot-item">
+                <span className="spell-slot-level">{slot.level}环</span>
+                <span className="spell-slot-count">
+                  <span className="spell-slot-current">{slot.current}</span>
+                  <span className="spell-slot-separator">/</span>
+                  <span className="spell-slot-max">{slot.max}</span>
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

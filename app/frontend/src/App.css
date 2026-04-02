@@ -3668,3 +3668,61 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* ---- Spell Slots ---- */
+
+.spell-slots {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.1), rgba(75, 0, 130, 0.1));
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 8px;
+}
+
+.spell-slots-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8a2be2;
+  margin-bottom: 6px;
+}
+
+.spell-slots-list {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.spell-slot-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(138, 43, 226, 0.15);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.spell-slot-level {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.spell-slot-count {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.spell-slot-current {
+  font-weight: 600;
+  color: #8a2be2;
+}
+
+.spell-slot-separator {
+  color: var(--text-muted);
+  margin: 0 2px;
+}
+
+.spell-slot-max {
+  color: var(--text-secondary);
+}

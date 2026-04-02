@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel, Field, validator
 
@@ -189,6 +189,13 @@ class Effect(BaseModel):
     description: str
 
 
+class InventoryUpdate(BaseModel):
+    """Inventory change summary for pickup/equip actions."""
+    picked_up: Optional[dict[str, Any]] = None
+    equipped: Optional[dict[str, Any]] = None
+    inventory: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class ActionResponse(BaseModel):
     action_summary: str
     resolution_type: ResolutionType
@@ -200,6 +207,7 @@ class ActionResponse(BaseModel):
     outcome: Outcome
     effects: list[Effect] = Field(default_factory=list)
     combat_state: Optional[CombatState] = Field(default=None, description="Combat context if in combat")
+    inventory_update: Optional[InventoryUpdate] = Field(default=None, description="Inventory changes from pickup/equip")
     narration: str
     scene_progression: str
     gm_prompt: str

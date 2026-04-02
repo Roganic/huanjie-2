@@ -9,33 +9,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from ..models.state import NPC, NPCType, SceneExit
-
-
-# ---------------------------------------------------------------------------
-# Interactive Element Models
-# ---------------------------------------------------------------------------
-
-class InteractiveElement(BaseModel):
-    """An interactive element in a scene that can trigger skill checks.
-    
-    Interactive elements are environmental features that players can interact with,
-    potentially triggering skill checks with different outcomes based on success/failure.
-    """
-    id: str = Field(description="Unique identifier for this element")
-    name: str = Field(description="Display name of the element")
-    description: str = Field(description="Description shown to players")
-    hint: str = Field(description="Hint text suggesting possible interaction")
-    skill: str = Field(description="Skill required for the check (e.g., investigation, athletics)")
-    dc: int = Field(default=15, description="Difficulty class for the skill check")
-    action_name: str = Field(description="Name of the action to trigger this interaction")
-    action_description: str = Field(description="Description of what happens when triggered")
-    success_narrative: str = Field(description="Narrative text on successful check")
-    failure_narrative: str = Field(description="Narrative text on failed check")
-    reward_item: Optional[str] = Field(default=None, description="Optional item ID rewarded on success")
-    reward_info: Optional[str] = Field(default=None, description="Optional information revealed on success")
-    
-    model_config = {"populate_by_name": True}
+from ..models.state import NPC, NPCType, SceneExit, InventoryItem
 
 
 class SceneData(BaseModel):
@@ -63,9 +37,9 @@ class SceneData(BaseModel):
         default_factory=list,
         description="Available exits from this scene with direction names"
     )
-    interactive_elements: list[InteractiveElement] = Field(
+    loot_items: list[InventoryItem] = Field(
         default_factory=list,
-        description="Interactive environmental elements that can trigger skill checks"
+        description="Items available to pick up in this scene"
     )
     
     model_config = {"populate_by_name": True}
@@ -133,6 +107,10 @@ VILLAGE_SQUARE_SCENE = SceneData(
         SceneExit(direction="酒馆", target_scene_id="tavern-01"),
         SceneExit(direction="森林入口", target_scene_id="dungeon-entrance-01"),
     ],
+    loot_items=[
+        InventoryItem(id="dagger", name="匕首", type="weapon", damage_dice="1d4", attack_ability="dex", description="一把锋利的匕首。"),
+        InventoryItem(id="leather", name="皮甲", type="armor", base_ac=11, add_dex_modifier=True, description="轻便的皮革护甲。"),
+    ],
 )
 
 # Scene 2: The Tavern (starting exploration scene)
@@ -143,7 +121,6 @@ TAVERN_SCENE = SceneData(
         "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。"
         "几个当地人默默地喝着酒，角落里传来轻柔的竖琴声。"
         "酒保老马库斯在吧台后面擦拭着酒杯，不时用独眼打量着客人。"
-        "在酒馆后方，一堵古老的石壁上似乎有微弱的空气流通。"
     ),
     actors=[],
     npcs=[
@@ -171,21 +148,9 @@ TAVERN_SCENE = SceneData(
         SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
         SceneExit(direction="森林入口", target_scene_id="dungeon-entrance-01"),
     ],
-    interactive_elements=[
-        InteractiveElement(
-            id="secret-climb-wall",
-            name="古老石壁",
-            description="酒馆后方的一堵古老石壁，表面有可以用来攀爬的裂缝。",
-            hint="这堵石壁看起来可以攀爬，裂缝似乎通向某个隐藏的地方。",
-            skill="athletics",
-            dc=14,
-            action_name="攀爬石壁",
-            action_description="利用石壁上的裂缝和突起，尝试攀爬到上方",
-            success_narrative="你成功攀上了石壁，发现一个小隐藏的壁龛，里面有一把精致的匕首！",
-            failure_narrative="石壁太滑了，你爬到一半就滑了下来，手臂有些擦伤。",
-            reward_item="hidden_dagger",
-            reward_info="石壁上方的壁龛似乎是以前的冒险者留下的",
-        ),
+    loot_items=[
+        InventoryItem(id="shortsword", name="短剑", type="weapon", damage_dice="1d6", attack_ability="dex", description="一把轻便的短剑。"),
+        InventoryItem(id="robe", name="布袍", type="armor", base_ac=10, add_dex_modifier=True, description="普通的布制长袍。"),
     ],
 )
 
@@ -222,22 +187,6 @@ DUNGEON_ENTRANCE_SCENE = SceneData(
         SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
         SceneExit(direction="酒馆", target_scene_id="tavern-01"),
         SceneExit(direction="地下城", target_scene_id="combat-entrance-01"),
-    ],
-    interactive_elements=[
-        InteractiveElement(
-            id="mysterious-chest",
-            name="神秘箱子",
-            description="一个被遗弃在角落的古老箱子，表面覆盖着奇怪的符文。",
-            hint="这个箱子看起来被锁住了，但似乎可以检查它的构造。",
-            skill="investigation",
-            dc=12,
-            action_name="调查神秘箱子",
-            action_description="仔细检查箱子的锁和符文，尝试找到打开它的方法",
-            success_narrative="你发现符文是一个简单的魔法陷阱。小心地解除后，箱子打开了，里面有一瓶治疗药水！",
-            failure_narrative="你不小心触发了符文的保护机制，箱子释放出一股寒气，但你未能打开它。",
-            reward_item="healing_potion",
-            reward_info="箱子里的符文是矮人制造的简单防护魔法",
-        ),
     ],
 )
 

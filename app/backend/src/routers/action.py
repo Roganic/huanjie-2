@@ -11,17 +11,18 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from ..agent.orchestrator import resolve_action_with_agent
-from ..models.action import ActionRequest, ActionResponse
+from ..models.action import ActionRequest, ActionResponse, InventoryUpdate, Outcome, ResolutionType
 from ..models.state import AdventurePhase
 from ..scene import get_scene_transition, build_scene_context_for_prompt, get_scene_by_id
 from ..state import (
-    append_action_history,
     has_character,
     require_bootstrap_state,
     reset_current_session,
     set_combat_scene,
     set_current_session,
     switch_scene,
+    pick_up_item,
+    equip_item,
     _get_session,
     _resolve_session_id,
     _save_session,
@@ -42,9 +43,82 @@ _COMBAT_TRIGGER_KEYWORDS = [
     "攻击", "战斗", "打", "杀", "砍", "刺", "射击", "开战",
 ]
 
-# Rest action keywords
-_SHORT_REST_KEYWORDS = ["短休", "short rest", "休息", "休整"]
-_LONG_REST_KEYWORDS = ["长休", "long rest", "睡眠", "睡觉", "宿营", "露营"]
+
+def _is_pickup_action(intent: str, approach: str) -> bool:
+    """Check if action is a pick-up item action."""
+    text = f"{intent} {approach}".lower()
+    return "拾取" in text or "pick up" in text
+
+
+def _is_equip_action(intent: str, approach: str) -> bool:
+    """Check if action is an equip item action."""
+    text = f"{intent} {approach}".lower()
+    return "装备" in text or "equip" in text
+
+
+def _extract_item_name(intent: str, approach: str) -> str | None:
+    """Extract item name from pickup/equip intent.
+    
+    Supports patterns like:
+    - 拾取长剑 -> longsword
+    - 装备皮甲 -> leather
+    - pick up the dagger -> dagger
+    - equip leather armor -> leather
+    """
+    text = f"{intent} {approach}".lower().strip()
+    
+    # Chinese patterns
+    for prefix in ["拾取", "装备"]:
+        if prefix in text:
+            idx = text.index(prefix) + len(prefix)
+            remainder = text[idx:].strip()
+            # Take only up to first space or punctuation
+            import re
+            match = re.match(r"([^\s，。！？.!?]+)", remainder)
+            if match:
+                return match.group(1)
+    
+    # English patterns
+    for prefix in ["pick up", "equip"]:
+        if prefix in text:
+            idx = text.index(prefix) + len(prefix)
+            remainder = text[idx:].strip()
+            # Remove articles
+            for article in ["the ", "a ", "an "]:
+                if remainder.startswith(article):
+                    remainder = remainder[len(article):]
+            # Take first word
+            import re
+            match = re.match(r"([^\s.,!?]+)", remainder)
+            if match:
+                return match.group(1)
+    
+    return None
+
+
+# Item name to ID mapping
+_ITEM_NAME_MAP: dict[str, str] = {
+    "长剑": "longsword",
+    "短剑": "shortsword",
+    "匕首": "dagger",
+    "法杖": "quarterstaff",
+    "锁甲": "chain_mail",
+    "皮甲": "leather",
+    "布袍": "robe",
+    "longsword": "longsword",
+    "shortsword": "shortsword",
+    "dagger": "dagger",
+    "quarterstaff": "quarterstaff",
+    "chain mail": "chain_mail",
+    "leather": "leather",
+    "leather armor": "leather",
+    "robe": "robe",
+}
+
+
+def _resolve_item_id(item_name: str) -> str | None:
+    """Resolve an item name (Chinese or English) to an item ID."""
+    return _ITEM_NAME_MAP.get(item_name.lower().strip())
 
 
 def _is_movement_action(intent: str, approach: str) -> bool:
@@ -73,18 +147,6 @@ def _should_trigger_combat(intent: str, approach: str) -> bool:
     if _is_movement_action(intent, approach):
         return False
     return any(keyword in text for keyword in _COMBAT_TRIGGER_KEYWORDS)
-
-
-def _is_short_rest_action(intent: str, approach: str) -> bool:
-    """Check if action is a short rest."""
-    text = f"{intent} {approach}".lower()
-    return any(keyword in text for keyword in _SHORT_REST_KEYWORDS)
-
-
-def _is_long_rest_action(intent: str, approach: str) -> bool:
-    """Check if action is a long rest."""
-    text = f"{intent} {approach}".lower()
-    return any(keyword in text for keyword in _LONG_REST_KEYWORDS)
 
 
 def _sse_event(event: str, data: dict) -> str:
@@ -147,98 +209,6 @@ async def submit_action(req: ActionRequest, request: Request):
                 session_id=session_id,
             )
 
-        # Check for rest actions first (before agent resolution)
-        session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-        
-        # Handle short rest
-        if _is_short_rest_action(req.intent, req.approach):
-            from ..state import perform_short_rest
-            success, rest_result = perform_short_rest(session_id)
-            
-            if not success:
-                # Return error response for rest failure
-                error_response = ActionResponse(
-                    action_summary="短休",
-                    resolution_type="auto_success",
-                    outcome="failure",
-                    narration=rest_result.get("error", rest_result.get("message", "短休失败")),
-                    scene_progression="无法在当前状态下短休。",
-                    gm_prompt="短休未能执行。",
-                )
-                return error_response
-            
-            # Return success response for short rest
-            success_response = ActionResponse(
-                action_summary="短休",
-                resolution_type="auto_success",
-                outcome="success",
-                narration=rest_result["message"],
-                scene_progression=f"角色进行了短休，恢复了 {rest_result.get('hp_gained', 0)} 点HP。",
-                gm_prompt="短休完成，角色可以继续探索。",
-            )
-            
-            # Persist to history
-            append_action_history(
-                {"action": "短休", "result": "success", "narrative_summary": rest_result["message"]},
-                session_id=session_id,
-            )
-            
-            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
-            if not accepts_stream:
-                return success_response
-            return StreamingResponse(
-                _stream_action_response(success_response),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                },
-            )
-        
-        # Handle long rest
-        if _is_long_rest_action(req.intent, req.approach):
-            from ..state import perform_long_rest
-            success, rest_result = perform_long_rest(session_id)
-            
-            if not success:
-                error_response = ActionResponse(
-                    action_summary="长休",
-                    resolution_type="auto_success",
-                    outcome="failure",
-                    narration=rest_result.get("error", rest_result.get("message", "长休失败")),
-                    scene_progression="无法在当前状态下长休。",
-                    gm_prompt="长休未能执行。",
-                )
-                return error_response
-            
-            success_response = ActionResponse(
-                action_summary="长休",
-                resolution_type="auto_success",
-                outcome="success",
-                narration=rest_result["message"],
-                scene_progression="角色进行了长休，完全恢复了HP和所有资源。",
-                gm_prompt="长休完成，角色已经完全恢复，可以继续冒险。",
-            )
-            
-            append_action_history(
-                {"action": "长休", "result": "success", "narrative_summary": rest_result["message"]},
-                session_id=session_id,
-            )
-            
-            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
-            if not accepts_stream:
-                return success_response
-            return StreamingResponse(
-                _stream_action_response(success_response),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                },
-            )
-
         try:
             result = await asyncio.to_thread(resolve_action_with_agent, req)
         except Exception as exc:  # pragma: no cover - surfaced to client as SSE error
@@ -249,16 +219,89 @@ async def submit_action(req: ActionRequest, request: Request):
 
             return StreamingResponse(error_stream(), media_type="text/event-stream")
 
-        # Persist action summary to session memory
-        append_action_history(
-            {
-                "action": result.action_summary,
-                "result": result.outcome.value,
-                "narrative_summary": (result.narration or "")[:400],
-            },
-            session_id=session_id,
-        )
-
+        # Handle pickup and equip actions directly
+        if _is_pickup_action(req.intent, req.approach) or _is_equip_action(req.intent, req.approach):
+            item_name = _extract_item_name(req.intent, req.approach)
+            item_id = _resolve_item_id(item_name) if item_name else None
+            
+            if item_id is None:
+                return ActionResponse(
+                    action_summary=f"{req.actor} attempts to interact with an item",
+                    resolution_type=ResolutionType.AUTO_SUCCESS,
+                    outcome=Outcome.FAILURE,
+                    effects=[],
+                    narration=f"你没有找到名为 '{item_name or '未知'}' 的物品。",
+                    scene_progression="你可以尝试拾取场景中可见的物品。",
+                    gm_prompt="请确认物品名称是否正确。",
+                )
+            
+            is_pickup = _is_pickup_action(req.intent, req.approach)
+            inventory_update = None
+            
+            if is_pickup:
+                result = pick_up_item(item_id, session_id)
+                if result is None:
+                    return ActionResponse(
+                        action_summary=f"{req.actor} 尝试拾取 {item_name}",
+                        resolution_type=ResolutionType.AUTO_SUCCESS,
+                        outcome=Outcome.FAILURE,
+                        effects=[],
+                        narration=f"你无法拾取 {item_name}（物品不存在或已在背包中）。",
+                        scene_progression="检查场景中是否有该物品。",
+                        gm_prompt="请确认物品名称。",
+                    )
+                inventory_update = InventoryUpdate(
+                    picked_up=result["picked_up"],
+                    inventory=result["inventory"],
+                )
+                narration = f"你拾起了 {result['picked_up']['name']}，它现在在你的背包中了。"
+            else:
+                result = equip_item(item_id, session_id)
+                if result is None:
+                    return ActionResponse(
+                        action_summary=f"{req.actor} 尝试装备 {item_name}",
+                        resolution_type=ResolutionType.AUTO_SUCCESS,
+                        outcome=Outcome.FAILURE,
+                        effects=[],
+                        narration=f"你无法装备 {item_name}（物品不在背包中或无法装备）。",
+                        scene_progression="先拾取物品，再尝试装备。",
+                        gm_prompt="请确认该物品已在你的背包中。",
+                    )
+                inventory_update = InventoryUpdate(
+                    equipped=result["equipped"],
+                    inventory=result["inventory"],
+                )
+                slot_name = "武器" if result["equipped"]["slot"] == "weapon" else "护甲"
+                narration = f"你装备了 {result['equipped']['item']['name']} 作为{slot_name}。"
+            
+            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
+            response = ActionResponse(
+                action_summary=f"{req.actor} {'拾取' if is_pickup else '装备'}了 {item_name}",
+                resolution_type=ResolutionType.AUTO_SUCCESS,
+                outcome=Outcome.SUCCESS,
+                effects=[],
+                inventory_update=inventory_update,
+                narration=narration,
+                scene_progression="你的装备状态已更新。",
+                gm_prompt="继续探索或采取下一步行动。",
+            )
+            
+            if not accepts_stream:
+                return response
+            
+            async def pickup_stream() -> AsyncIterator[str]:
+                yield _sse_event(
+                    "start",
+                    {
+                        "action_summary": response.action_summary,
+                        "resolution_type": response.resolution_type.value,
+                        "outcome": response.outcome.value,
+                    },
+                )
+                yield _sse_event("complete", response.model_dump(mode="json"))
+            
+            return StreamingResponse(pickup_stream(), media_type="text/event-stream")
+        
         # Check for scene transitions based on action intent
         session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
         if session.game_phase == AdventurePhase.EXPLORATION:

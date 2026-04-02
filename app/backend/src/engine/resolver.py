@@ -391,7 +391,7 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
         )
 
     # Determine weapon and damage dice
-    # Priority: 1. Request override, 2. Equipped weapon, 3. Default fallback
+    # Priority: 1. Request override, 2. Equipped weapon, 3. Unarmed fallback
     if req.weapon:
         weapon = req.weapon
         damage_dice = req.damage_dice or get_weapon_damage(weapon)
@@ -401,9 +401,9 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
         weapon = equipped_weapon.name
         damage_dice = req.damage_dice or equipped_weapon.damage_dice or get_weapon_damage(equipped_weapon.id)
     else:
-        # Fallback default
-        weapon = "longsword"
-        damage_dice = req.damage_dice or get_weapon_damage(weapon)
+        # Unarmed attack fallback
+        weapon = "unarmed"
+        damage_dice = req.damage_dice or "1d4"
 
     # Determine attack ability (STR for melee, DEX for finesse/ranged)
     # Priority: 1. Request override, 2. Equipped weapon's attack_ability, 3. Inferred from weapon name

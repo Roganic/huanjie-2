@@ -40,6 +40,7 @@ WEAPON_DAMAGE = {
     "shortbow": "1d6",
     "longbow": "1d8",
     "heavy_crossbow": "1d10",
+    "unarmed": "1d4",
 }
 
 

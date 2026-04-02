@@ -230,14 +230,17 @@ async def state(request: Request):
 
 
 # Include routers AFTER defining persistence endpoints
-from .routers import action, character, combat, health, state
+from .routers import action, character, combat as combat_router, health, state
 
 app.include_router(health.router)
 app.include_router(action.router)
-app.include_router(combat.router)
 app.include_router(character.router)
 app.include_router(state.router)
-app.include_router(combat.router)
+
+# Include routes modules (these take precedence for combat endpoints)
+from routes import combat as combat_routes
+
+app.include_router(combat_routes.router)
 
 
 # Auto-load saved game on startup (if exists)

@@ -9,7 +9,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from .models.module import ModuleDefinition, StoryNode, StoryTrigger, TriggerType, get_module
+from .models.module import (
+    ModuleDefinition,
+    EngineStoryNode as StoryNode,
+    StoryTrigger,
+    StoryTriggerType as TriggerType,
+    get_module,
+)
 from .state import get_active_module, get_scene, set_active_module_story_node
 
 

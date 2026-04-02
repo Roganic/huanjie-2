@@ -2852,7 +2852,7 @@ function App() {
               ))}
             </select>
           </div>
-          <button className="header-button" onClick={saveGame} disabled={saving || sending || creatingCharacter}>
+          <button className="header-button" onClick={saveGame} disabled={saving || sending || creatingCharacter || inCombat} title={inCombat ? "战斗中无法存档" : undefined}>
             {saving ? "存档中…" : "保存游戏"}
           </button>
           <button className="header-button" onClick={openLoadDialog} disabled={loadingSaves || sending || creatingCharacter}>

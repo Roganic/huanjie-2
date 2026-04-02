@@ -14,7 +14,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .models.action import Effect
+from .models.action import CombatState, Effect
 from .scene import SceneData, get_default_exploration_scene, get_scene_by_id
 from .models.state import (
     AbilityScores,
@@ -60,13 +60,7 @@ def _get_adventure_scene_init() -> dict:
     }
 
 
-# Compatibility constant for routers that expect this name
-_ADVENTURE_SCENE_INIT = {
-    "id": "tavern-01",
-    "name": "锈迹斑斑的灯笼酒馆",
-    "description": "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒。",
-    "actors": [],
-}
+_ADVENTURE_SCENE_INIT = _get_adventure_scene_init()
 
 _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
     CharacterClass.WARRIOR: {
@@ -175,6 +169,42 @@ SESSION_STORE_DIR.mkdir(parents=True, exist_ok=True)
 
 _CURRENT_SESSION_ID: ContextVar[str | None] = ContextVar("current_session_id", default=None)
 _SESSION_LOCK = threading.RLock()
+
+# Module-level combat state for agent orchestration
+_combat_state: CombatState | None = None
+
+
+def get_combat_state() -> CombatState:
+    global _combat_state
+    if _combat_state is None:
+        _combat_state = CombatState()
+    return _combat_state
+
+
+def start_combat_session() -> None:
+    global _combat_state
+    _combat_state = CombatState(is_active=True)
+
+
+def end_combat_session(outcome: str) -> None:
+    global _combat_state
+    if _combat_state is not None:
+        _combat_state.is_active = False
+        _combat_state.combat_ended = True
+        _combat_state.outcome = outcome
+
+
+def advance_combat_round() -> None:
+    global _combat_state
+    if _combat_state is not None:
+        _combat_state.round_number += 1
+
+
+def update_combatant_hp(combatant_id: str, hp: int) -> None:
+    global _combat_state
+    if _combat_state is None:
+        _combat_state = CombatState()
+    _combat_state.combatant_hp[combatant_id] = hp
 
 
 class SessionData(BaseModel):
@@ -393,90 +423,6 @@ def check_and_update_combat_status(session_id: str | None = None) -> bool:
             _save_session(session)
             return True
         return False
-
-
-def get_combat_state(session_id: str | None = None):
-    """Get combat state for narrative context.
-    
-    This is a compatibility function that returns a minimal CombatState
-    for use by the narrative generator. Full combat state is managed
-    by the combat module.
-    
-    Args:
-        session_id: Optional session ID (uses current if not provided)
-    
-    Returns:
-        CombatState with is_active flag indicating if in combat
-    """
-    from .models.action import CombatState
-    
-    resolved_session_id = _resolve_session_id(session_id)
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=True)
-        
-        is_active = session.game_phase == AdventurePhase.COMBAT
-        
-        # Build minimal combat state from session data
-        turn_order = []
-        combatant_hp = {}
-        combatant_names = {}
-        
-        if session.actor:
-            turn_order.append(session.actor.id)
-            combatant_hp[session.actor.id] = session.actor.hp
-            combatant_names[session.actor.id] = session.actor.name
-        
-        if session.enemy:
-            turn_order.append(session.enemy.id)
-            combatant_hp[session.enemy.id] = session.enemy.hp
-            combatant_names[session.enemy.id] = session.enemy.name
-        
-        return CombatState(
-            is_active=is_active,
-            round_number=1,
-            current_turn_index=0,
-            turn_order=turn_order,
-            combatant_hp=combatant_hp,
-            combatant_names=combatant_names,
-        )
-
-
-def start_combat_session(session_id: str | None = None) -> None:
-    """Mark combat as active for the session.
-    
-    This is a compatibility function for the narrative system.
-    Full combat management is handled by the combat module.
-    """
-    resolved_session_id = _resolve_session_id(session_id)
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=True)
-        session.game_phase = AdventurePhase.COMBAT
-        _save_session(session)
-
-
-def end_combat_session(outcome: str | None = None, session_id: str | None = None) -> None:
-    """Mark combat as ended for the session.
-    
-    This is a compatibility function for the narrative system.
-    Full combat management is handled by the combat module.
-    """
-    resolved_session_id = _resolve_session_id(session_id)
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=True)
-        session.game_phase = AdventurePhase.EXPLORATION
-        _save_session(session)
-
-
-def update_combatant_hp(combatant_id: str, new_hp: int, session_id: str | None = None) -> None:
-    """Update combatant HP (compatibility function for narrative system)."""
-    # HP is already updated through apply_effects, this is a no-op for compatibility
-    pass
-
-
-def advance_combat_round(session_id: str | None = None) -> None:
-    """Advance combat round (compatibility function for narrative system)."""
-    # Round tracking is handled by combat module, this is a no-op for compatibility
-    pass
 
 
 def has_character(session_id: str | None = None) -> bool:

@@ -24,8 +24,8 @@ from ..models.action import (
     Outcome,
 )
 from ..models.state import Actor, NarrativeHistoryEntry, Scene
-from ..memory_manager import format_recent_events_for_prompt
-from .providers import get_provider
+from ..config import get_llm_config
+from ..llm_client import OpenAICompatibleClient
 from .resolution_constraints import (
     NarrationConstraintContext,
     ValidationResult,
@@ -391,18 +391,20 @@ def _narration_respects_constraints(
 
 
 async def _call_kimi_api(prompt: str) -> Optional[NarrationBundle]:
-    provider = get_provider("kimi")
-    if provider is None:
+    config = get_llm_config("kimi")
+    if config is None:
         return None
-    generated = await provider.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
+    client = OpenAICompatibleClient(config)
+    generated = await client.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
     return _parse_narration_bundle(generated) if generated else None
 
 
 async def _call_openai_api(prompt: str) -> Optional[NarrationBundle]:
-    provider = get_provider("openai")
-    if provider is None:
+    config = get_llm_config("openai")
+    if config is None:
         return None
-    generated = await provider.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
+    client = OpenAICompatibleClient(config)
+    generated = await client.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
     return _parse_narration_bundle(generated) if generated else None
 
 
@@ -473,15 +475,7 @@ def generate_narration(
         combat_outcome=combat_outcome,
     )
 
-    # Log narrative prompts with memory context for observability
-    # Build memory context summary for logging
-    memory_context = format_recent_events_for_prompt(
-        narrative_history or [],
-        current_scene_name=scene.name,
-        max_events=5,
-    )
-    memory_entry_count = len(narrative_history) if narrative_history else 0
-    
+    # Log combat narrative prompts for observability
     if attack_result:
         logger.info(
             "Combat narrative prompt generated for %s vs %s (round=%s, hit=%s, damage=%s)",
@@ -495,23 +489,7 @@ def generate_narration(
                 "target_hp": target.hp if target else None,
                 "combat_round": combat_round,
                 "is_combat_ended": is_combat_ended,
-                "memory_entries": memory_entry_count,
-                "memory_context": memory_context[:500] if memory_context else None,
                 "prompt_preview": prompt[:800],
-            },
-        )
-    else:
-        # Log non-combat narrative prompts with memory context
-        logger.info(
-            "Narrative prompt generated for %s action (outcome=%s)",
-            actor.name,
-            outcome.value,
-            extra={
-                "actor_hp": actor.hp,
-                "action_intent": req.intent,
-                "memory_entries": memory_entry_count,
-                "memory_context": memory_context[:500] if memory_context else None,
-                "prompt_preview": prompt[:600],
             },
         )
 
@@ -523,27 +501,18 @@ def generate_narration(
                 return asyncio.run(_call_openai_api(current_prompt))
             if req.provider == "kimi" or KIMI_API_KEY:
                 return asyncio.run(_call_kimi_api(current_prompt))
-
-            provider = get_provider(req.provider)
-            if provider is None:
-                return None
-
-            generated = asyncio.run(provider.generate(NARRATIVE_SYSTEM_PROMPT, current_prompt))
-            return _parse_narration_bundle(generated) if generated else None
+            return None
         except Exception:
             return None
 
     narrative = _run_provider(prompt)
     if narrative:
-        # Use comprehensive validation including numeric authority checks and scene context
+        # Use comprehensive validation including numeric authority checks
         validation = validate_narrative_for_overreach(
             action_result=narrative.action_result,
             scene_progression=narrative.scene_progression,
             gm_prompt=narrative.gm_prompt,
             context=context,
-            scene_name=scene.name,
-            scene_description=scene.description,
-            scene_npcs=scene.npcs,
         )
         
         if validation.is_valid:
@@ -573,9 +542,6 @@ def generate_narration(
                 scene_progression=retry_narrative.scene_progression,
                 gm_prompt=retry_narrative.gm_prompt,
                 context=context,
-                scene_name=scene.name,
-                scene_description=scene.description,
-                scene_npcs=scene.npcs,
             )
             if retry_validation.is_valid:
                 return retry_narrative

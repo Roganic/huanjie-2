@@ -174,3 +174,25 @@ def get_npcs_by_ids(npc_ids: list[str]) -> list[NPC]:
 def get_npc_names_for_scene(npc_ids: list[str]) -> list[str]:
     """Get NPC names for display in a scene."""
     return [npc.name for npc_id in npc_ids if (npc := get_npc_by_id(npc_id)) is not None]
+
+
+def is_npc_interaction(intent: str, approach: str) -> bool:
+    """Check if the action intent involves interacting with an NPC."""
+    text = f"{intent} {approach}".lower()
+    interaction_verbs = [
+        "talk", "speak", "chat", "ask", "greet", "hail", "交谈", "说话", "聊天", "询问",
+        "打招呼", "对话", "问", "说", "聊",
+    ]
+    return any(verb in text for verb in interaction_verbs)
+
+
+def find_target_npc(intent: str, approach: str, npcs: list[NPC]) -> Optional[NPC]:
+    """Find the target NPC based on intent and available NPCs in the scene."""
+    text = f"{intent} {approach}".lower()
+    for npc in npcs:
+        if npc.name.lower() in text:
+            return npc
+        # Try matching by ID
+        if npc.id.lower() in text:
+            return npc
+    return None

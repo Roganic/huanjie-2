@@ -129,7 +129,7 @@ def handle_movement(intent: str, approach: str, session_id: str) -> MovementResu
         )
     
     # Perform the scene switch
-    switch_success, _ = switch_scene(target_scene_id, session_id)
+    switch_success = switch_scene(target_scene_id, session_id)
     if not switch_success:
         return MovementResult(
             success=False,

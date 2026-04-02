@@ -1428,3 +1428,47 @@ def reset_explored_nodes(session_id: str | None = None) -> None:
         session = _get_session(resolved_session_id, create_if_missing=True)
         session.explored_nodes = []
         _save_session(session)
+
+
+def get_map_state(session_id: str | None = None) -> dict:
+    """Get the full map state including topology and exploration.
+    
+    Args:
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        Dict with current_node, nodes, connections, and explored_nodes
+    """
+    from .map import generate_map_from_scenes
+    from .scene_map import SCENE_MAP
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    session = _get_session(resolved_session_id, create_if_missing=True)
+    
+    # Get current scene
+    current_scene_id = session.scene.id
+    
+    # Get explored nodes (ensure current is included)
+    explored_nodes = list(session.explored_nodes)
+    if current_scene_id not in explored_nodes:
+        explored_nodes.append(current_scene_id)
+    
+    # Build map topology
+    nodes = generate_map_from_scenes()
+    
+    # Build connections from scene map
+    connections = []
+    for scene_id, node in SCENE_MAP.items():
+        for exit_info in node.exits:
+            connections.append({
+                "from_node": scene_id,
+                "to_node": exit_info.target_scene_id,
+                "direction": exit_info.direction,
+            })
+    
+    return {
+        "current_node": current_scene_id,
+        "nodes": [node.model_dump() for node in nodes],
+        "connections": connections,
+        "explored_nodes": explored_nodes,
+    }

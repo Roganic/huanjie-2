@@ -63,8 +63,12 @@ def _should_trigger_combat(intent: str, approach: str) -> bool:
 
 
 # Item use keywords
+# Note: "use" is intentionally NOT included because it's too common in English
+# Use "use item", "use potion", etc. for explicit item use
 _ITEM_USE_PREFIXES = [
-    "使用", "用", "use", "consume", "drink", "喝",
+    "使用", "用", "consume", "drink", "喝",
+    # Specific item use patterns
+    "use healing", "use potion", "use item",
 ]
 
 
@@ -73,12 +77,13 @@ def _is_item_use_action(intent: str, approach: str) -> bool:
     text = f"{intent} {approach}".lower().strip()
     for prefix in _ITEM_USE_PREFIXES:
         if prefix.isascii():
-            # English prefixes: require word boundary or space
-            if text.startswith(prefix.lower()) or f" {prefix.lower()}" in text:
+            # English prefixes: require word boundary (space after prefix)
+            prefix_lower = prefix.lower()
+            if text.startswith(prefix_lower + " ") or f" {prefix_lower} " in text:
                 return True
         else:
             # Chinese prefixes
-            if text.startswith(prefix) or text.startswith(f"{prefix}"):
+            if text.startswith(prefix) or f" {prefix} " in text:
                 return True
     return False
 

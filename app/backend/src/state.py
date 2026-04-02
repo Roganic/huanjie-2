@@ -247,7 +247,7 @@ class SessionData(BaseModel):
     )
     explored_nodes: list[str] = Field(
         default_factory=list,
-        description="Scene IDs the player has visited"
+        description="List of scene IDs that have been explored by the player"
     )
     updated_at: float = Field(default_factory=time.time)
 
@@ -311,13 +311,6 @@ def get_actor_by_id_or_name(target: str, session_id: str | None = None) -> Optio
 
 def get_scene(session_id: str | None = None) -> Scene:
     return _get_session(_resolve_session_id(session_id), create_if_missing=True).scene
-
-
-def get_map_state(session_id: str | None = None) -> dict:
-    """Return the full map topology with current position and explored nodes."""
-    from .map import build_map_response
-    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-    return build_map_response(session.scene.id, session.explored_nodes)
 
 
 def get_narrative_history(session_id: str | None = None) -> list[NarrativeHistoryEntry]:
@@ -444,8 +437,6 @@ def set_combat_scene(session_id: str | None = None) -> None:
             time=session.scene.time,  # Preserve time from previous scene
             exits=COMBAT_ENCOUNTER_SCENE.exits,
         )
-        if COMBAT_ENCOUNTER_SCENE.id not in session.explored_nodes:
-            session.explored_nodes.append(COMBAT_ENCOUNTER_SCENE.id)
         session.game_phase = AdventurePhase.COMBAT
         _save_session(session)
 
@@ -458,7 +449,7 @@ def set_exploration_phase(session_id: str | None = None) -> None:
         _save_session(session)
 
 
-def switch_scene(scene_id: str, session_id: str | None = None) -> tuple[bool, str]:
+def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
     """Switch to a different scene.
     
     Args:
@@ -466,16 +457,14 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> tuple[bool, st
         session_id: The session ID (uses current session if None)
         
     Returns:
-        Tuple of (success, source_scene_name). success is True if scene was switched,
-        False if scene_id not found. source_scene_name is the name of the scene before
-        switching (empty string if switch failed).
+        True if scene was switched, False if scene_id not found
     """
     from .scene import get_scene_by_id
     from .scene_map import get_scene_node
     
     scene_data = get_scene_by_id(scene_id)
     if scene_data is None:
-        return False, ""
+        return False
     
     # Get scene node from new scene_map for exits
     scene_node = get_scene_node(scene_id)
@@ -483,7 +472,6 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> tuple[bool, st
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:
         session = _get_session(resolved_session_id, create_if_missing=True)
-        source_name = session.scene.name
         # Preserve the player actor in the actors list
         actors = [session.actor.id] if session.actor else []
         
@@ -499,10 +487,13 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> tuple[bool, st
             time=session.scene.time,  # Preserve time from previous scene
             exits=exits,  # Include exits for navigation
         )
-        if scene_data.id not in session.explored_nodes:
-            session.explored_nodes.append(scene_data.id)
+        
+        # Add new scene to explored nodes
+        if scene_id not in session.explored_nodes:
+            session.explored_nodes = [*session.explored_nodes, scene_id]
+        
         _save_session(session)
-    return True, source_name
+    return True
 
 
 def get_game_phase(session_id: str | None = None) -> AdventurePhase:
@@ -682,6 +673,7 @@ def create_character(
         session.enemy = Actor(**_ENEMY_INIT)
         session.narrative_history = []
         session.scene_history = []
+        # Initialize explored nodes with current scene
         session.explored_nodes = [scene_data.id]
         _save_session(session)
         
@@ -1019,8 +1011,6 @@ def _session_file(session_id: str) -> Path:
 def _create_fresh_session(session_id: str) -> SessionData:
     """Create a fresh session, with default character for default session (backward compatibility)."""
     session = SessionData(session_id=session_id)
-    # Mark the initial character-creation scene as explored
-    session.explored_nodes = [_CHARACTER_CREATION_SCENE_INIT["id"]]
 
     # For the default session, create the legacy Aldric character automatically
     # to maintain backward compatibility with tests that expect him to exist
@@ -1074,6 +1064,7 @@ def _create_fresh_session(session_id: str) -> SessionData:
             npcs=scene_data.npcs,
             exits=scene_data.exits,
         )
+        # Initialize explored nodes for default session
         session.explored_nodes = [scene_data.id]
 
     return session
@@ -1371,3 +1362,50 @@ def is_first_npc_contact(
         True if this is the first contact, False otherwise
     """
     return get_npc_dialogue_count(npc_id, session_id) == 0
+    """
+    return get_npc_dialogue_count(npc_id, session_id) == 0
+
+
+# -----------------------------------------------------------------------------
+# Map Exploration Functions
+# -----------------------------------------------------------------------------
+
+def get_explored_nodes(session_id: str | None = None) -> list[str]:
+    """Get list of explored scene IDs for a session.
+    
+    Args:
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        List of scene IDs that have been explored
+    """
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return list(session.explored_nodes)
+
+
+def add_explored_node(scene_id: str, session_id: str | None = None) -> None:
+    """Add a scene to the explored nodes list.
+    
+    Args:
+        scene_id: The scene ID to add
+        session_id: The session ID (uses current session if None)
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if scene_id not in session.explored_nodes:
+            session.explored_nodes = [*session.explored_nodes, scene_id]
+            _save_session(session)
+
+
+def reset_explored_nodes(session_id: str | None = None) -> None:
+    """Clear all explored nodes for a session.
+    
+    Args:
+        session_id: The session ID (uses current session if None)
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        session.explored_nodes = []
+        _save_session(session)

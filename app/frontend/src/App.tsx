@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
-import { MapPanel, MapButton, type MapData } from "./components/MapPanel";
+import MapPanel from "./components/MapPanel";
 
 interface Message {
   id: number;
@@ -44,11 +44,19 @@ interface Effect {
   description: string;
 }
 
+interface ItemUseDetail {
+  item_name: string;
+  effect_type: string;
+  roll_result: number;
+  hp_change: number;
+}
+
 interface ActionResponse {
   action_summary: string;
   resolution_type: "auto_success" | "check";
   check: CheckDetail | null;
   skill_check: SkillCheckDetail | null;
+  item_use: ItemUseDetail | null;
   outcome: "success" | "failure";
   effects: Effect[];
   narration: string;
@@ -72,6 +80,27 @@ interface AbilityScores {
   cha: number;
 }
 
+interface InventoryItem {
+  id: string;
+  name: string;
+  type: "weapon" | "armor";
+  description?: string;
+  damage_dice?: string;
+  attack_ability?: string;
+  base_ac?: number;
+}
+
+interface EquippedItems {
+  weapon: InventoryItem | null;
+  armor: InventoryItem | null;
+}
+
+interface SpellSlot {
+  level: number;
+  max: number;
+  current: number;
+}
+
 interface Actor {
   id: string;
   name: string;
@@ -85,11 +114,14 @@ interface Actor {
   description: string;
   conditions?: string[];
   skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
-  // Rest system fields
-  hit_dice_remaining?: number;
-  hit_dice_total?: number;
-  spell_slots?: Record<string, number>;
-  spell_slots_max?: Record<string, number>;
+  experience_points?: number;
+  equipped?: EquippedItems;
+  spell_slots?: SpellSlot[];
+  class_features?: {
+    second_wind_used?: boolean;
+    action_surge_used?: boolean;
+    sneak_attack_available?: boolean;
+  };
 }
 
 interface NPC {
@@ -180,16 +212,11 @@ interface CombatState {
   log: CombatLogEntry[];
 }
 
-interface LootItem {
-  item_id: string;
-  name: string;
-  quantity: number;
-}
-
-interface LootGained {
-  enemy_id: string;
-  enemy_name: string;
-  items: LootItem[];
+interface LevelUpInfo {
+  old_level: number;
+  new_level: number;
+  hp_increase: number;
+  new_proficiency_bonus: number;
 }
 
 interface CombatActionResult {
@@ -201,7 +228,8 @@ interface CombatActionResult {
   effects: Effect[];
   narrative: string;
   combat_state: CombatState;
-  loot_gained?: LootGained[];
+  xp_gained?: number;
+  level_up?: LevelUpInfo;
 }
 
 interface ProviderOption {
@@ -231,6 +259,7 @@ interface SaveFile {
   save_name: string;
   character_name: string | null;
   class: string | null;
+  character_level: number | null;
   hp: number | null;
   hp_max: number | null;
   scene_name: string | null;
@@ -531,23 +560,27 @@ function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolea
   );
 }
 
-function HitDiceDisplay({ actor }: { actor: Actor }) {
-  const hitDiceRemaining = actor.hit_dice_remaining ?? 0;
-  const hitDiceTotal = actor.hit_dice_total ?? 0;
+// XP thresholds matching the backend
+const XP_THRESHOLDS: Record<number, number> = {
+  1: 0,
+  2: 300,
+  3: 900,
+  4: 2700,
+  5: 6500,
+};
+
+function getXpProgress(currentXp: number, level: number): { current: number; needed: number } {
+  const currentThreshold = XP_THRESHOLDS[level] ?? 0;
+  const nextThreshold = XP_THRESHOLDS[level + 1];
   
-  if (hitDiceTotal <= 0) return null;
+  if (nextThreshold === undefined) {
+    return { current: currentXp - currentThreshold, needed: 0 };
+  }
   
-  // Get hit die size based on class
-  const hitDieSize = actor.character_class === "warrior" ? 10 : actor.character_class === "mage" ? 6 : 8;
-  
-  return (
-    <div className="hit-dice-display" title="剩余生命骰（短休可用）">
-      <span className="hit-dice-icon">🎲</span>
-      <span className="hit-dice-value">
-        {hitDiceRemaining}/{hitDiceTotal}d{hitDieSize}
-      </span>
-    </div>
-  );
+  return {
+    current: currentXp - currentThreshold,
+    needed: nextThreshold - currentThreshold,
+  };
 }
 
 function MiniCharacterCard({ actor }: { actor: Actor }) {
@@ -556,13 +589,16 @@ function MiniCharacterCard({ actor }: { actor: Actor }) {
   if (hpPercent <= 30) hpStatus = "low";
   else if (hpPercent <= 60) hpStatus = "medium";
 
+  const xp = actor.experience_points ?? 0;
+  const level = actor.level ?? 1;
+
   return (
     <div className="mini-character-card">
       <div className="mini-char-main">
         <div className="mini-char-avatar">{actor.character_class === "warrior" ? "⚔️" : actor.character_class === "mage" ? "🔮" : "🗡️"}</div>
         <div className="mini-char-info">
           <div className="mini-char-name">{actor.name}</div>
-          <div className="mini-char-class">{actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"}</div>
+          <div className="mini-char-class">{actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"} · Lv.{level}</div>
         </div>
       </div>
       <div className="mini-char-stats">
@@ -578,9 +614,82 @@ function MiniCharacterCard({ actor }: { actor: Actor }) {
           <span className="mini-stat-icon">⭐</span>
           <span className="mini-stat-value">+{actor.proficiency_bonus}</span>
         </div>
-        <div className="mini-stat" title="生命骰">
-          <HitDiceDisplay actor={actor} />
+        <div className="mini-stat" title="经验值">
+          <span className="mini-xp-icon">✨</span>
+          <span className="mini-xp-stat">{xp}</span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function XpBar({ current, needed }: { current: number; needed: number }) {
+  if (needed === 0) {
+    return (
+      <div className="xp-section">
+        <div className="xp-header">
+          <span className="xp-label">经验值 (Max Level)</span>
+          <span className="xp-values">
+            <span className="xp-current">{current}</span>
+          </span>
+        </div>
+        <div className="xp-bar-container">
+          <div className="xp-bar" style={{ width: "100%" }} />
+        </div>
+      </div>
+    );
+  }
+
+  const percentage = Math.min(100, Math.max(0, (current / needed) * 100));
+
+  return (
+    <div className="xp-section">
+      <div className="xp-header">
+        <span className="xp-label">经验值</span>
+        <span className="xp-values">
+          <span className="xp-current">{current}</span>
+          <span className="xp-separator">/</span>
+          <span className="xp-needed">{needed}</span>
+          <span style={{ color: "var(--text-muted)", marginLeft: 4 }}>XP</span>
+        </span>
+      </div>
+      <div className="xp-bar-container">
+        <div className="xp-bar" style={{ width: `${percentage}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function SpellSlotsPanel({ slots, previousSlots }: { slots: SpellSlot[]; previousSlots?: SpellSlot[] }) {
+  if (!slots || slots.length === 0) return null;
+  
+  return (
+    <div className="spell-slots-section">
+      <div className="spell-slots-header">
+        <span className="spell-slots-label">法术槽位</span>
+      </div>
+      <div className="spell-slots-list">
+        {slots.map((slot) => {
+          const previousSlot = previousSlots?.find((s) => s.level === slot.level);
+          const hasChanged = previousSlot && previousSlot.current !== slot.current;
+          const isDepleted = slot.current === 0;
+          
+          return (
+            <div 
+              key={slot.level} 
+              className={`spell-slot-item ${isDepleted ? 'depleted' : ''} ${hasChanged ? 'changed' : ''}`}
+            >
+              <span className="spell-slot-level">{slot.level}环</span>
+              <span className="spell-slot-values">
+                <span className={`spell-slot-current ${hasChanged ? 'changed' : ''}`}>
+                  {slot.current}
+                </span>
+                <span className="spell-slot-separator">/</span>
+                <span className="spell-slot-max">{slot.max}</span>
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -595,6 +704,11 @@ function CharacterCard({
   previousActor?: Actor | null;
   newConditions?: string[];
 }) {
+  const xp = actor.experience_points ?? 0;
+  const level = actor.level ?? 1;
+  const xpProgress = getXpProgress(xp, level);
+  const isMage = actor.character_class === "mage";
+
   return (
     <div className="character-card">
       <div className="character-header">
@@ -604,7 +718,7 @@ function CharacterCard({
         <div className="character-info">
           <div className="character-name">{actor.name}</div>
           <div className="character-level">
-            {actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"} Lv.{actor.level ?? 1} · 熟练加值 +{actor.proficiency_bonus}
+            {actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"} Lv.{level} · 熟练加值 +{actor.proficiency_bonus}
           </div>
         </div>
         {actor.ac !== undefined && (
@@ -616,12 +730,43 @@ function CharacterCard({
       </div>
 
       <HpBar hp={actor.hp} max={actor.hp_max} previousHp={previousActor?.hp} />
+      
+      <XpBar current={xpProgress.current} needed={xpProgress.needed} />
+
+      {/* Spell Slots - Only for mages */}
+      {isMage && actor.spell_slots && actor.spell_slots.length > 0 && (
+        <SpellSlotsPanel 
+          slots={actor.spell_slots} 
+          previousSlots={previousActor?.spell_slots} 
+        />
+      )}
 
       {actor.conditions && actor.conditions.length > 0 && (
         <div className="status-effects">
           {actor.conditions.map((condition, index) => (
             <StatusEffect key={index} name={condition} isNew={newConditions?.includes(condition)} />
           ))}
+        </div>
+      )}
+      
+      {/* Equipped Items */}
+      {(actor.equipped?.weapon || actor.equipped?.armor) && (
+        <div className="equipped-items">
+          <div className="equipped-label">已装备</div>
+          <div className="equipped-list">
+            {actor.equipped.weapon && (
+              <div className="equipped-item" title={`武器: ${actor.equipped.weapon.name}`}>
+                <span className="equipped-icon">⚔️</span>
+                <span className="equipped-name">{actor.equipped.weapon.name}</span>
+              </div>
+            )}
+            {actor.equipped.armor && (
+              <div className="equipped-item" title={`护甲: ${actor.equipped.armor.name}`}>
+                <span className="equipped-icon">🛡️</span>
+                <span className="equipped-name">{actor.equipped.armor.name}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -823,23 +968,29 @@ function Timeline({
 // Scrollable Narrative History (shows all records, auto-scrolls)
 // ---------------------------------------------------------------------------
 
+interface ScrollableNarrativeHistoryProps {
+  messages: Message[];
+  streamingPreview: StreamingPreview | null;
+  sending: boolean;
+  gamePhase?: "exploration" | "combat" | "ended";
+  xpGained?: number;
+  levelUp?: LevelUpInfo | null;
+}
+
 function ScrollableNarrativeHistory({
   messages,
   streamingPreview,
   sending,
   gamePhase,
-}: {
-  messages: Message[];
-  streamingPreview: StreamingPreview | null;
-  sending: boolean;
-  gamePhase?: "exploration" | "combat" | "ended";
-}) {
+  xpGained,
+  levelUp,
+}: ScrollableNarrativeHistoryProps) {
   const gmMessages = messages.filter((m) => m.role === "gm");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending, streamingPreview]);
+  }, [messages, sending, streamingPreview, xpGained, levelUp]);
 
   const isCombat = gamePhase === "combat";
 
@@ -882,6 +1033,16 @@ function ScrollableNarrativeHistory({
                     </span>
                   )}
                 </div>
+                {message.resolution.item_use && (
+                  <div className="item-use-sm">
+                    <span className="item-use-icon">🧪</span>
+                    <span className="item-use-name">{message.resolution.item_use.item_name}</span>
+                    <span className={`item-use-effect ${message.resolution.item_use.hp_change > 0 ? "positive" : message.resolution.item_use.hp_change < 0 ? "negative" : ""}`}>
+                      {message.resolution.item_use.effect_type === "heal" ? "恢复" : ""} {message.resolution.item_use.hp_change} HP
+                    </span>
+                    <span className="item-use-roll">(roll: {message.resolution.item_use.roll_result})</span>
+                  </div>
+                )}
                 {message.resolution.effects.length > 0 && (
                   <div className="effects-sm">
                     {message.resolution.effects.map((eff, index) => (
@@ -904,6 +1065,32 @@ function ScrollableNarrativeHistory({
             )}
           </div>
         ))}
+        
+        {/* XP Gained Notification */}
+        {!sending && xpGained !== undefined && xpGained > 0 && (
+          <div className="narrative-item xp-gained-item">
+            <div className="xp-gained-notification">
+              <span className="xp-gained-icon">✨</span>
+              <span className="xp-gained-text">+{xpGained} XP</span>
+            </div>
+          </div>
+        )}
+        
+        {/* Level Up Notification */}
+        {!sending && levelUp && (
+          <div className="narrative-item level-up-item">
+            <div className="level-up-notification-narrative">
+              <span className="level-up-narrative-icon">🎊</span>
+              <div className="level-up-narrative-content">
+                <div className="level-up-narrative-title">升至 {levelUp.new_level} 级！</div>
+                <div className="level-up-narrative-details">
+                  HP +{levelUp.hp_increase} · 熟练加值 +{levelUp.new_proficiency_bonus}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {sending && streamingPreview && (
           <div className={`narrative-item streaming ${isCombat ? "narrative-combat-item" : ""}`}>
             <div className="narrative-text">
@@ -931,6 +1118,7 @@ function ScrollableNarrativeHistory({
 
 interface CombatScreenProps {
   combat: CombatState;
+  actor: Actor | null;
   combatNarrative: string;
   isNarrativeStreaming: boolean;
   selectedTarget: string | null;
@@ -938,12 +1126,14 @@ interface CombatScreenProps {
   selectedWeapon: string;
   onWeaponChange: (weapon: string) => void;
   onAction: (actionType: CombatActionType) => void;
+  onClassFeatureAction: (feature: "second_wind" | "action_surge") => void;
   onFlee: () => void;
   loading: boolean;
 }
 
 function CombatScreen({
   combat,
+  actor,
   combatNarrative,
   isNarrativeStreaming,
   selectedTarget,
@@ -951,6 +1141,7 @@ function CombatScreen({
   selectedWeapon,
   onWeaponChange,
   onAction,
+  onClassFeatureAction,
   onFlee,
   loading,
 }: CombatScreenProps) {
@@ -1114,6 +1305,38 @@ function CombatScreen({
               ))}
             </select>
           </div>
+          {/* Class feature buttons */}
+          {actor?.character_class === "warrior" && (
+            <div className="combat-class-features">
+              {!actor.class_features?.second_wind_used && (
+                <button
+                  className="combat-btn second-wind"
+                  onClick={() => onClassFeatureAction("second_wind")}
+                  disabled={loading}
+                  title="恢复 1d10 + 等级 生命值"
+                >
+                  ❤️ Second Wind
+                </button>
+              )}
+              {!actor.class_features?.action_surge_used && (
+                <button
+                  className="combat-btn action-surge"
+                  onClick={() => onClassFeatureAction("action_surge")}
+                  disabled={loading}
+                  title="额外获得一次行动"
+                >
+                  ⚡ Action Surge
+                </button>
+              )}
+            </div>
+          )}
+          {actor?.character_class === "rogue" && (
+            <div className="combat-class-features">
+              <span className={`sneak-attack-badge ${actor.class_features?.sneak_attack_available ? "available" : "unavailable"}`}>
+                🗡️ 偷袭 {actor.class_features?.sneak_attack_available ? "可用" : "已用"}
+              </span>
+            </div>
+          )}
           <div className="combat-action-buttons">
             <button
               className="combat-btn attack"
@@ -1141,16 +1364,14 @@ function CombatScreen({
 
 interface CombatEndScreenProps {
   combat: CombatState;
-  lootGained?: LootGained[];
   onReturn: () => void;
+  xpGained?: number;
+  levelUp?: LevelUpInfo | null;
 }
 
-function CombatEndScreen({ combat, lootGained, onReturn }: CombatEndScreenProps) {
+function CombatEndScreen({ combat, onReturn, xpGained, levelUp }: CombatEndScreenProps) {
   const isVictory = combat.status === "victory";
   const isEscape = combat.status === "escaped";
-
-  // Format loot for display
-  const hasLoot = lootGained && lootGained.length > 0 && lootGained.some(entry => entry.items.length > 0);
 
   return (
     <div className="combat-end-screen">
@@ -1167,28 +1388,26 @@ function CombatEndScreen({ combat, lootGained, onReturn }: CombatEndScreenProps)
               : "你在战斗中倒下了…"}
         </p>
         
-        {/* Loot Display */}
-        {isVictory && hasLoot && (
-          <div className="combat-loot-section">
-            <h3>🎁 获得战利品</h3>
-            <div className="combat-loot-list">
-              {lootGained?.map((entry) => (
-                entry.items.length > 0 && (
-                  <div key={entry.enemy_id} className="combat-loot-entry">
-                    <div className="loot-enemy-name">从 {entry.enemy_name} 身上搜到：</div>
-                    <div className="loot-items">
-                      {entry.items.map((item, idx) => (
-                        <span key={idx} className="loot-item">
-                          {item.name} {item.quantity > 1 ? `x${item.quantity}` : ""}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )
-              ))}
+        {/* XP Gained */}
+        {isVictory && xpGained !== undefined && xpGained > 0 && (
+          <div className="xp-gained-badge" style={{ marginBottom: 16 }}>
+            获得 {xpGained} XP
+          </div>
+        )}
+        
+        {/* Level Up Notification */}
+        {levelUp && (
+          <div className="level-up-notification">
+            <span className="level-up-icon">🎊</span>
+            <div className="level-up-content">
+              <div className="level-up-title">升级！Lv.{levelUp.old_level} → Lv.{levelUp.new_level}</div>
+              <div className="level-up-details">
+                HP +{levelUp.hp_increase} · 熟练加值 +{levelUp.new_proficiency_bonus}
+              </div>
             </div>
           </div>
         )}
+        
         <div className="combat-result-stats">
           <div className="result-stat">
             <span className="result-stat-label">战斗轮数</span>
@@ -1561,6 +1780,7 @@ function restoreMessagesFromHistory(history: NarrativeHistoryEntry[]): Message[]
           resolution_type: entry.resolution_summary.resolution_type ?? "auto_success",
           check: entry.resolution_summary.check ?? null,
           skill_check: null,
+          item_use: null,
           outcome: entry.resolution_summary.outcome ?? "success",
           effects: [],
           narration: entry.narration,
@@ -1675,12 +1895,10 @@ function App() {
   const [selectedWeapon, setSelectedWeapon] = useState<string>("longsword");
   const [combatNarrative, setCombatNarrative] = useState<string>("");
   const [isCombatNarrativeStreaming, setIsCombatNarrativeStreaming] = useState(false);
-  const [combatLoot, setCombatLoot] = useState<LootGained[] | undefined>(undefined);
+  const [lastCombatXp, setLastCombatXp] = useState<number | undefined>(undefined);
+  const [lastCombatLevelUp, setLastCombatLevelUp] = useState<LevelUpInfo | null>(null);
   // Map state
-  const [mapData, setMapData] = useState<MapData | null>(null);
-  const [isMapOpen, setIsMapOpen] = useState(false);
-  const [mapLoading, setMapLoading] = useState(false);
-  const toggleMap = () => setIsMapOpen((prev) => !prev);
+  const [showMap, setShowMap] = useState(false);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
@@ -1813,29 +2031,7 @@ function App() {
     setBootstrap(state);
     setMessages(restoreMessagesFromHistory(state.narrative_history));
     setTimeline(restoreTimelineFromHistory(state.narrative_history));
-    // Refresh map after state update
-    await refreshMap(sid ?? undefined);
     return state;
-  };
-
-  const refreshMap = async (overrideSessionId?: string) => {
-    const sid = overrideSessionId ?? sessionId;
-    if (!sid) return;
-    
-    setMapLoading(true);
-    try {
-      const response = await fetch(apiUrl("/map"), {
-        headers: buildSessionHeaders(sid),
-      });
-      if (response.ok) {
-        const data: MapData = await response.json();
-        setMapData(data);
-      }
-    } catch {
-      // Silently fail - map is not critical
-    } finally {
-      setMapLoading(false);
-    }
   };
 
   const resetSession = async () => {
@@ -1979,9 +2175,6 @@ function App() {
       setSelectedTarget(null);
       setIsCombatNarrativeStreaming(false);
       setShowLoadDialog(false);
-      
-      // Refresh map after loading save
-      await refreshMap(data.session_id);
       
       setMessages((previous) => [
         ...previous,
@@ -2364,7 +2557,6 @@ function App() {
 
       setPreviousBootstrap(bootstrap);
       await refreshState();
-      // Map is already refreshed in refreshState()
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setMessages((previous) => {
@@ -2434,6 +2626,45 @@ function App() {
     }
   };
 
+  const executeClassFeatureAction = async (feature: "second_wind" | "action_surge") => {
+    if (!sessionId || combatLoading) return;
+    setCombatLoading(true);
+    try {
+      const response = await fetch(apiUrl("/action"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId, {
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          scene_id: bootstrap?.scene.id || "combat",
+          actor: bootstrap?.actor?.name || "",
+          intent: feature,
+          approach: "",
+        }),
+      });
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      const data = await response.json();
+      addToTimeline({
+        type: "action",
+        title: feature === "second_wind" ? "Second Wind" : "Action Surge",
+        outcome: "success",
+        details: data.narration || "",
+      });
+      await refreshState();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "system", text: message, timestamp: Date.now() },
+      ]);
+    } finally {
+      setCombatLoading(false);
+    }
+  };
+
   const executeCombatAction = async (actionType: CombatActionType) => {
     if (!sessionId || !combat || combatLoading) return;
     if (combat.current_actor_id !== combat.participants.find((p) => p.is_player)?.id) {
@@ -2497,6 +2728,13 @@ function App() {
       }
       if (finalResult) {
         setCombat(finalResult.combat_state);
+        // Capture XP and level-up info
+        if (finalResult.xp_gained !== undefined) {
+          setLastCombatXp(finalResult.xp_gained);
+        }
+        if (finalResult.level_up) {
+          setLastCombatLevelUp(finalResult.level_up);
+        }
         addToTimeline({
           type: "action",
           title: `战斗: ${actionType}`,
@@ -2507,11 +2745,6 @@ function App() {
         });
         // Refresh bootstrap state to get updated game_phase
         await refreshState();
-        // Store loot gained from combat
-        if (finalResult.loot_gained && finalResult.loot_gained.length > 0) {
-          setCombatLoot(finalResult.loot_gained);
-        }
-        
         // If combat ended, show result and auto-return to exploration after delay
         if (finalResult.combat_state.status !== "active") {
           const isVictory = finalResult.combat_state.status === "victory";
@@ -2530,7 +2763,9 @@ function App() {
                 {
                   id: Date.now(),
                   role: "system",
-                  text: "🎉 战斗胜利！你成功击败了所有敌人，继续你的冒险吧。",
+                  text: finalResult.level_up 
+                    ? `🎉 战斗胜利！你成功击败了所有敌人，升级到 Lv.${finalResult.level_up.new_level}！`
+                    : "🎉 战斗胜利！你成功击败了所有敌人，继续你的冒险吧。",
                   timestamp: Date.now(),
                 },
               ]);
@@ -2566,7 +2801,6 @@ function App() {
       setCombat(null);
       // Refresh bootstrap state to get updated game_phase
       await refreshState();
-      // Map is already refreshed in refreshState()
       addToTimeline({
         type: "system",
         title: "战斗结束",
@@ -2585,6 +2819,8 @@ function App() {
     setCombat(null);
     setCombatNarrative("");
     setSelectedTarget(null);
+    setLastCombatXp(undefined);
+    setLastCombatLevelUp(null);
     await refreshState();
   };
 
@@ -2625,6 +2861,16 @@ function App() {
           <button className="header-button" onClick={resetSession} disabled={resetting || sending || creatingCharacter}>
             {resetting ? "重置中…" : "重置"}
           </button>
+          {inAdventure && (
+            <button 
+              className="header-button map-button" 
+              onClick={() => setShowMap(true)}
+              disabled={sending || creatingCharacter}
+              title="打开地图"
+            >
+              🗺️ 地图
+            </button>
+          )}
           {inCombat && <span className="combat-badge">⚔️ 战斗中</span>}
           <HealthDot status={health} />
           <span className="subtitle">
@@ -2692,6 +2938,7 @@ function App() {
         {inCombat && combat ? (
           <CombatScreen
             combat={combat}
+            actor={bootstrap?.actor || null}
             combatNarrative={combatNarrative}
             isNarrativeStreaming={isCombatNarrativeStreaming}
             selectedTarget={selectedTarget}
@@ -2699,14 +2946,16 @@ function App() {
             selectedWeapon={selectedWeapon}
             onWeaponChange={setSelectedWeapon}
             onAction={executeCombatAction}
+            onClassFeatureAction={executeClassFeatureAction}
             onFlee={() => endCombat("flee")}
             loading={combatLoading}
           />
         ) : combatEnded && combat ? (
           <CombatEndScreen
             combat={combat}
-            lootGained={combatLoot}
             onReturn={returnToAdventure}
+            xpGained={lastCombatXp}
+            levelUp={lastCombatLevelUp}
           />
         ) : inAdventure ? (
           <>
@@ -2715,6 +2964,8 @@ function App() {
               streamingPreview={streamingPreview}
               sending={sending}
               gamePhase={gamePhase}
+              xpGained={lastCombatXp}
+              levelUp={lastCombatLevelUp}
             />
             <div className="input-bar">
               <input
@@ -2726,22 +2977,6 @@ function App() {
               />
               <button onClick={send} disabled={sending}>
                 {sending ? "…" : "发送"}
-              </button>
-              <button
-                className="rest-btn short-rest"
-                onClick={() => setInput("短休")}
-                disabled={sending || (bootstrap?.actor?.hit_dice_remaining ?? 0) <= 0}
-                title="短休：消耗1个生命骰恢复HP"
-              >
-                🎲 短休
-              </button>
-              <button
-                className="rest-btn long-rest"
-                onClick={() => setInput("长休")}
-                disabled={sending}
-                title="长休：完全恢复HP和生命骰"
-              >
-                🛏️ 长休
               </button>
               <button
                 className="combat-start-btn"
@@ -2798,16 +3033,6 @@ function App() {
             <section>
               <h2>技能</h2>
               <SkillsList actor={bootstrap.actor} compact />
-            </section>
-
-            <section>
-              <h2>生命骰</h2>
-              <div className="hit-dice-panel">
-                <HitDiceDisplay actor={bootstrap.actor} />
-                <div className="hit-dice-hint">
-                  短休消耗1个生命骰恢复 HP
-                </div>
-              </div>
             </section>
 
             {bootstrap.actor.conditions && bootstrap.actor.conditions.length > 0 && (
@@ -2882,6 +3107,7 @@ function App() {
                             <span className="save-character">
                               {save.character_name}
                               {save.class && ` · ${CLASS_LABELS[save.class as CharacterClass] || save.class}`}
+                              {save.character_level !== null && ` Lv.${save.character_level}`}
                               {save.hp !== null && save.hp_max !== null && ` · HP ${save.hp}/${save.hp_max}`}
                             </span>
                           ) : (
@@ -2911,17 +3137,14 @@ function App() {
         </div>
       )}
 
-      {/* Map Button (Fixed position) */}
-      {inAdventure && (
-        <MapButton isOpen={isMapOpen} onClick={toggleMap} />
-      )}
-
       {/* Map Panel */}
       <MapPanel
-        mapData={mapData}
-        isOpen={isMapOpen}
-        onClose={() => setIsMapOpen(false)}
-        loading={mapLoading}
+        apiUrl={apiUrl}
+        sessionId={sessionId}
+        buildSessionHeaders={buildSessionHeaders}
+        currentSceneId={bootstrap?.scene?.id ?? ""}
+        isVisible={showMap}
+        onClose={() => setShowMap(false)}
       />
     </div>
   );

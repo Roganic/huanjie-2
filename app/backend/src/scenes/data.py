@@ -165,16 +165,16 @@ DUNGEON_ENTRANCE_SCENE = SceneData(
         "与受伤的托尔金交谈，了解情况",
         "检查死去的守卫尸体",
         "检查石门上的符文",
-        "进入地下城",
+        "进入宝库",
         "返回酒馆",
         "返回村庄广场",
         "在入口处搜索线索",
     ],
-    connected_scenes=["village-square-01", "tavern-01", "combat-encounter-01"],
+    connected_scenes=["village-square-01", "tavern-01", "vault-01"],
     exits=[
         SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
         SceneExit(direction="酒馆", target_scene_id="tavern-01"),
-        SceneExit(direction="地下城", target_scene_id="combat-entrance-01"),
+        SceneExit(direction="宝库", target_scene_id="vault-01"),
     ],
 )
 
@@ -212,12 +212,40 @@ COMBAT_ENCOUNTER_SCENE = SceneData(
     ],
 )
 
+# Scene 5: The Vault (treasure room)
+VAULT_SCENE = SceneData(
+    id="vault-01",
+    name="古老宝库",
+    description=(
+        "地下深处的一间石室，墙壁上镶嵌着发出微光的水晶。"
+        "中央的石台上放着一个古老的宝箱，周围散落着一些金币和珠宝。"
+        "空气中弥漫着古老魔法的气息，让人既兴奋又警惕。"
+    ),
+    actors=[],
+    npcs=[
+        NPC(id="treasure-guardian-01", name="宝箱守护者", type=NPCType.HOSTILE,
+            description="守护着宝箱的魔法构造体，虽然已经残破但仍然危险。",
+            race="构造体", occupation="守护者"),
+    ],
+    available_actions=[
+        "打开宝箱",
+        "搜索周围的金币",
+        "检查墙壁上的水晶",
+        "返回地下城入口",
+    ],
+    connected_scenes=["dungeon-entrance-01"],
+    exits=[
+        SceneExit(direction="地下城入口", target_scene_id="dungeon-entrance-01"),
+    ],
+)
+
 # Scene registry for lookups
 SCENE_REGISTRY: dict[str, SceneData] = {
     VILLAGE_SQUARE_SCENE.id: VILLAGE_SQUARE_SCENE,
     TAVERN_SCENE.id: TAVERN_SCENE,
     DUNGEON_ENTRANCE_SCENE.id: DUNGEON_ENTRANCE_SCENE,
     COMBAT_ENCOUNTER_SCENE.id: COMBAT_ENCOUNTER_SCENE,
+    VAULT_SCENE.id: VAULT_SCENE,
 }
 
 # Scene transition keywords
@@ -260,10 +288,18 @@ SCENE_TRANSITION_KEYWORDS: dict[str, str] = {
     # To combat encounter
     "combat": "combat-encounter-01",
     "战斗": "combat-encounter-01",
-    "进入地下城": "combat-encounter-01",
     "进入通道": "combat-encounter-01",
     "深入": "combat-encounter-01",
     "前进": "combat-encounter-01",
+    
+    # To vault
+    "vault": "vault-01",
+    "宝库": "vault-01",
+    "古老宝库": "vault-01",
+    "去宝库": "vault-01",
+    "前往宝库": "vault-01",
+    "进入宝库": "vault-01",
+    "treasure": "vault-01",
 }
 
 

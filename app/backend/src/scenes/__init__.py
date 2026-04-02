@@ -6,10 +6,11 @@ Scenes are the primary locations where gameplay takes place.
 
 from .data import (
     SceneData,
-    TAVERN_SCENE,
     VILLAGE_SQUARE_SCENE,
+    TAVERN_SCENE,
     DUNGEON_ENTRANCE_SCENE,
     COMBAT_ENCOUNTER_SCENE,
+    VAULT_SCENE,
     SCENE_REGISTRY,
     SCENE_TRANSITION_KEYWORDS,
     get_scene_by_id,
@@ -21,10 +22,11 @@ from .data import (
 
 __all__ = [
     "SceneData",
-    "TAVERN_SCENE",
     "VILLAGE_SQUARE_SCENE",
+    "TAVERN_SCENE",
     "DUNGEON_ENTRANCE_SCENE",
     "COMBAT_ENCOUNTER_SCENE",
+    "VAULT_SCENE",
     "SCENE_REGISTRY",
     "SCENE_TRANSITION_KEYWORDS",
     "get_scene_by_id",

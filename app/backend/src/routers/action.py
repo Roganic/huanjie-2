@@ -14,6 +14,11 @@ from ..agent.orchestrator import resolve_action_with_agent
 from ..models.action import ActionRequest, ActionResponse
 from ..models.state import AdventurePhase
 from ..scene import get_scene_transition, build_scene_context_for_prompt, get_scene_by_id
+from ..scenes import (
+    is_movement_action,
+    handle_movement,
+    get_available_exits,
+)
 from ..state import (
     append_action_history,
     has_character,
@@ -29,12 +34,6 @@ from ..state import (
 
 router = APIRouter(tags=["game"])
 
-# Movement keywords - if these appear, treat as scene navigation (no combat trigger)
-_MOVEMENT_KEYWORDS = [
-    "go", "move", "walk", "head", "enter", "leave", "exit", "return", "back",
-    "前往", "去", "走", "进入", "离开", "返回", "回", "到", "向",
-]
-
 # Combat trigger keywords - if these appear in action intent, auto-trigger combat
 _COMBAT_TRIGGER_KEYWORDS = [
     "attack", "fight", "combat", "hit", "strike", "stab", "slash", "shoot",
@@ -43,30 +42,11 @@ _COMBAT_TRIGGER_KEYWORDS = [
 ]
 
 
-def _is_movement_action(intent: str, approach: str) -> bool:
-    """Check if an action is a movement/navigation action."""
-    text = f"{intent} {approach}".lower()
-    # Use word boundary matching to avoid partial matches (e.g., "go" in "goblin")
-    import re
-    for keyword in _MOVEMENT_KEYWORDS:
-        # Create a pattern that matches the keyword as a whole word/phrase
-        # For Chinese keywords, we don't need word boundaries
-        # For English keywords, we use word boundaries
-        if keyword.isascii():
-            pattern = r'\b' + re.escape(keyword) + r'\b'
-            if re.search(pattern, text):
-                return True
-        else:
-            if keyword in text:
-                return True
-    return False
-
-
 def _should_trigger_combat(intent: str, approach: str) -> bool:
     """Check if an action should trigger combat based on keywords."""
     text = f"{intent} {approach}".lower()
     # Don't trigger combat for movement actions
-    if _is_movement_action(intent, approach):
+    if is_movement_action(intent, approach):
         return False
     return any(keyword in text for keyword in _COMBAT_TRIGGER_KEYWORDS)
 
@@ -154,23 +134,35 @@ async def submit_action(req: ActionRequest, request: Request):
         # Check for scene transitions based on action intent
         session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
         if session.game_phase == AdventurePhase.EXPLORATION:
-            # Check for scene transition keywords first
-            target_scene_id = get_scene_transition(req.intent)
-            
-            # If no transition keyword found but it's a movement action,
-            # check against current scene exits
-            if not target_scene_id and _is_movement_action(req.intent, req.approach):
-                intent_lower = req.intent.lower()
-                for exit in session.scene.exits:
-                    if exit.direction.lower() in intent_lower:
-                        target_scene_id = exit.target_scene_id
-                        break
-            
-            if target_scene_id and target_scene_id != session.scene.id:
-                # Switch to new scene (movement doesn't trigger combat)
-                switch_scene(target_scene_id, session_id)
-                # Re-fetch session to get updated state
-                session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+            # Check if this is a movement action
+            if is_movement_action(req.intent, req.approach):
+                # Use the new movement handler
+                movement_result = handle_movement(req.intent, req.approach, session_id)
+                
+                if movement_result.success:
+                    # Movement successful - refresh session state
+                    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+                    
+                    # Append movement to action history
+                    append_action_history(
+                        {
+                            "action": f"移动: {req.intent}",
+                            "result": "success",
+                            "narrative_summary": movement_result.message,
+                        },
+                        session_id=session_id,
+                    )
+                else:
+                    # Movement failed - still record it
+                    append_action_history(
+                        {
+                            "action": f"尝试移动: {req.intent}",
+                            "result": "failure",
+                            "narrative_summary": movement_result.message,
+                        },
+                        session_id=session_id,
+                    )
+                    # Don't return error - let the agent provide narrative context
             # Check if this action should trigger combat (only if not a movement action)
             elif _should_trigger_combat(req.intent, req.approach):
                 # Transition to combat

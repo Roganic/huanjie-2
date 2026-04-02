@@ -18,6 +18,7 @@ from .models.action import Effect
 from .models.state import (
     AbilityScores,
     Actor,
+    AdventurePhase,
     BootstrapState,
     CharacterCard,
     CharacterClass,
@@ -160,6 +161,7 @@ _SESSION_LOCK = threading.RLock()
 class SessionData(BaseModel):
     session_id: str
     phase: GamePhase = GamePhase.CHARACTER_CREATION
+    game_phase: AdventurePhase = AdventurePhase.EXPLORATION
     actor: Actor | None = None
     enemy: Actor = Field(default_factory=lambda: Actor(**_ENEMY_INIT))
     scene: Scene = Field(default_factory=lambda: Scene(**_CHARACTER_CREATION_SCENE_INIT))
@@ -295,7 +297,42 @@ def set_combat_scene(session_id: str | None = None) -> None:
         if session.actor is not None:
             actors.insert(0, session.actor.id)
         session.scene = Scene(**{**_COMBAT_SCENE_INIT, "actors": actors})
+        session.game_phase = AdventurePhase.COMBAT
         _save_session(session)
+
+
+def set_exploration_phase(session_id: str | None = None) -> None:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        session.game_phase = AdventurePhase.EXPLORATION
+        _save_session(session)
+
+
+def get_game_phase(session_id: str | None = None) -> AdventurePhase:
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return session.game_phase
+
+
+def check_and_update_combat_status(session_id: str | None = None) -> bool:
+    """Check if combat should end (all enemies defeated) and update phase accordingly.
+    
+    Returns True if phase was changed to exploration (combat ended), False otherwise.
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.game_phase != AdventurePhase.COMBAT:
+            return False
+        
+        # Check if enemy is defeated (HP <= 0 or has 'defeated' condition)
+        enemy_defeated = session.enemy.hp <= 0 or "defeated" in session.enemy.conditions
+        
+        if enemy_defeated:
+            session.game_phase = AdventurePhase.EXPLORATION
+            _save_session(session)
+            return True
+        return False
 
 
 def has_character(session_id: str | None = None) -> bool:
@@ -509,6 +546,7 @@ def _bootstrap_from_session(session: SessionData) -> BootstrapState:
     return BootstrapState(
         session_id=session.session_id,
         phase=session.phase,
+        game_phase=session.game_phase,
         actor=session.actor,
         scene=session.scene,
         narrative_history=list(session.narrative_history),

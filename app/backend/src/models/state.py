@@ -203,6 +203,15 @@ class Skill(BaseModel):
     modifier: int
 
 
+class SpellSlot(BaseModel):
+    """Spell slot for spellcasting classes."""
+    level: int           # Spell level (1-9)
+    max: int             # Maximum slots at this level
+    current: int         # Current available slots
+    
+    model_config = {"populate_by_name": True}
+
+
 class Actor(BaseModel):
     id: str
     name: str
@@ -219,6 +228,8 @@ class Actor(BaseModel):
     # Inventory and equipment
     inventory: list[InventoryItem] = Field(default_factory=list)
     equipped: EquippedItems = Field(default_factory=EquippedItems)
+    # Spell slots for spellcasting classes
+    spell_slots: list[SpellSlot] = Field(default_factory=list)
 
 
 class NPCType(str, Enum):
@@ -322,6 +333,8 @@ class CharacterCard(BaseModel):
     skills: list[CharacterSkill]
     inventory: list[dict[str, Any]] = Field(default_factory=list)
     equipped: CharacterEquipped = Field(default_factory=CharacterEquipped)
+    # Spell slots for spellcasting classes
+    spell_slots: list[dict[str, int]] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
 

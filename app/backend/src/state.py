@@ -36,6 +36,7 @@ from .models.state import (
     Scene,
     SceneHistoryEntry,
     Skill,
+    SpellSlot,
 )
 from .npc.dialogue_state import (
     NPCDialogueState,
@@ -352,6 +353,46 @@ def append_narrative_history(
             pass
 
 
+def append_action_history(
+    entry: dict,
+    session_id: str | None = None,
+) -> None:
+    """Append an action to the narrative history.
+    
+    This is a simplified wrapper that creates a NarrativeHistoryEntry
+    from a dictionary.
+    """
+    from datetime import datetime
+    
+    narrative_entry = NarrativeHistoryEntry(
+        action_summary=entry.get("action", ""),
+        resolution_summary={
+            "result": entry.get("result", ""),
+            "narrative_summary": entry.get("narrative_summary", ""),
+        },
+        narration_summary=entry.get("narrative_summary", ""),
+        narration=entry.get("narrative_summary", ""),
+        created_at=int(datetime.now().timestamp() * 1000),
+    )
+    append_narrative_history(narrative_entry, session_id)
+
+
+def get_action_history(session_id: str | None = None) -> list[dict]:
+    """Get action history for a session.
+    
+    Returns a list of action entries with action, result, and narrative_summary.
+    """
+    history = get_narrative_history(session_id=session_id)
+    return [
+        {
+            "action": entry.action_summary,
+            "result": entry.resolution_summary.get("result", ""),
+            "narrative_summary": entry.narration_summary,
+        }
+        for entry in history
+    ]
+
+
 def get_narrative_context(
     max_entries: int = DEFAULT_PROMPT_HISTORY_ENTRIES,
     max_chars: int = DEFAULT_PROMPT_HISTORY_CHARS,
@@ -565,6 +606,13 @@ def create_character(
 
         skills = _build_skills(abilities, req.character_class, proficiency_bonus=2)
 
+        # Initialize spell slots for mages (2 1st-level slots at level 1)
+        spell_slots: list[SpellSlot] = []
+        if req.character_class == CharacterClass.MAGE:
+            spell_slots = [
+                SpellSlot(level=1, max=2, current=2),
+            ]
+
         session.actor = Actor(
             id=actor_id,
             name=req.name.strip(),
@@ -579,6 +627,7 @@ def create_character(
             skills=skills,
             inventory=inventory,
             equipped=equipped,
+            spell_slots=spell_slots,
         )
         session.phase = GamePhase.ADVENTURE
         # Initialize scene with NPCs from scene system
@@ -635,6 +684,12 @@ def get_character_card(session_id: str | None = None) -> CharacterCard | None:
     if actor.equipped.armor:
         equipped_dict.armor = _inventory_item_to_dict(actor.equipped.armor)
     
+    # Build spell slots info
+    spell_slots_info = [
+        {"level": slot.level, "max": slot.max, "current": slot.current}
+        for slot in actor.spell_slots
+    ]
+
     return CharacterCard(
         name=actor.name,
         class_=actor.character_class.value if actor.character_class else "",
@@ -679,6 +734,7 @@ def get_character_card(session_id: str | None = None) -> CharacterCard | None:
         ],
         inventory=[_inventory_item_to_dict(item) for item in actor.inventory],
         equipped=equipped_dict,
+        spell_slots=spell_slots_info,
     )
 
 
@@ -721,6 +777,12 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
             session.actor = actor.model_copy(
                 update={"conditions": [c for c in actor.conditions if c != eff.delta]}
             )
+        elif eff.field == "spell_slot_consumed" and isinstance(eff.delta, int):
+            # Spell slot already consumed by spell resolver, this is just for tracking
+            pass
+        elif eff.field == "spell_slots_restored":
+            # Spell slots already restored by rest resolver, this is just for tracking
+            pass
         return
 
     if eff.target in (enemy.id, enemy.name):

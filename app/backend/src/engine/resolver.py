@@ -24,6 +24,14 @@ from ..models.action import (
 from ..models.state import Actor
 from ..state import get_actor, get_actor_by_id_or_name, get_scene
 from .dice import get_weapon_damage, roll_d20, roll_damage
+from ..spells.spell_resolver import (
+    cast_spell,
+    is_cast_command,
+    is_rest_command,
+    parse_cast_command,
+)
+from ..spells.spell_registry import get_spell
+from ..spells.spell_resolver import restore_spell_slots as _restore_spell_slots
 
 # ---------------------------------------------------------------------------
 # DC tiers (rules-core: "先压缩成少量稳定档位，例如 10 / 15 / 20")
@@ -146,12 +154,6 @@ def _pick_dc(intent: str) -> int:
     return DC_MEDIUM  # default to medium
 
 
-
-
-
-
-
-
 def _resolve_skill_check(req: ActionRequest) -> ActionResponse:
     """Resolve a skill check action (d20 + ability mod + prof if proficient).
     
@@ -267,6 +269,15 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
     # Route skill check actions to skill resolver
     if req.action_type == ActionType.SKILL_CHECK or req.skill is not None:
         return _resolve_skill_check(req)
+
+    # Route spell cast commands to spell resolver
+    if is_cast_command(req.intent):
+        return _resolve_spell_cast(req)
+
+    # Handle rest commands
+    is_rest, rest_type = is_rest_command(req.intent)
+    if is_rest:
+        return _resolve_rest(req, rest_type)
 
     action_summary = f"{req.actor} attempts to {req.intent} by {req.approach}"
     
@@ -424,9 +435,6 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
     )
 
     effects: list[Effect] = []
-    damage_detail: Optional[DamageDetail] = None
-    damage_total: Optional[int] = None
-    damage_rolls: Optional[list[int]] = None
 
     if outcome == Outcome.SUCCESS:
         # Hit! Roll damage: weapon dice + ability modifier
@@ -480,7 +488,7 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
     attack_result = {
         "weapon": weapon,
         "target": target.name,
-        "damage": damage_detail.model_dump() if damage_detail else None,
+        "damage": damage_detail.model_dump() if outcome == Outcome.SUCCESS and attack_detail.damage else None,
     }
     
     # Generate AI narration with fallback (pass target and effects for hard constraints)
@@ -504,6 +512,182 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
         narration=narration.action_result,
         scene_progression=narration.scene_progression,
         gm_prompt=narration.gm_prompt,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Spell Resolution
+# ---------------------------------------------------------------------------
+
+
+def _resolve_spell_cast(req: ActionRequest) -> ActionResponse:
+    """Resolve a spell casting action."""
+    actor = get_actor()
+    scene = get_scene()
+    
+    # Parse spell name and target from intent
+    spell_name, target_name = parse_cast_command(req.intent)
+    
+    if spell_name is None:
+        return ActionResponse(
+            action_summary=f"{req.actor} attempts to cast a spell",
+            resolution_type=ResolutionType.CHECK,
+            check=None,
+            attack=None,
+            outcome=Outcome.FAILURE,
+            effects=[],
+            narration="无法识别你想施放的法术。",
+            scene_progression="请明确你想施放什么法术。",
+            gm_prompt="Ask the player to specify which spell they want to cast.",
+        )
+    
+    # Look up target if specified
+    target = None
+    if target_name:
+        target = get_actor_by_id_or_name(target_name)
+    if target is None:
+        # Default to enemy if no target specified or target not found
+        from ..state import get_enemy
+        target = get_enemy()
+    
+    # Cast the spell
+    result = cast_spell(actor, spell_name, target)
+    
+    # Build action summary
+    action_summary = f"{actor.name} 施放 {result.spell_name}"
+    if result.target:
+        action_summary += f" 攻击 {result.target}"
+    
+    # Build effects
+    effects: list[Effect] = []
+    
+    # Add spell slot consumption effect (for tracking)
+    if result.slot_level > 0:
+        effects.append(
+            Effect(
+                target=actor.id,
+                field="spell_slot_consumed",
+                delta=result.slot_level,
+                description=f"消耗 {result.slot_level} 环法术位",
+            )
+        )
+    
+    # Add damage effect if hit
+    if result.damage and result.damage > 0 and target:
+        damage_applied = min(result.damage, target.hp)
+        effects.append(
+            Effect(
+                target=target.id,
+                field="hp",
+                delta=-damage_applied,
+                description=f"{result.spell_name} 造成 {damage_applied} 点 {result.damage_type.value if result.damage_type else ''}伤害",
+            )
+        )
+        
+        # Check if target is defeated
+        new_hp = max(0, target.hp - damage_applied)
+        if new_hp == 0:
+            effects.append(
+                Effect(
+                    target=target.id,
+                    field="conditions_add",
+                    delta="defeated",
+                    description=f"{target.name} 被法术击败了！",
+                )
+            )
+    
+    # Always advance time
+    effects.append(
+        Effect(
+            target=scene.id,
+            field="time",
+            delta=1,
+            description="施法消耗时间。",
+        )
+    )
+    
+    # Build attack detail for attack roll spells
+    attack_detail = None
+    if result.requires_attack_roll and result.attack_roll is not None:
+        from ..models.action import DamageDetail
+        spell_obj = get_spell(spell_name)
+        damage_dice = spell_obj.damage_dice if spell_obj else "1d8"
+        attack_detail = AttackDetail(
+            target=target.id if target else "unknown",
+            weapon=result.spell_name,
+            hit_roll=result.attack_roll,
+            total_attack=result.attack_total or result.attack_roll,
+            target_ac=result.target_ac or (target.ac if target else 10),
+            damage=DamageDetail(
+                dice_expression=damage_dice,
+                rolls=result.damage_rolls,
+                modifier=result.damage_modifier,
+                total=result.damage or 0,
+            ) if result.damage else None,
+        )
+    
+    return ActionResponse(
+        action_summary=action_summary,
+        resolution_type=ResolutionType.CHECK,
+        check=None,
+        attack=attack_detail,
+        outcome=Outcome.SUCCESS if result.success else Outcome.FAILURE,
+        effects=effects,
+        narration=result.narrative if result.success else (result.error_message or "施法失败。"),
+        scene_progression="法术效果已经展现。" if result.success else "施法被打断或失败了。",
+        gm_prompt="Continue the scene based on the spell's effect." if result.success else "Ask what the player wants to do next.",
+    )
+
+
+def _resolve_rest(req: ActionRequest, rest_type: str) -> ActionResponse:
+    """Resolve a rest action (short or long rest)."""
+    actor = get_actor()
+    scene = get_scene()
+    
+    action_summary = f"{actor.name} 进行{ '短休' if rest_type == 'short' else '长休' }"
+    
+    effects: list[Effect] = []
+    
+    # Restore spell slots on long rest
+    if rest_type == "long":
+        restored = _restore_spell_slots(actor, rest_type)
+        if restored:
+            effects.append(
+                Effect(
+                    target=actor.id,
+                    field="spell_slots_restored",
+                    delta=1,
+                    description="所有法术位已恢复",
+                )
+            )
+            narration = f"{actor.name} 完成长休，所有法术位已恢复。"
+        else:
+            narration = f"{actor.name} 完成长休。"
+    else:
+        # Short rest does not restore spell slots for mages
+        narration = f"{actor.name} 完成短休。法师的法术位只能通过长休恢复。"
+    
+    # Advance time significantly
+    time_delta = 60 if rest_type == "short" else 480  # 1 hour or 8 hours
+    effects.append(
+        Effect(
+            target=scene.id,
+            field="time",
+            delta=time_delta,
+            description=f"{'短休' if rest_type == 'short' else '长休'}消耗时间。",
+        )
+    )
+    
+    return ActionResponse(
+        action_summary=action_summary,
+        resolution_type=ResolutionType.AUTO_SUCCESS,
+        check=None,
+        attack=None,
+        outcome=Outcome.SUCCESS,
+        effects=effects,
+        narration=narration,
+        scene_progression="休息后，你感觉精神焕发。",
+        gm_prompt="Describe the rest and what the character notices upon waking.",
     )
 
 

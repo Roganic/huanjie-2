@@ -243,17 +243,36 @@ async def state(request: Request):
     except Exception:
         pass
 
-    # Include active module information
-    from .modules.manager import get_module_manager
-    manager = get_module_manager()
-    active_module = manager.get_active_module(session_id)
+    # Include active module information (prefer session state, fallback to manager)
+    from .state import get_active_module
+    active_module = get_active_module(session_id)
     if active_module:
+        from .models.module import get_module
+        mod = get_module(active_module.module_id)
         result["active_module"] = {
             "id": active_module.module_id,
-            "name": active_module.module_name,
-            "current_node_id": active_module.current_node_id,
+            "module_id": active_module.module_id,
+            "name": mod.name if mod else "",
+            "module_name": mod.name if mod else "",
+            "current_story_node": active_module.current_story_node,
+            "current_node_id": active_module.current_story_node,
             "current_scene_id": active_module.current_scene_id,
+            "visited_nodes": active_module.visited_nodes,
         }
+    else:
+        from .modules.manager import get_module_manager
+        manager = get_module_manager()
+        manager_active = manager.get_active_module(session_id)
+        if manager_active:
+            result["active_module"] = {
+                "id": manager_active.module_id,
+                "module_id": manager_active.module_id,
+                "name": manager_active.module_name,
+                "module_name": manager_active.module_name,
+                "current_story_node": manager_active.current_node_id,
+                "current_node_id": manager_active.current_node_id,
+                "current_scene_id": manager_active.current_scene_id,
+            }
 
     return result
 

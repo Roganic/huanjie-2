@@ -7,7 +7,7 @@ define an adventure or story segment.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -25,6 +25,9 @@ class TriggerType(str, Enum):
     FLAG = "flag"              # Game flag set/unset
     TIME = "time"              # Time-based trigger
     CUSTOM = "custom"          # Custom condition logic
+    ENTER_SCENE = "enter_scene"    # Engine: enter a scene
+    INTERACT_NPC = "interact_npc"  # Engine: interact with an NPC
+    ACTION_KEYWORD = "action_keyword"  # Engine: action keyword
 
 
 class TriggerCondition(BaseModel):
@@ -60,6 +63,19 @@ class Trigger(BaseModel):
 
 
 # -----------------------------------------------------------------------------
+# Story Triggers (engine-facing)
+# -----------------------------------------------------------------------------
+
+class StoryTrigger(BaseModel):
+    """A story progression trigger attached to a story node."""
+    type: TriggerType
+    target: str
+    next_node_id: str
+    
+    model_config = {"populate_by_name": True}
+
+
+# -----------------------------------------------------------------------------
 # Story Nodes
 # -----------------------------------------------------------------------------
 
@@ -90,14 +106,20 @@ class StoryNode(BaseModel):
     type: StoryNodeType
     description: str = ""
     scene_id: Optional[str] = None  # Associated scene
-    npc_ids: list[str] = Field(default_factory=list)  # NPCs involved
+    npc_ids: list[str] = Field(default_factory=list)  # NPCs involved (backward compat)
+    visible_npcs: list[str] = Field(default_factory=list)  # Engine-facing NPC list
     dialogue_text: Optional[str] = None  # For dialogue nodes
     transitions: list[StoryNodeTransition] = Field(default_factory=list)
-    triggers: list[str] = Field(default_factory=list)  # Trigger IDs to activate
+    triggers: list[Union[str, StoryTrigger]] = Field(default_factory=list)  # Trigger IDs or engine triggers
+    quests: list[Quest] = Field(default_factory=list)  # Active quests in this node
     required_flags: list[str] = Field(default_factory=list)  # Flags required to enter
     sets_flags: list[str] = Field(default_factory=list)  # Flags set upon completion
     
     model_config = {"populate_by_name": True}
+
+
+# Forward-reference resolution for Quest used above
+# Quest is defined below; Pydantic v2 resolves forward refs lazily.
 
 
 # -----------------------------------------------------------------------------
@@ -134,6 +156,10 @@ class Quest(BaseModel):
     starting_node_id: Optional[str] = None
     
     model_config = {"populate_by_name": True}
+
+
+# Rebuild StoryNode now that Quest is defined
+StoryNode.model_rebuild()
 
 
 # -----------------------------------------------------------------------------
@@ -298,7 +324,24 @@ class ModuleSummary(BaseModel):
 
 
 # -----------------------------------------------------------------------------
-# Active Module State
+# Active Module State (session-scoped, engine-facing)
+# -----------------------------------------------------------------------------
+
+class ActiveModuleState(BaseModel):
+    """Information about the currently active module in session state."""
+    module_id: str
+    current_story_node: Optional[str] = None
+    visited_nodes: list[str] = Field(default_factory=list)
+    current_scene_id: Optional[str] = None
+    completed_nodes: list[str] = Field(default_factory=list)
+    active_flags: list[str] = Field(default_factory=list)
+    completed_quests: list[str] = Field(default_factory=list)
+    
+    model_config = {"populate_by_name": True}
+
+
+# -----------------------------------------------------------------------------
+# Active Module (manager-facing, backward compat)
 # -----------------------------------------------------------------------------
 
 class ActiveModule(BaseModel):
@@ -311,3 +354,109 @@ class ActiveModule(BaseModel):
     active_flags: list[str] = Field(default_factory=list)
     
     model_config = {"populate_by_name": True}
+
+
+# -----------------------------------------------------------------------------
+# Module Definition (engine-facing story graph)
+# -----------------------------------------------------------------------------
+
+class ModuleDefinition(BaseModel):
+    """A module defined as a story graph for the narrative engine."""
+    id: str
+    name: str
+    description: str = ""
+    nodes: dict[str, StoryNode] = Field(default_factory=dict)
+    starting_node_id: Optional[str] = None
+    
+    model_config = {"populate_by_name": True}
+
+
+# -----------------------------------------------------------------------------
+# Starter Module Data
+# -----------------------------------------------------------------------------
+
+_starter_quest = Quest(
+    id="quest-dungeon-rumor",
+    name="地下城传闻",
+    description="村庄附近出现了关于地下城的传闻，去探索真相。",
+    status=QuestStatus.NOT_STARTED,
+    objectives=[
+        QuestObjective(id="obj-1", description="前往酒馆打听消息", completed=False),
+        QuestObjective(id="obj-2", description="调查地下城入口", completed=False),
+    ],
+)
+
+_starter_node_village = StoryNode(
+    id="node-village-arrival",
+    name="抵达村庄",
+    type=StoryNodeType.START,
+    description="你来到了十字路口村庄。村民们正在各自忙碌，你可以探索村庄，与村长或铁匠交谈。",
+    scene_id="village-square-01",
+    visible_npcs=["village-elder-01", "blacksmith-01"],
+    quests=[_starter_quest],
+    triggers=[
+        StoryTrigger(type=TriggerType.ENTER_SCENE, target="tavern-01", next_node_id="node-tavern-gossip"),
+    ],
+)
+
+_starter_node_tavern = StoryNode(
+    id="node-tavern-gossip",
+    name="酒馆消息",
+    type=StoryNodeType.DIALOGUE,
+    description="你在灯笼酒馆里听到了关于地下城的传闻，酒保老马库斯和吟游诗人银弦艾拉似乎知道不少消息。",
+    scene_id="tavern-01",
+    visible_npcs=["tavern-keeper-01", "tavern-bard-01"],
+    quests=[_starter_quest],
+    triggers=[
+        StoryTrigger(type=TriggerType.ENTER_SCENE, target="dungeon-entrance-01", next_node_id="node-dungeon-entrance"),
+        StoryTrigger(type=TriggerType.INTERACT_NPC, target="tavern-keeper-01", next_node_id="node-tavern-gossip"),
+    ],
+)
+
+_starter_node_dungeon = StoryNode(
+    id="node-dungeon-entrance",
+    name="地下城入口",
+    type=StoryNodeType.EXPLORATION,
+    description="你站在遗忘地下城入口前，受伤的矮人托尔金警告你里面的危险。准备进入地下城。",
+    scene_id="dungeon-entrance-01",
+    visible_npcs=["wounded-adventurer-01"],
+    triggers=[
+        StoryTrigger(type=TriggerType.ENTER_SCENE, target="combat-encounter-01", next_node_id="node-goblin-encounter"),
+    ],
+)
+
+_starter_node_goblin = StoryNode(
+    id="node-goblin-encounter",
+    name="哥布林遭遇",
+    type=StoryNodeType.COMBAT,
+    description="你在地下城通道中遭遇了哥布林的埋伏，必须突破遭遇才能继续前进。",
+    scene_id="combat-encounter-01",
+    visible_npcs=["goblin-01", "goblin-shaman-01"],
+)
+
+STARTER_MODULE = ModuleDefinition(
+    id="starter-village-dungeon",
+    name="村庄与地下城",
+    description="一个经典的入门冒险：从宁静的村庄出发，经过酒馆打听消息，最终探索危险的地下城。",
+    nodes={
+        _starter_node_village.id: _starter_node_village,
+        _starter_node_tavern.id: _starter_node_tavern,
+        _starter_node_dungeon.id: _starter_node_dungeon,
+        _starter_node_goblin.id: _starter_node_goblin,
+    },
+    starting_node_id="node-village-arrival",
+)
+
+MODULE_REGISTRY: dict[str, ModuleDefinition] = {
+    STARTER_MODULE.id: STARTER_MODULE,
+}
+
+
+def get_module(module_id: str) -> Optional[ModuleDefinition]:
+    """Get a module definition from the registry."""
+    return MODULE_REGISTRY.get(module_id)
+
+
+def get_default_module() -> ModuleDefinition:
+    """Get the default starter module."""
+    return STARTER_MODULE

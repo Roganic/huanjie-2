@@ -631,6 +631,7 @@ def create_character(
             abilities=abilities,
             proficiency_bonus=2,
             level=1,
+            experience_points=0,
             hp=hp,
             hp_max=hp,
             ac=ac,
@@ -705,6 +706,7 @@ def get_character_card(session_id: str | None = None) -> CharacterCard | None:
         name=actor.name,
         class_=actor.character_class.value if actor.character_class else "",
         level=actor.level,
+        experience_points=actor.experience_points,
         proficiency_bonus=actor.proficiency_bonus,
         attributes={
             "str": {
@@ -1021,6 +1023,7 @@ def _create_fresh_session(session_id: str) -> SessionData:
             abilities=abilities,
             proficiency_bonus=2,
             level=1,
+            experience_points=0,
             hp=hp,
             hp_max=hp,
             ac=ac,

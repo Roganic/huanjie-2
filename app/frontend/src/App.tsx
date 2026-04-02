@@ -577,7 +577,6 @@ function MiniCharacterCard({ actor }: { actor: Actor }) {
 
   const xp = actor.experience_points ?? 0;
   const level = actor.level ?? 1;
-  const xpProgress = getXpProgress(xp, level);
 
   return (
     <div className="mini-character-card">
@@ -610,7 +609,7 @@ function MiniCharacterCard({ actor }: { actor: Actor }) {
   );
 }
 
-function XpBar({ current, needed, level }: { current: number; needed: number; level: number }) {
+function XpBar({ current, needed }: { current: number; needed: number }) {
   if (needed === 0) {
     return (
       <div className="xp-section">
@@ -682,7 +681,7 @@ function CharacterCard({
 
       <HpBar hp={actor.hp} max={actor.hp_max} previousHp={previousActor?.hp} />
       
-      <XpBar current={xpProgress.current} needed={xpProgress.needed} level={level} />
+      <XpBar current={xpProgress.current} needed={xpProgress.needed} />
 
       {actor.conditions && actor.conditions.length > 0 && (
         <div className="status-effects">
@@ -1654,6 +1653,8 @@ function restoreMessagesFromHistory(history: NarrativeHistoryEntry[]): Message[]
           action_summary: entry.action_summary,
           resolution_type: entry.resolution_summary.resolution_type ?? "auto_success",
           check: entry.resolution_summary.check ?? null,
+          skill_check: null,
+          item_use: null,
           outcome: entry.resolution_summary.outcome ?? "success",
           effects: [],
           narration: entry.narration,

@@ -831,6 +831,7 @@ interface CombatScreenProps {
   onAction: (actionType: CombatActionType) => void;
   onFlee: () => void;
   loading: boolean;
+  lastActionResult?: CombatActionResult | null;
 }
 
 function CombatScreen({
@@ -844,11 +845,17 @@ function CombatScreen({
   onAction,
   onFlee,
   loading,
+  lastActionResult,
 }: CombatScreenProps) {
   const currentParticipant = combat.participants.find((p) => p.id === combat.current_actor_id);
   const isPlayerTurn = currentParticipant?.is_player ?? false;
   const enemies = combat.participants.filter((p) => !p.is_player);
   const weapons = ["longsword", "shortsword", "dagger", "shortbow"];
+  
+  // Get target info for display
+  const targetInfo = lastActionResult?.target_id 
+    ? combat.participants.find((p) => p.id === lastActionResult.target_id)
+    : null;
 
   return (
     <div className="combat-screen">
@@ -892,6 +899,40 @@ function CombatScreen({
           </div>
         ))}
       </div>
+
+      {/* Combat Result Display */}
+      {lastActionResult && !isNarrativeStreaming && (
+        <div className="combat-result-panel">
+          <div className="combat-result-header">
+            <span className="combat-result-icon">🎲</span>
+            <span className="combat-result-label">攻击结果</span>
+          </div>
+          <div className="combat-result-body">
+            {lastActionResult.hit === true ? (
+              <div className="combat-hit-result">
+                <span className="hit-badge success">✓ 命中</span>
+                {lastActionResult.damage !== undefined && (
+                  <span className="damage-value">-{lastActionResult.damage} HP</span>
+                )}
+                {targetInfo && (
+                  <span className="target-remaining">
+                    {targetInfo.name}: {targetInfo.hp}/{targetInfo.hp_max} HP
+                  </span>
+                )}
+              </div>
+            ) : lastActionResult.hit === false ? (
+              <div className="combat-hit-result">
+                <span className="hit-badge miss">✗ 未命中</span>
+                {targetInfo && <span className="target-name">目标: {targetInfo.name}</span>}
+              </div>
+            ) : (
+              <div className="combat-hit-result">
+                <span className="hit-badge">执行: {lastActionResult.action_type}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="combat-narrative">
         {isNarrativeStreaming || combatNarrative ? (
@@ -1417,6 +1458,7 @@ function App() {
   const [selectedWeapon, setSelectedWeapon] = useState<string>("longsword");
   const [combatNarrative, setCombatNarrative] = useState<string>("");
   const [isCombatNarrativeStreaming, setIsCombatNarrativeStreaming] = useState(false);
+  const [lastCombatActionResult, setLastCombatActionResult] = useState<CombatActionResult | null>(null);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
@@ -2048,6 +2090,7 @@ function App() {
       }
       if (finalResult) {
         setCombat(finalResult.combat_state);
+        setLastCombatActionResult(finalResult);
         addToTimeline({
           type: "action",
           title: `战斗: ${actionType}`,
@@ -2056,13 +2099,22 @@ function App() {
             ? `命中，造成 ${finalResult.damage} 点伤害`
             : "未命中",
         });
-        // If combat ended, show result
+        // If combat ended, show result and add system message
         if (finalResult.combat_state.status !== "active") {
+          const isVictory = finalResult.combat_state.status === "victory";
+          const endMessage = isVictory 
+            ? `🏆 战斗胜利！所有敌人已被击败。战斗持续了 ${finalResult.combat_state.round_number} 轮。`
+            : `💀 战斗结束。战斗持续了 ${finalResult.combat_state.round_number} 轮。`;
           addToTimeline({
             type: "system",
-            title: finalResult.combat_state.status === "victory" ? "战斗胜利" : "战斗结束",
+            title: isVictory ? "战斗胜利" : "战斗结束",
             details: `战斗在 ${finalResult.combat_state.round_number} 轮后结束`,
           });
+          // Add system message to message list
+          setMessages((prev) => [
+            ...prev,
+            { id: Date.now(), role: "system", text: endMessage, timestamp: Date.now() },
+          ]);
         }
       }
     } catch (error) {
@@ -2109,6 +2161,7 @@ function App() {
     setCombat(null);
     setCombatNarrative("");
     setSelectedTarget(null);
+    setLastCombatActionResult(null);
     refreshState();
   };
 
@@ -2218,6 +2271,7 @@ function App() {
             onAction={executeCombatAction}
             onFlee={() => endCombat("flee")}
             loading={combatLoading}
+            lastActionResult={lastCombatActionResult}
           />
         ) : combatEnded ? (
           <CombatEndScreen

@@ -1469,6 +1469,116 @@
   border-radius: 10px;
 }
 
+/* ---- Combat Result Panel ---- */
+
+.combat-result-panel {
+  background: linear-gradient(135deg, rgba(26, 39, 64, 0.9), rgba(26, 26, 46, 0.95));
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 14px 16px;
+  animation: slideInUp 0.3s ease-out;
+}
+
+.combat-result-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent-dark), var(--accent), var(--accent-light));
+  border-radius: 10px 10px 0 0;
+}
+
+.combat-result-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.combat-result-icon {
+  font-size: 14px;
+}
+
+.combat-result-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--accent-light);
+}
+
+.combat-result-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.combat-hit-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+}
+
+.hit-badge.success {
+  background: var(--success-bg);
+  border-color: var(--success);
+  color: #7dd87d;
+}
+
+.hit-badge.miss {
+  background: var(--failure-bg);
+  border-color: var(--failure);
+  color: #e07d7a;
+}
+
+.damage-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--failure);
+  font-family: monospace;
+}
+
+.target-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.target-remaining {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-panel);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .combat-narrative {
   flex: 1;
   min-height: 120px;

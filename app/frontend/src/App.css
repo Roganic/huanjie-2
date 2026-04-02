@@ -385,6 +385,35 @@
   margin-top: 2px;
 }
 
+.npc-item.npc-clickable {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.npc-item.npc-clickable:hover {
+  background: var(--bg-panel-hover);
+  border-color: var(--accent);
+  transform: translateX(4px);
+}
+
+.npc-item.npc-clickable:active {
+  transform: translateX(2px);
+}
+
+.npc-item.npc-clickable:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.3);
+}
+
+.npc-role {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(199, 168, 109, 0.15);
+  color: #c7a86d;
+  margin-left: 4px;
+}
+
 .sidebar-loading {
   padding: 16px;
   color: var(--text-muted);
@@ -3342,6 +3371,36 @@
   border-radius: 50%;
   background: var(--accent);
   animation: pulse 1.2s infinite;
+}
+
+.streaming-dot.combat-dot {
+  background: #d9534f;
+}
+
+/* Combat vs Exploration Narrative Styles */
+.narrative-history.narrative-combat .narrative-history-header {
+  border-bottom-color: rgba(217, 83, 79, 0.5);
+}
+
+.narrative-history.narrative-combat .narrative-history-title {
+  color: #e07d7a;
+}
+
+.narrative-history.narrative-exploration .narrative-history-header {
+  border-bottom-color: rgba(199, 168, 109, 0.5);
+}
+
+.narrative-history.narrative-exploration .narrative-history-title {
+  color: #c7a86d;
+}
+
+.narrative-item.narrative-combat-item {
+  background: linear-gradient(135deg, rgba(217, 83, 79, 0.08), var(--bg-panel));
+  border-color: rgba(217, 83, 79, 0.3);
+}
+
+.narrative-item.narrative-combat-item.streaming {
+  border-color: #d9534f;
 }
 
 .compact-resolution {

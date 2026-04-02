@@ -59,6 +59,15 @@ def _get_adventure_scene_init() -> dict:
         "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
     }
 
+
+# Compatibility constant for routers that expect this name
+_ADVENTURE_SCENE_INIT = {
+    "id": "tavern-01",
+    "name": "锈迹斑斑的灯笼酒馆",
+    "description": "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒。",
+    "actors": [],
+}
+
 _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
     CharacterClass.WARRIOR: {
         "description": "久经沙场的前线战士，信奉钢铁与意志。",

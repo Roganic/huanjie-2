@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "saved_at": "2026-04-02T11:51:47.747941",
-  "session_id": "28528e9505f545e28ebd982cfdf37106",
+  "saved_at": "2026-04-02T11:53:56.866993",
+  "session_id": "852d85c727cc47c6b5421778a0a054f2",
   "phase": "adventure",
   "game_phase": "exploration",
   "character": {
@@ -18,7 +18,7 @@
     },
     "proficiency_bonus": 2,
     "level": 1,
-    "hp": 12,
+    "hp": 11,
     "hp_max": 12,
     "ac": 16,
     "conditions": [],
@@ -222,7 +222,8 @@
         "type": "friendly",
         "description": "灯笼酒馆的老板，一位白发苍苍的老兵，瞎了一只眼但笑容温暖。",
         "race": "人类",
-        "occupation": "酒馆老板"
+        "occupation": "酒馆老板",
+        "dialogue_count": 0
       },
       {
         "id": "tavern-bard-01",
@@ -230,7 +231,8 @@
         "type": "neutral",
         "description": "在角落演奏竖琴的吟游诗人，据说知道很多古老传说。",
         "race": "精灵",
-        "occupation": "吟游诗人"
+        "occupation": "吟游诗人",
+        "dialogue_count": 0
       },
       {
         "id": "merchant-01",
@@ -238,21 +240,12 @@
         "type": "neutral",
         "description": "独自坐在阴影中的神秘商人，时不时打量着进出的客人。",
         "race": "未知",
-        "occupation": "商人"
+        "occupation": "商人",
+        "dialogue_count": 0
       }
     ],
     "time": 1,
-    "flags": [],
-    "exits": [
-      {
-        "direction": "村庄广场",
-        "target_scene_id": "village-square-01"
-      },
-      {
-        "direction": "森林入口",
-        "target_scene_id": "dungeon-entrance-01"
-      }
-    ]
+    "flags": []
   },
   "combat_state": null,
   "action_history": [
@@ -260,13 +253,13 @@
       "action_summary": "TestHero attempts to search the room by look under tables and behind barrels",
       "resolution_summary": {
         "resolution_type": "check",
-        "outcome": "success",
+        "outcome": "failure",
         "check": {
           "ability": "str",
           "modifier": 2,
           "dc": 15,
-          "roll": 15,
-          "total": 17
+          "roll": 2,
+          "total": 4
         },
         "attack": null,
         "saving_throw": null,
@@ -276,14 +269,20 @@
             "field": "time",
             "delta": 1,
             "description": "时间流逝。"
+          },
+          {
+            "target": "warrior-testhero",
+            "field": "hp",
+            "delta": -1,
+            "description": "体力消耗造成轻微伤害。"
           }
         ]
       },
-      "narration_summary": "TestHero sets out to search the room. Through skill and determination, the attempt succeeds, bringing the desired result. A ripple of response moves through 锈迹斑斑的灯笼酒馆 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed. A fresh opening has appeared in 锈迹斑斑的灯笼酒馆, but it will not stay open for long. Time ",
-      "narration": "TestHero sets out to search the room. Through skill and determination, the attempt succeeds, bringing the desired result.",
-      "scene_progression": "A ripple of response moves through 锈迹斑斑的灯笼酒馆 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed.",
-      "gm_prompt": "A fresh opening has appeared in 锈迹斑斑的灯笼酒馆, but it will not stay open for long. Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 1. Do you exploit that opening immediately, question whoever reacts, or examine what just shifted?",
-      "created_at": 1775101907745
+      "narration_summary": "TestHero attempts to search the room, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around TestHero. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. Time ",
+      "narration": "TestHero attempts to search the room, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around TestHero. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
+      "gm_prompt": "The failed attempt gives the scene permission to push back. Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 1. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
+      "created_at": 1775102036863
     }
   ],
   "scene_history": []

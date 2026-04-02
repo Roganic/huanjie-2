@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import { MapPanel, MapButton, type MapData } from "./components/MapPanel";
 
 interface Message {
   id: number;
@@ -1559,6 +1560,7 @@ function restoreMessagesFromHistory(history: NarrativeHistoryEntry[]): Message[]
           action_summary: entry.action_summary,
           resolution_type: entry.resolution_summary.resolution_type ?? "auto_success",
           check: entry.resolution_summary.check ?? null,
+          skill_check: null,
           outcome: entry.resolution_summary.outcome ?? "success",
           effects: [],
           narration: entry.narration,
@@ -1674,6 +1676,11 @@ function App() {
   const [combatNarrative, setCombatNarrative] = useState<string>("");
   const [isCombatNarrativeStreaming, setIsCombatNarrativeStreaming] = useState(false);
   const [combatLoot, setCombatLoot] = useState<LootGained[] | undefined>(undefined);
+  // Map state
+  const [mapData, setMapData] = useState<MapData | null>(null);
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [mapLoading, setMapLoading] = useState(false);
+  const toggleMap = () => setIsMapOpen((prev) => !prev);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
@@ -1806,7 +1813,29 @@ function App() {
     setBootstrap(state);
     setMessages(restoreMessagesFromHistory(state.narrative_history));
     setTimeline(restoreTimelineFromHistory(state.narrative_history));
+    // Refresh map after state update
+    await refreshMap(sid ?? undefined);
     return state;
+  };
+
+  const refreshMap = async (overrideSessionId?: string) => {
+    const sid = overrideSessionId ?? sessionId;
+    if (!sid) return;
+    
+    setMapLoading(true);
+    try {
+      const response = await fetch(apiUrl("/map"), {
+        headers: buildSessionHeaders(sid),
+      });
+      if (response.ok) {
+        const data: MapData = await response.json();
+        setMapData(data);
+      }
+    } catch {
+      // Silently fail - map is not critical
+    } finally {
+      setMapLoading(false);
+    }
   };
 
   const resetSession = async () => {
@@ -2332,6 +2361,7 @@ function App() {
 
       setPreviousBootstrap(bootstrap);
       await refreshState();
+      // Map is already refreshed in refreshState()
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setMessages((previous) => {
@@ -2533,6 +2563,7 @@ function App() {
       setCombat(null);
       // Refresh bootstrap state to get updated game_phase
       await refreshState();
+      // Map is already refreshed in refreshState()
       addToTimeline({
         type: "system",
         title: "战斗结束",
@@ -2876,6 +2907,19 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Map Button (Fixed position) */}
+      {inAdventure && (
+        <MapButton isOpen={isMapOpen} onClick={toggleMap} />
+      )}
+
+      {/* Map Panel */}
+      <MapPanel
+        mapData={mapData}
+        isOpen={isMapOpen}
+        onClose={() => setIsMapOpen(false)}
+        loading={mapLoading}
+      />
     </div>
   );
 }

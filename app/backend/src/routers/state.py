@@ -66,6 +66,18 @@ async def state(request: Request):
     enemy = get_enemy(session_id=resolved_id)
     result["enemy"] = enemy.model_dump(mode="json")
 
+    # Include active module information
+    from ..modules.manager import get_module_manager
+    manager = get_module_manager()
+    active_module = manager.get_active_module(resolved_id)
+    if active_module:
+        result["active_module"] = {
+            "id": active_module.module_id,
+            "name": active_module.module_name,
+            "current_node_id": active_module.current_node_id,
+            "current_scene_id": active_module.current_scene_id,
+        }
+
     return result
 
 

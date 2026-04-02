@@ -1,0 +1,313 @@
+"""Module data models for the modular adventure system.
+
+A module contains scenes, NPCs, quests, story nodes, and triggers that
+define an adventure or story segment.
+"""
+
+from __future__ import annotations
+
+from enum import Enum
+from typing import Any, Optional
+
+from pydantic import BaseModel, Field
+
+
+# -----------------------------------------------------------------------------
+# Trigger Conditions
+# -----------------------------------------------------------------------------
+
+class TriggerType(str, Enum):
+    """Types of trigger conditions."""
+    LOCATION = "location"      # Entering a specific scene/location
+    ITEM = "item"              # Obtaining a specific item
+    QUEST = "quest"            # Quest state change
+    DIALOGUE = "dialogue"      # Specific dialogue completed
+    FLAG = "flag"              # Game flag set/unset
+    TIME = "time"              # Time-based trigger
+    CUSTOM = "custom"          # Custom condition logic
+
+
+class TriggerCondition(BaseModel):
+    """A condition that must be met for a trigger to fire."""
+    type: TriggerType
+    target_id: str = Field(description="ID of the target (scene_id, item_id, quest_id, etc.)")
+    value: Any = Field(default=None, description="Optional value to compare against")
+    operator: str = Field(default="equals", description="Comparison operator: equals, not_equals, gt, lt, contains")
+    
+    model_config = {"populate_by_name": True}
+
+
+class TriggerAction(BaseModel):
+    """An action to execute when a trigger fires."""
+    type: str = Field(description="Action type: unlock_node, start_quest, spawn_npc, set_flag, etc.")
+    target_id: str = Field(description="Target ID for the action")
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Additional parameters")
+    
+    model_config = {"populate_by_name": True}
+
+
+class Trigger(BaseModel):
+    """A trigger that responds to game events."""
+    id: str
+    name: str
+    description: str = ""
+    conditions: list[TriggerCondition] = Field(default_factory=list)
+    actions: list[TriggerAction] = Field(default_factory=list)
+    once_only: bool = Field(default=True, description="Whether this trigger fires only once")
+    enabled: bool = Field(default=True)
+    
+    model_config = {"populate_by_name": True}
+
+
+# -----------------------------------------------------------------------------
+# Story Nodes
+# -----------------------------------------------------------------------------
+
+class StoryNodeType(str, Enum):
+    """Types of story nodes."""
+    START = "start"            # Starting node
+    DIALOGUE = "dialogue"      # Dialogue/conversation node
+    COMBAT = "combat"          # Combat encounter node
+    EXPLORATION = "exploration"  # Free exploration node
+    CHOICE = "choice"          # Player choice node
+    EVENT = "event"            # Scripted event
+    END = "end"                # Ending node
+
+
+class StoryNodeTransition(BaseModel):
+    """A possible transition to another story node."""
+    target_node_id: str
+    condition: Optional[str] = None  # Optional condition expression
+    description: str = ""
+    
+    model_config = {"populate_by_name": True}
+
+
+class StoryNode(BaseModel):
+    """A node in the story progression graph."""
+    id: str
+    name: str
+    type: StoryNodeType
+    description: str = ""
+    scene_id: Optional[str] = None  # Associated scene
+    npc_ids: list[str] = Field(default_factory=list)  # NPCs involved
+    dialogue_text: Optional[str] = None  # For dialogue nodes
+    transitions: list[StoryNodeTransition] = Field(default_factory=list)
+    triggers: list[str] = Field(default_factory=list)  # Trigger IDs to activate
+    required_flags: list[str] = Field(default_factory=list)  # Flags required to enter
+    sets_flags: list[str] = Field(default_factory=list)  # Flags set upon completion
+    
+    model_config = {"populate_by_name": True}
+
+
+# -----------------------------------------------------------------------------
+# Quests
+# -----------------------------------------------------------------------------
+
+class QuestStatus(str, Enum):
+    """Status of a quest."""
+    NOT_STARTED = "not_started"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class QuestObjective(BaseModel):
+    """An objective within a quest."""
+    id: str
+    description: str
+    completed: bool = False
+    optional: bool = False
+    
+    model_config = {"populate_by_name": True}
+
+
+class Quest(BaseModel):
+    """A quest or mission in the module."""
+    id: str
+    name: str
+    description: str
+    status: QuestStatus = QuestStatus.NOT_STARTED
+    objectives: list[QuestObjective] = Field(default_factory=list)
+    rewards: dict[str, Any] = Field(default_factory=dict)  # XP, items, etc.
+    prerequisites: list[str] = Field(default_factory=list)  # Quest IDs required
+    starting_node_id: Optional[str] = None
+    
+    model_config = {"populate_by_name": True}
+
+
+# -----------------------------------------------------------------------------
+# NPCs
+# -----------------------------------------------------------------------------
+
+class NPCRole(str, Enum):
+    """Role of an NPC in the module."""
+    QUEST_GIVER = "quest_giver"
+    MERCHANT = "merchant"
+    ENEMY = "enemy"
+    ALLY = "ally"
+    NEUTRAL = "neutral"
+    BOSS = "boss"
+
+
+class NPCStats(BaseModel):
+    """Combat stats for an NPC if applicable."""
+    hp: int = 10
+    ac: int = 10
+    str: int = 10
+    dex: int = 10
+    con: int = 10
+    
+    model_config = {"populate_by_name": True}
+
+
+class ModuleNPC(BaseModel):
+    """An NPC definition within a module."""
+    id: str
+    name: str
+    description: str = ""
+    race: Optional[str] = None
+    role: NPCRole = NPCRole.NEUTRAL
+    stats: NPCStats = Field(default_factory=NPCStats)
+    dialogue_tree_id: Optional[str] = None
+    inventory: list[dict[str, Any]] = Field(default_factory=list)
+    is_hostile: bool = False
+    
+    model_config = {"populate_by_name": True}
+
+
+# -----------------------------------------------------------------------------
+# Scenes
+# -----------------------------------------------------------------------------
+
+class SceneExit(BaseModel):
+    """An exit from a scene to another scene."""
+    direction: str  # "north", "door", "portal", etc.
+    target_scene_id: str
+    description: str = ""
+    locked: bool = False
+    key_item_id: Optional[str] = None  # Item required to unlock
+    
+    model_config = {"populate_by_name": True}
+
+
+class ModuleScene(BaseModel):
+    """A scene/location within a module."""
+    id: str
+    name: str
+    description: str
+    npc_ids: list[str] = Field(default_factory=list)  # NPCs present
+    exits: list[SceneExit] = Field(default_factory=list)
+    items: list[dict[str, Any]] = Field(default_factory=list)  # Items in scene
+    flags: list[str] = Field(default_factory=list)  # Scene-specific flags
+    lighting: str = "normal"  # normal, dark, bright, dim
+    atmosphere: str = ""  # Mood/atmosphere description
+    
+    model_config = {"populate_by_name": True}
+
+
+# -----------------------------------------------------------------------------
+# Module
+# -----------------------------------------------------------------------------
+
+class ModuleMetadata(BaseModel):
+    """Metadata for a module."""
+    author: str = ""
+    version: str = "1.0.0"
+    created_at: str = ""
+    tags: list[str] = Field(default_factory=list)
+    difficulty: str = "normal"  # easy, normal, hard
+    estimated_duration: str = ""  # "30 minutes", "2 hours", etc.
+    
+    model_config = {"populate_by_name": True}
+
+
+class Module(BaseModel):
+    """A complete adventure module.
+    
+    Contains all the data needed to run an adventure: scenes, NPCs,
+    quests, story nodes, and triggers.
+    """
+    id: str
+    name: str
+    description: str
+    metadata: ModuleMetadata = Field(default_factory=ModuleMetadata)
+    
+    # Core content
+    scenes: list[ModuleScene] = Field(default_factory=list)
+    npcs: list[ModuleNPC] = Field(default_factory=list)
+    quests: list[Quest] = Field(default_factory=list)
+    story_nodes: list[StoryNode] = Field(default_factory=list)
+    triggers: list[Trigger] = Field(default_factory=list)
+    
+    # Starting state
+    starting_scene_id: Optional[str] = None
+    starting_node_id: Optional[str] = None
+    
+    model_config = {"populate_by_name": True}
+    
+    def get_scene(self, scene_id: str) -> Optional[ModuleScene]:
+        """Get a scene by ID."""
+        for scene in self.scenes:
+            if scene.id == scene_id:
+                return scene
+        return None
+    
+    def get_npc(self, npc_id: str) -> Optional[ModuleNPC]:
+        """Get an NPC by ID."""
+        for npc in self.npcs:
+            if npc.id == npc_id:
+                return npc
+        return None
+    
+    def get_quest(self, quest_id: str) -> Optional[Quest]:
+        """Get a quest by ID."""
+        for quest in self.quests:
+            if quest.id == quest_id:
+                return quest
+        return None
+    
+    def get_story_node(self, node_id: str) -> Optional[StoryNode]:
+        """Get a story node by ID."""
+        for node in self.story_nodes:
+            if node.id == node_id:
+                return node
+        return None
+    
+    def get_trigger(self, trigger_id: str) -> Optional[Trigger]:
+        """Get a trigger by ID."""
+        for trigger in self.triggers:
+            if trigger.id == trigger_id:
+                return trigger
+        return None
+
+
+# -----------------------------------------------------------------------------
+# Module Summary (for list views)
+# -----------------------------------------------------------------------------
+
+class ModuleSummary(BaseModel):
+    """Summary of a module for listing."""
+    id: str
+    name: str
+    description: str
+    version: str = "1.0.0"
+    difficulty: str = "normal"
+    
+    model_config = {"populate_by_name": True}
+
+
+# -----------------------------------------------------------------------------
+# Active Module State
+# -----------------------------------------------------------------------------
+
+class ActiveModule(BaseModel):
+    """Information about the currently active module."""
+    id: str
+    name: str
+    current_node_id: Optional[str] = None
+    current_scene_id: Optional[str] = None
+    completed_nodes: list[str] = Field(default_factory=list)
+    active_flags: list[str] = Field(default_factory=list)
+    
+    model_config = {"populate_by_name": True}

@@ -247,13 +247,14 @@ async def state(request: Request):
 
 
 # Include routers AFTER defining persistence endpoints
-from .routers import action, character, combat as combat_router, health, map as map_router, state
+from .routers import action, character, combat as combat_router, health, map as map_router, modules as modules_router, state
 
 app.include_router(health.router)
 app.include_router(action.router)
 app.include_router(character.router)
 app.include_router(state.router)
 app.include_router(map_router.router)
+app.include_router(modules_router.router)
 
 # Include routes modules (these take precedence for combat endpoints)
 from routes import combat as combat_routes

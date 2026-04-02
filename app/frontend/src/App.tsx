@@ -1980,6 +1980,9 @@ function App() {
       setIsCombatNarrativeStreaming(false);
       setShowLoadDialog(false);
       
+      // Refresh map after loading save
+      await refreshMap(data.session_id);
+      
       setMessages((previous) => [
         ...previous,
         { id: Date.now(), role: "system", text: `存档已加载，欢迎回来，${data.actor?.name || "冒险者"}！`, timestamp: Date.now() },

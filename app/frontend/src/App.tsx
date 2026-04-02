@@ -1593,6 +1593,11 @@ function App() {
       setMessages([]);
       setTimeline([]);
       setInput("");
+      // Clear combat state
+      setCombat(null);
+      setCombatNarrative("");
+      setSelectedTarget(null);
+      setIsCombatNarrativeStreaming(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setMessages((previous) => [

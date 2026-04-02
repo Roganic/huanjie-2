@@ -3669,74 +3669,152 @@
   cursor: not-allowed;
 }
 
+/* ---- XP Progress Bar ---- */
 
-/* ---------------------------------------------------------------------------
-   Combat Loot Display Styles
-   --------------------------------------------------------------------------- */
-
-.combat-loot-section {
-  margin: 20px 0;
-  padding: 16px;
-  background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), rgba(212, 175, 55, 0.05));
-  border: 1px solid rgba(212, 175, 55, 0.3);
-  border-radius: 12px;
-  animation: loot-glow 2s ease-in-out infinite alternate;
+.xp-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 
-@keyframes loot-glow {
-  from {
-    box-shadow: 0 0 5px rgba(212, 175, 55, 0.2);
-  }
-  to {
-    box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
-  }
-}
-
-.combat-loot-section h3 {
-  margin: 0 0 12px 0;
-  font-size: 16px;
-  color: #d4af37;
-  text-align: center;
-}
-
-.combat-loot-list {
+.xp-header {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.combat-loot-entry {
-  padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  border-left: 3px solid #d4af37;
-}
-
-.loot-enemy-name {
-  font-size: 12px;
-  color: var(--text-muted);
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 6px;
 }
 
-.loot-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.xp-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.loot-item {
+.xp-values {
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text-secondary);
+}
+
+.xp-current {
+  color: #c7a86d;
+  font-weight: 600;
+}
+
+.xp-separator {
+  color: var(--text-muted);
+  margin: 0 2px;
+}
+
+.xp-needed {
+  color: var(--text-muted);
+}
+
+.xp-bar-container {
+  height: 6px;
+  background: var(--hp-bg);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.xp-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #8b7355, #c7a86d);
+  border-radius: 3px;
+  transition: width var(--transition-normal);
+  position: relative;
+}
+
+.xp-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.2), transparent);
+  border-radius: 3px 3px 0 0;
+}
+
+.xp-level-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
-  background: rgba(212, 175, 55, 0.15);
-  border: 1px solid rgba(212, 175, 55, 0.3);
-  border-radius: 16px;
-  font-size: 13px;
-  color: #d4af37;
-  font-weight: 500;
+  gap: 4px;
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(199, 168, 109, 0.15);
+  border: 1px solid rgba(199, 168, 109, 0.4);
+  border-radius: 12px;
+  color: #c7a86d;
+  font-weight: 600;
 }
 
-.loot-item::before {
-  content: "✨";
-  margin-right: 4px;
+.level-up-notification {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  background: linear-gradient(135deg, rgba(199, 168, 109, 0.2), rgba(199, 168, 109, 0.05));
+  border: 1px solid #c7a86d;
+  border-radius: 10px;
+  animation: levelUpPulse 2s ease-in-out infinite;
+}
+
+.level-up-icon {
+  font-size: 24px;
+}
+
+.level-up-content {
+  flex: 1;
+}
+
+.level-up-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #c7a86d;
+  margin-bottom: 2px;
+}
+
+.level-up-details {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+@keyframes levelUpPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(199, 168, 109, 0.4); }
+  50% { box-shadow: 0 0 20px 4px rgba(199, 168, 109, 0.15); }
+}
+
+/* Mini character card XP display */
+.mini-xp-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #c7a86d;
+}
+
+.mini-xp-icon {
+  font-size: 9px;
+}
+
+.xp-gained-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(199, 168, 109, 0.2);
+  border: 1px solid #c7a86d;
+  border-radius: 12px;
+  color: #c7a86d;
+  font-size: 12px;
+  font-weight: 600;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.xp-gained-badge::before {
+  content: '✨';
 }

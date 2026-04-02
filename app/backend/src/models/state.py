@@ -219,6 +219,8 @@ class Actor(BaseModel):
     # Inventory and equipment
     inventory: list[InventoryItem] = Field(default_factory=list)
     equipped: EquippedItems = Field(default_factory=EquippedItems)
+    # Experience points and leveling
+    experience_points: int = 0
 
 
 class NPCType(str, Enum):
@@ -322,6 +324,7 @@ class CharacterCard(BaseModel):
     skills: list[CharacterSkill]
     inventory: list[dict[str, Any]] = Field(default_factory=list)
     equipped: CharacterEquipped = Field(default_factory=CharacterEquipped)
+    experience_points: int = 0
 
     model_config = {"populate_by_name": True}
 

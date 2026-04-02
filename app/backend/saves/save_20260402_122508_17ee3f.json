@@ -1,12 +1,14 @@
 {
   "version": 1,
-  "saved_at": "2026-04-02T12:02:07.707503",
-  "session_id": "0fd9e48febe14488850ea9bb0b5712aa",
+  "saved_at": "2026-04-02T12:25:08.325016",
+  "save_id": "save_20260402_122508_17ee3f",
+  "save_name": "存档 2026-04-02 12:25:08",
+  "session_id": "00505444c2b5423895a9ebef38956a9e",
   "phase": "adventure",
   "game_phase": "exploration",
   "character": {
-    "id": "warrior-persisthero",
-    "name": "PersistHero",
+    "id": "warrior-actor",
+    "name": "Actor",
     "character_class": "warrior",
     "abilities": {
       "str": 15,
@@ -18,7 +20,7 @@
     },
     "proficiency_bonus": 2,
     "level": 1,
-    "hp": 11,
+    "hp": 12,
     "hp_max": 12,
     "ac": 16,
     "conditions": [],
@@ -180,7 +182,8 @@
         "max_dex_bonus": null,
         "description": "由金属环编织而成的重甲。"
       }
-    }
+    },
+    "experience_points": 0
   },
   "enemy": {
     "id": "goblin-01",
@@ -206,14 +209,15 @@
     "equipped": {
       "weapon": null,
       "armor": null
-    }
+    },
+    "experience_points": 0
   },
   "scene": {
     "id": "tavern-01",
     "name": "锈迹斑斑的灯笼酒馆",
     "description": "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒，角落里传来轻柔的竖琴声。酒保老马库斯在吧台后面擦拭着酒杯，不时用独眼打量着客人。",
     "actors": [
-      "warrior-persisthero"
+      "warrior-actor"
     ],
     "npcs": [
       {
@@ -223,7 +227,7 @@
         "description": "灯笼酒馆的老板，一位白发苍苍的老兵，瞎了一只眼但笑容温暖。",
         "race": "人类",
         "occupation": "酒馆老板",
-        "role": "merchant"
+        "dialogue_count": 0
       },
       {
         "id": "tavern-bard-01",
@@ -232,7 +236,7 @@
         "description": "在角落演奏竖琴的吟游诗人，据说知道很多古老传说。",
         "race": "精灵",
         "occupation": "吟游诗人",
-        "role": "quest_giver"
+        "dialogue_count": 0
       },
       {
         "id": "merchant-01",
@@ -241,10 +245,10 @@
         "description": "独自坐在阴影中的神秘商人，时不时打量着进出的客人。",
         "race": "未知",
         "occupation": "商人",
-        "role": "merchant"
+        "dialogue_count": 0
       }
     ],
-    "time": 2,
+    "time": 0,
     "flags": [],
     "exits": [
       {
@@ -254,71 +258,6 @@
     ]
   },
   "combat_state": null,
-  "action_history": [
-    {
-      "action_summary": "PersistHero attempts to do something by try",
-      "resolution_summary": {
-        "resolution_type": "check",
-        "outcome": "success",
-        "check": {
-          "ability": "str",
-          "modifier": 2,
-          "dc": 15,
-          "roll": 18,
-          "total": 22
-        },
-        "attack": null,
-        "saving_throw": null,
-        "effects": [
-          {
-            "target": "tavern-01",
-            "field": "time",
-            "delta": 1,
-            "description": "时间流逝。"
-          }
-        ]
-      },
-      "narration_summary": "PersistHero sets out to do something. Through skill and determination, the attempt succeeds, bringing the desired result. A ripple of response moves through 锈迹斑斑的灯笼酒馆 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed. A fresh opening has appeared in 锈迹斑斑的灯笼酒馆, but it will not stay open for long. Time ",
-      "narration": "PersistHero sets out to do something. Through skill and determination, the attempt succeeds, bringing the desired result.",
-      "scene_progression": "A ripple of response moves through 锈迹斑斑的灯笼酒馆 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed.",
-      "gm_prompt": "A fresh opening has appeared in 锈迹斑斑的灯笼酒馆, but it will not stay open for long. Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 1. Do you exploit that opening immediately, question whoever reacts, or examine what just shifted?",
-      "created_at": 1775102527702
-    },
-    {
-      "action_summary": "PersistHero attempts to do another thing by try again",
-      "resolution_summary": {
-        "resolution_type": "check",
-        "outcome": "failure",
-        "check": {
-          "ability": "str",
-          "modifier": 2,
-          "dc": 15,
-          "roll": 8,
-          "total": 12
-        },
-        "attack": null,
-        "saving_throw": null,
-        "effects": [
-          {
-            "target": "tavern-01",
-            "field": "time",
-            "delta": 1,
-            "description": "时间流逝。"
-          },
-          {
-            "target": "warrior-persisthero",
-            "field": "hp",
-            "delta": -1,
-            "description": "体力消耗造成轻微伤害。"
-          }
-        ]
-      },
-      "narration_summary": "PersistHero attempts to do another thing, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around PersistHero. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back",
-      "narration": "PersistHero attempts to do another thing, but fortune does not favor them this time. The effort falls short of success.",
-      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around PersistHero. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
-      "gm_prompt": "The failed attempt gives the scene permission to push back. The room is still reacting to the last beat: PersistHero sets out to do something. Through skill and determination, the attempt succeeds, bringing the desired res... Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 2. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
-      "created_at": 1775102527706
-    }
-  ],
+  "action_history": [],
   "scene_history": []
 }

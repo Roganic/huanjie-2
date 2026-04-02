@@ -31,6 +31,7 @@ from ..memory import (
     get_memory_context,
     get_session_memory,
 )
+from ..state import _resolve_session_id
 from .providers import get_provider
 from .resolution_constraints import (
     NarrationConstraintContext,
@@ -150,6 +151,7 @@ def _build_narrative_prompt(
     combat_round: Optional[int] = None,
     is_combat_ended: Optional[bool] = None,
     combat_outcome: Optional[str] = None,
+    memory_context: Optional[list[dict]] = None,
 ) -> str:
     """Backward-compatible wrapper around centralized prompt building."""
     return build_narrative_prompt(
@@ -169,6 +171,7 @@ def _build_narrative_prompt(
             combat_outcome=combat_outcome,
         ),
         narrative_history=narrative_history,
+        memory_context=memory_context,
     )
 
 
@@ -466,7 +469,11 @@ def generate_narration(
         combat_outcome=combat_outcome,
     )
     
-    # Build prompt with narrative history for context
+    # Get session memory context for enhanced narrative continuity
+    resolved_session_id = session_id or _resolve_session_id(None)
+    memory_context = get_memory_context(resolved_session_id)
+    
+    # Build prompt with narrative history and memory context
     prompt = _build_narrative_prompt(
         req=req,
         actor=actor,
@@ -481,12 +488,35 @@ def generate_narration(
         combat_round=combat_round,
         is_combat_ended=is_combat_ended,
         combat_outcome=combat_outcome,
+        memory_context=memory_context if memory_context else None,
     )
 
     # Log session memory context for observability
     history_count = len(narrative_history) if narrative_history else 0
-    if history_count > 0:
-        # Extract recent entries for logging
+    memory_count = len(memory_context) if memory_context else 0
+    
+    if memory_count > 0:
+        # Log memory context entries (new session memory system)
+        recent_memories = memory_context[-3:] if memory_count >= 3 else memory_context
+        memory_summaries = [
+            f"[{i+1}] {m.get('action', 'unknown')[:50]}..." if len(m.get('action', '')) > 50 
+            else f"[{i+1}] {m.get('action', 'unknown')}"
+            for i, m in enumerate(recent_memories)
+        ]
+        logger.info(
+            "Narrative prompt includes %d session memory entries",
+            memory_count,
+            extra={
+                "session_id": resolved_session_id,
+                "memory_count": memory_count,
+                "recent_memories": memory_summaries,
+                "actor": actor.name,
+                "action_intent": req.intent[:100],
+                "has_memory_context": True,
+            },
+        )
+    elif history_count > 0:
+        # Fallback: log legacy narrative history
         recent_entries = narrative_history[-3:] if history_count >= 3 else narrative_history
         recent_summaries = [
             f"[{i+1}] {e.action_summary[:50]}..." if len(e.action_summary) > 50 else f"[{i+1}] {e.action_summary}"
@@ -496,11 +526,12 @@ def generate_narration(
             "Narrative prompt includes %d history entries",
             history_count,
             extra={
-                "session_id": session_id,
+                "session_id": resolved_session_id,
                 "history_count": history_count,
                 "recent_history": recent_summaries,
                 "actor": actor.name,
                 "action_intent": req.intent[:100],
+                "has_memory_context": False,
             },
         )
 
@@ -519,6 +550,7 @@ def generate_narration(
                 "combat_round": combat_round,
                 "is_combat_ended": is_combat_ended,
                 "history_in_context": history_count,
+                "memory_in_context": memory_count,
                 "prompt_preview": prompt[:800],
             },
         )

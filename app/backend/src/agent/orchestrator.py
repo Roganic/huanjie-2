@@ -39,9 +39,12 @@ from ..state import (
     get_combat_state,
     get_narrative_context,
     get_scene,
+    get_session_memory_for_session,
     start_combat_session,
     update_combatant_hp,
+    _resolve_session_id,
 )
+from ..memory import add_memory_entry, ActionType, ResolutionOutcome
 from .narrator import generate_narration
 from .tools import (
     ApplyStateChangeResult,
@@ -217,17 +220,20 @@ class GMAgent:
             narration_result.gm_prompt.strip(),
         ]).strip()
 
+        # Build resolution summary for both narrative history and session memory
+        resolution_summary = {
+            "resolution_type": resolution_type.value,
+            "outcome": outcome.value,
+            "check": check_result,
+            "attack": attack_result,
+            "saving_throw": saving_throw_result,
+            "effects": [effect.model_dump(mode="json") for effect in self.effects],
+        }
+
         append_narrative_history(
             NarrativeHistoryEntry(
                 action_summary=action_summary,
-                resolution_summary={
-                    "resolution_type": resolution_type.value,
-                    "outcome": outcome.value,
-                    "check": check_result,
-                    "attack": attack_result,
-                    "saving_throw": saving_throw_result,
-                    "effects": [effect.model_dump(mode="json") for effect in self.effects],
-                },
+                resolution_summary=resolution_summary,
                 narration_summary=narration_summary[:400],
                 narration=narration_result.narrative,
                 scene_progression=narration_result.scene_progression,
@@ -235,6 +241,85 @@ class GMAgent:
                 created_at=int(time.time() * 1000),
             )
         )
+
+        # Also record to session memory for AI narrative context
+        self._record_session_memory(
+            action_summary=action_summary,
+            outcome=outcome,
+            resolution_summary=resolution_summary,
+            narration_summary=narration_summary[:400],
+            check_result=check_result,
+            attack_result=attack_result,
+            saving_throw_result=saving_throw_result,
+        )
+
+    def _record_session_memory(
+        self,
+        action_summary: str,
+        outcome: Outcome,
+        resolution_summary: dict,
+        narration_summary: str,
+        check_result: Optional[dict] = None,
+        attack_result: Optional[dict] = None,
+        saving_throw_result: Optional[dict] = None,
+    ) -> None:
+        """Record action to session memory for AI narrative context.
+        
+        This enables the AI DM to reference previous actions and outcomes
+        when generating new narrative.
+        """
+        try:
+            session_id = _resolve_session_id(None)
+            scene = get_scene()
+            actor = get_actor()
+            
+            # Determine action type from resolution data
+            action_type = ActionType.OTHER
+            if attack_result:
+                action_type = ActionType.ATTACK
+            elif check_result and check_result.get("skill"):
+                action_type = ActionType.SKILL_CHECK
+            
+            # Extract key numeric values
+            hit_roll = None
+            damage = None
+            dc = None
+            check_total = None
+            target_name = None
+            
+            if attack_result:
+                hit_roll = attack_result.get("hit_roll")
+                target_name = attack_result.get("target")
+                damage_data = attack_result.get("damage")
+                if damage_data and isinstance(damage_data, dict):
+                    damage = damage_data.get("total")
+            
+            if check_result:
+                dc = check_result.get("dc")
+                check_total = check_result.get("total")
+            
+            if saving_throw_result:
+                dc = saving_throw_result.get("dc")
+            
+            add_memory_entry(
+                session_id=session_id,
+                action_type=action_type,
+                action_summary=action_summary,
+                intent=action_summary,  # Using summary as intent fallback
+                actor_name=actor.name if actor else "Unknown",
+                outcome=ResolutionOutcome.SUCCESS if outcome == Outcome.SUCCESS else ResolutionOutcome.FAILURE,
+                resolution_summary=resolution_summary,
+                hit_roll=hit_roll,
+                damage=damage,
+                dc=dc,
+                check_total=check_total,
+                narration_summary=narration_summary,
+                scene_name=scene.name if scene else "",
+                target_name=target_name,
+            )
+        except Exception:
+            # Session memory is best-effort; don't fail the action if recording fails
+            pass
     
     # -----------------------------------------------------------------------
     # Resolution Paths

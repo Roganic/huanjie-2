@@ -276,6 +276,7 @@ def build_narrative_prompt(
     scene: Scene,
     context: NarrationConstraintContext,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
+    memory_context: Optional[list[dict]] = None,
 ) -> str:
     """Build the prompt with explicit hard-constraint and narrative sections."""
     lines: list[str] = []
@@ -336,7 +337,43 @@ def build_narrative_prompt(
         lines.append("")
 
     lines.append("会话历史 / Session Narrative History:")
+    
+    # Add AI memory context (from session memory system)
+    if memory_context:
+        lines.append("【近期行动摘要 / Recent Actions】")
+        for idx, entry in enumerate(memory_context, start=1):
+            action = entry.get("action", "Unknown action")
+            actor_name = entry.get("actor", "Unknown")
+            outcome_val = entry.get("outcome", "unknown")
+            entry_type = entry.get("type", "other")
+            
+            # Build key values string
+            key_values = entry.get("key_values", {})
+            key_info = []
+            if "hit_roll" in key_values:
+                key_info.append(f"命中骰={key_values['hit_roll']}")
+            if "damage" in key_values:
+                key_info.append(f"伤害={key_values['damage']}")
+            if "dc" in key_values:
+                key_info.append(f"DC={key_values['dc']}")
+            if "check_total" in key_values:
+                key_info.append(f"检定结果={key_values['check_total']}")
+            
+            key_str = f" ({', '.join(key_info)})" if key_info else ""
+            target_str = f" -> {entry.get('target')}" if entry.get('target') else ""
+            
+            lines.append(f"{idx}. [{entry_type}] {actor_name}: {action}{target_str} = {outcome_val}{key_str}")
+            
+            # Add narration summary if available (truncated)
+            narration = entry.get("narration_summary", "")
+            if narration:
+                short_narration = narration[:80] + "..." if len(narration) > 80 else narration
+                lines.append(f"   叙事: {short_narration}")
+        lines.append("")
+    
+    # Also include legacy narrative history if available
     if narrative_history:
+        lines.append("【详细历史记录 / Detailed History】")
         for idx, entry in enumerate(narrative_history, start=1):
             resolution_json = json.dumps(
                 entry.resolution_summary,
@@ -346,7 +383,7 @@ def build_narrative_prompt(
             lines.append(f"{idx}. 行动: {entry.action_summary}")
             lines.append(f"   裁定: {resolution_json}")
             lines.append(f"   摘要: {entry.narration_summary}")
-    else:
+    elif not memory_context:
         lines.append("无。当前是本次会话中最早需要参考的动作。")
     lines.append("")
 

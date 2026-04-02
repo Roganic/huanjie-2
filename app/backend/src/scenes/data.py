@@ -76,7 +76,7 @@ VILLAGE_SQUARE_SCENE = SceneData(
         "村庄的中心广场，几座破旧但整洁的房屋环绕着一口古老的水井。"
         "清晨的阳光洒在鹅卵石铺就的地面上，几个村民正在忙碌地准备着新的一天。"
         "铁匠铺传来叮叮当当的敲打声，杂货店老板正在门前整理货物。"
-        "一条小路通向村外的森林，另一条则通往村中心的酒馆。"
+        "北方是酒馆，东方是通往森林的小路。"
     ),
     actors=[],
     npcs=[
@@ -94,18 +94,18 @@ VILLAGE_SQUARE_SCENE = SceneData(
         "与村长托马斯交谈，打听消息",
         "去铁匠铺找格鲁姆修理装备",
         "在杂货店购买补给",
-        "前往酒馆休息",
-        "去地下城入口探险",
+        "向北前往酒馆",
+        "向东去地下城入口探险",
         "与村民交谈收集情报",
     ],
     connected_scenes=["tavern-01", "dungeon-entrance-01"],
     exits=[
-        SceneExit(direction="酒馆", target_scene_id="tavern-01"),
-        SceneExit(direction="森林入口", target_scene_id="dungeon-entrance-01"),
+        SceneExit(direction="north", target_scene_id="tavern-01"),
+        SceneExit(direction="east", target_scene_id="dungeon-entrance-01"),
     ],
 )
 
-# Scene 2: The Tavern (starting exploration scene)
+# Scene 2: The Tavern
 TAVERN_SCENE = SceneData(
     id="tavern-01",
     name="锈迹斑斑的灯笼酒馆",
@@ -113,6 +113,7 @@ TAVERN_SCENE = SceneData(
         "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。"
         "几个当地人默默地喝着酒，角落里传来轻柔的竖琴声。"
         "酒保老马库斯在吧台后面擦拭着酒杯，不时用独眼打量着客人。"
+        "向南可以返回村庄广场，向东则是通往森林的小路。"
     ),
     actors=[],
     npcs=[
@@ -130,15 +131,15 @@ TAVERN_SCENE = SceneData(
         "与老马库斯交谈，打听消息",
         "聆听银弦艾拉的演奏或询问传说",
         "接近神秘的商人",
-        "离开酒馆，前往地下城入口",
+        "向东去地下城入口",
         "在酒馆休息",
         "观察其他客人",
-        "返回村庄广场",
+        "向南返回村庄广场",
     ],
     connected_scenes=["village-square-01", "dungeon-entrance-01"],
     exits=[
-        SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
-        SceneExit(direction="森林入口", target_scene_id="dungeon-entrance-01"),
+        SceneExit(direction="south", target_scene_id="village-square-01"),
+        SceneExit(direction="east", target_scene_id="dungeon-entrance-01"),
     ],
 )
 
@@ -151,6 +152,7 @@ DUNGEON_ENTRANCE_SCENE = SceneData(
         "入口旁躺着一具石像守卫的残骸，似乎经历过激烈的战斗。"
         "不远处，一个受伤的矮人靠在树干上，神情惊恐地看着地下城的方向。"
         "阴冷的风从黑暗中吹出，带来腐朽和某种更危险的气息。"
+        "向西可以返回村庄，向下则进入危险的地下宝库。"
     ),
     actors=[],
     npcs=[
@@ -165,16 +167,14 @@ DUNGEON_ENTRANCE_SCENE = SceneData(
         "与受伤的托尔金交谈，了解情况",
         "检查死去的守卫尸体",
         "检查石门上的符文",
-        "进入宝库",
-        "返回酒馆",
-        "返回村庄广场",
+        "向下进入宝库",
+        "向西返回村庄",
         "在入口处搜索线索",
     ],
     connected_scenes=["village-square-01", "tavern-01", "vault-01"],
     exits=[
-        SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
-        SceneExit(direction="酒馆", target_scene_id="tavern-01"),
-        SceneExit(direction="宝库", target_scene_id="vault-01"),
+        SceneExit(direction="west", target_scene_id="village-square-01"),
+        SceneExit(direction="down", target_scene_id="vault-01"),
     ],
 )
 
@@ -220,6 +220,7 @@ VAULT_SCENE = SceneData(
         "地下深处的一间石室，墙壁上镶嵌着发出微光的水晶。"
         "中央的石台上放着一个古老的宝箱，周围散落着一些金币和珠宝。"
         "空气中弥漫着古老魔法的气息，让人既兴奋又警惕。"
+        "向上可以返回地下城入口。"
     ),
     actors=[],
     npcs=[
@@ -231,11 +232,11 @@ VAULT_SCENE = SceneData(
         "打开宝箱",
         "搜索周围的金币",
         "检查墙壁上的水晶",
-        "返回地下城入口",
+        "向上返回地下城入口",
     ],
     connected_scenes=["dungeon-entrance-01"],
     exits=[
-        SceneExit(direction="地下城入口", target_scene_id="dungeon-entrance-01"),
+        SceneExit(direction="up", target_scene_id="dungeon-entrance-01"),
     ],
 )
 
@@ -326,7 +327,7 @@ def get_scene_transition(intent: str) -> Optional[str]:
 
 def get_default_exploration_scene() -> SceneData:
     """Get the default starting exploration scene."""
-    return TAVERN_SCENE
+    return VILLAGE_SQUARE_SCENE
 
 
 def get_all_scene_names() -> dict[str, str]:

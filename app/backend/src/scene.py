@@ -233,7 +233,9 @@ def get_scene_transition(intent: str) -> Optional[str]:
 
 def get_default_exploration_scene() -> SceneData:
     """Get the default starting exploration scene."""
-    return TAVERN_SCENE
+    # Import here to avoid circular import issues
+    from .scenes.data import VILLAGE_SQUARE_SCENE
+    return VILLAGE_SQUARE_SCENE
 
 
 def get_all_scene_names() -> dict[str, str]:

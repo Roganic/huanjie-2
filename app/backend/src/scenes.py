@@ -28,6 +28,7 @@ from .scene_map import (
     # Functions
     get_scene_node,
     get_default_scene_node,
+    get_default_exploration_scene,
     resolve_direction,
     resolve_scene_by_name,
     parse_movement_intent,

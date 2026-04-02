@@ -167,10 +167,10 @@ DUNGEON_ENTRANCE_NODE = SceneMapNode(
         "一座古老的石门半埋在藤蔓之中，门上刻满了风化的符文。"
         "入口旁躺着一具石像守卫的残骸，似乎经历过激烈的战斗。"
         "不远处，一个受伤的矮人靠在树干上，神情惊恐地看着地下城的方向。"
+        "向西可以返回村庄，向下则进入危险的地下宝库。"
     ),
     exits=[
         SceneExitInfo(direction="west", target_scene_id="village-square-01", description="返回村庄广场"),
-        SceneExitInfo(direction="west", target_scene_id="tavern-01", description="返回酒馆"),
         SceneExitInfo(direction="down", target_scene_id="vault-01", description="进入地下城宝库"),
     ],
     encounter_config=EncounterConfig(
@@ -283,6 +283,11 @@ def get_scene_node(scene_id: str) -> Optional[SceneMapNode]:
 def get_default_scene_node() -> SceneMapNode:
     """Get the default starting scene node."""
     return VILLAGE_SQUARE_NODE
+
+
+def get_default_exploration_scene() -> SceneMapNode:
+    """Get the default starting exploration scene (alias for get_default_scene_node)."""
+    return get_default_scene_node()
 
 
 def resolve_direction(direction: str) -> Optional[str]:

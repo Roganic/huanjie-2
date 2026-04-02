@@ -309,5 +309,51 @@ class ActiveModule(BaseModel):
     current_scene_id: Optional[str] = None
     completed_nodes: list[str] = Field(default_factory=list)
     active_flags: list[str] = Field(default_factory=list)
-    
+
     model_config = {"populate_by_name": True}
+
+
+class ActiveModuleState(BaseModel):
+    """Runtime state of the currently active module session."""
+    module_id: str
+    current_story_node: Optional[str] = None
+    visited_nodes: list[str] = Field(default_factory=list)
+    completed_quests: list[str] = Field(default_factory=list)
+    active_flags: list[str] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+# Built-in default module for when no module is loaded
+_DEFAULT_MODULE = Module(
+    id="default",
+    name="自由探索",
+    description="无模组模式，由 AI DM 自由创作剧情",
+    starting_scene_id=None,
+    starting_node_id=None,
+)
+
+
+def get_default_module() -> Module:
+    """Return the built-in default module."""
+    return _DEFAULT_MODULE
+
+
+# Aliases for backward compatibility with older code that uses different names
+ModuleDefinition = Module          # module_engine.py uses ModuleDefinition
+StoryTrigger = Trigger             # module_engine.py uses StoryTrigger
+
+# In-memory module registry
+MODULE_REGISTRY: dict[str, Module] = {
+    _DEFAULT_MODULE.id: _DEFAULT_MODULE,
+}
+
+
+def get_module(module_id: str) -> Optional[Module]:
+    """Get a module by ID from the registry."""
+    return MODULE_REGISTRY.get(module_id)
+
+
+def register_module(module: Module) -> None:
+    """Register a module in the registry."""
+    MODULE_REGISTRY[module.id] = module

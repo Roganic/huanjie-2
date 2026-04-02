@@ -190,7 +190,7 @@ def _fallback_action_result(
         # Check for combat ended (target defeated)
         if is_combat_ended:
             return (
-                f"{actor.name} delivers a decisive strike with the {weapon}, "
+                f"{actor.name} hits the {target} with a decisive strike from the {weapon}, "
                 f"and the {target} collapses to the ground, defeated. "
                 f"The combat concludes as the battlefield falls silent."
             )
@@ -471,6 +471,24 @@ def generate_narration(
         is_combat_ended=is_combat_ended,
         combat_outcome=combat_outcome,
     )
+
+    # Log combat narrative prompts for observability
+    if attack_result:
+        logger.info(
+            "Combat narrative prompt generated for %s vs %s (round=%s, hit=%s, damage=%s)",
+            actor.name,
+            attack_result.get("target", "unknown"),
+            combat_round,
+            attack_result.get("hit"),
+            attack_result.get("damage", {}).get("total") if isinstance(attack_result.get("damage"), dict) else None,
+            extra={
+                "actor_hp": actor.hp,
+                "target_hp": target.hp if target else None,
+                "combat_round": combat_round,
+                "is_combat_ended": is_combat_ended,
+                "prompt_preview": prompt[:800],
+            },
+        )
 
     def _run_provider(current_prompt: str) -> Optional[NarrationBundle]:
         try:

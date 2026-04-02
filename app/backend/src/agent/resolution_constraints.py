@@ -10,6 +10,7 @@ from typing import Optional
 
 from ..models.action import ActionRequest, Effect, Outcome
 from ..models.state import Actor, NarrativeHistoryEntry, Scene
+from ..state import get_combat_state
 
 logger = logging.getLogger(__name__)
 
@@ -310,22 +311,44 @@ def build_narrative_prompt(
         damage = context.attack_result.get("damage")
         
         lines.append("")
-        lines.append("战斗信息 / Combat Info:")
-        lines.append(f"- 武器 / Weapon: {weapon}")
-        lines.append(f"- 目标 / Target: {target_name}")
+        lines.append("战斗裁定 / COMBAT RESOLUTION:")
+        lines.append(f"- 攻击方 / Attacker: {context.actor.name if context.actor else 'unknown'}")
+        lines.append(f"- 防御方 / Defender: {target_name}")
         lines.append(f"- 命中结果 / Hit Result: {'命中 / HIT' if hit else '未命中 / MISS'}")
         if damage and hit:
             damage_total = damage.get("total", 0) if isinstance(damage, dict) else 0
             lines.append(f"- 伤害数值 / Damage Value: {damage_total}")
+        else:
+            lines.append("- 伤害数值 / Damage Value: 0")
         if context.target:
-            lines.append(f"- 攻击方当前HP / Attacker HP: {context.actor.hp if context.actor else 'unknown'}")
-            lines.append(f"- 防御方当前HP / Defender HP: {context.target.hp}")
+            lines.append(f"- 攻击方当前HP / Attacker Current HP: {context.actor.hp if context.actor else 'unknown'}")
+            lines.append(f"- 防御方当前HP / Defender Current HP: {context.target.hp}")
             if context.target.hp == 0:
                 lines.append("- 战斗结果 / Combat Result: 敌方被击败 / ENEMY DEFEATED")
         
         # Add combat round info if available
         if context.combat_round is not None:
             lines.append(f"- 当前回合 / Current Round: 第 {context.combat_round} 回合")
+        
+        # Add initiative order from combat state
+        try:
+            combat_state = get_combat_state()
+            if combat_state.turn_order:
+                turn_order_names = []
+                for idx, cid in enumerate(combat_state.turn_order):
+                    name = combat_state.combatant_names.get(cid, cid)
+                    if cid == (context.actor.id if context.actor else None):
+                        name = f"{name} (当前行动 / CURRENT)"
+                    turn_order_names.append(name)
+                lines.append(f"- 先攻顺序 / Initiative Order: {' -> '.join(turn_order_names)}")
+            if combat_state.combatant_hp:
+                hp_lines = []
+                for cid, hp in combat_state.combatant_hp.items():
+                    name = combat_state.combatant_names.get(cid, cid)
+                    hp_lines.append(f"{name}: {hp} HP")
+                lines.append(f"- 战场HP / Battlefield HP: {', '.join(hp_lines)}")
+        except Exception:
+            pass
 
     lines.append("")
     lines.append("=" * 60)

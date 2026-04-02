@@ -14,6 +14,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from .memory import ActionHistoryEntry, Memory
 from .models.action import CombatState, Effect
 from .scene import SceneData, get_default_exploration_scene, get_scene_by_id
 from .models.state import (
@@ -57,7 +58,7 @@ def _get_adventure_scene_init() -> dict:
         "description": scene.description,
         "actors": [],
         "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
-        "exits": [exit.model_dump(mode="json") for exit in scene.exits],
+        "exits": [exit.model_dump(mode="json") for exit in getattr(scene, "exits", [])],
     }
 
 
@@ -159,6 +160,7 @@ _COMBAT_SCENE_INIT = dict(
 
 MAX_STORED_NARRATIVE_HISTORY = 50
 MAX_SCENE_HISTORY = 10
+MAX_ACTION_HISTORY = 10
 DEFAULT_PROMPT_HISTORY_ENTRIES = 5
 DEFAULT_PROMPT_HISTORY_CHARS = 1800
 DEFAULT_SESSION_ID = "default-session"
@@ -217,6 +219,7 @@ class SessionData(BaseModel):
     scene: Scene = Field(default_factory=lambda: Scene(**_CHARACTER_CREATION_SCENE_INIT))
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
     scene_history: list[SceneHistoryEntry] = Field(default_factory=list)
+    action_history: list[dict] = Field(default_factory=list)
     updated_at: float = Field(default_factory=time.time)
 
 
@@ -327,6 +330,25 @@ def append_narrative_history(
             pass
 
 
+def get_action_history(session_id: str | None = None) -> list[dict]:
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return list(session.action_history)
+
+
+def append_action_history(
+    entry: dict[str, str],
+    session_id: str | None = None,
+) -> None:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        session.action_history = [
+            *session.action_history,
+            entry,
+        ][-MAX_ACTION_HISTORY:]
+        _save_session(session)
+
+
 def get_narrative_context(
     max_entries: int = DEFAULT_PROMPT_HISTORY_ENTRIES,
     max_chars: int = DEFAULT_PROMPT_HISTORY_CHARS,
@@ -363,7 +385,7 @@ def set_combat_scene(session_id: str | None = None) -> None:
             actors=actors,
             npcs=COMBAT_ENCOUNTER_SCENE.npcs,
             time=session.scene.time,  # Preserve time from previous scene
-            exits=COMBAT_ENCOUNTER_SCENE.exits,
+            exits=getattr(COMBAT_ENCOUNTER_SCENE, "exits", []),
         )
         session.game_phase = AdventurePhase.COMBAT
         _save_session(session)
@@ -405,7 +427,7 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
             actors=actors,
             npcs=scene_data.npcs,
             time=session.scene.time,  # Preserve time from previous scene
-            exits=scene_data.exits,  # Include exits for navigation
+            exits=getattr(scene_data, "exits", []),  # Include exits for navigation
         )
         _save_session(session)
     return True
@@ -564,11 +586,12 @@ def create_character(
             description=scene_data.description,
             actors=[session.actor.id],
             npcs=scene_data.npcs,
-            exits=scene_data.exits,
+            exits=getattr(scene_data, "exits", []),
         )
         session.enemy = Actor(**_ENEMY_INIT)
         session.narrative_history = []
         session.scene_history = []
+        session.action_history = []
         _save_session(session)
         
         # Persist to save file for session restoration after restart
@@ -793,7 +816,7 @@ def _create_fresh_session(session_id: str) -> SessionData:
             description=scene_data.description,
             actors=[actor_id],
             npcs=scene_data.npcs,
-            exits=scene_data.exits,
+            exits=getattr(scene_data, "exits", []),
         )
 
     return session

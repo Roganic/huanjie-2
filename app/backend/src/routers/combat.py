@@ -37,6 +37,11 @@ from src.state import (
     _ADVENTURE_SCENE_INIT,
     Scene,
 )
+from src.combat import (
+    format_weapon_name_for_combat,
+    get_weapon_for_combat,
+    get_damage_dice_for_combat,
+)
 
 router = APIRouter(prefix="/combat", tags=["combat"])
 
@@ -78,6 +83,18 @@ def _actor_to_combatant(actor, combatant_type: CombatantType) -> Combatant:
 
 
 def _default_weapon_for_actor(actor) -> str:
+    """Get the default weapon name for combat actions.
+    
+    Priority:
+    1. Use equipped weapon if available
+    2. Fall back to class default
+    """
+    # First try to use equipped weapon
+    equipped_weapon = get_weapon_for_combat(actor)
+    if equipped_weapon is not None:
+        return equipped_weapon.name
+    
+    # Fall back to class default
     class_value = (actor.character_class.value if actor.character_class else "warrior")
     return {
         "warrior": "longsword",
@@ -381,6 +398,10 @@ async def combat_action(request: Request):
         if req.action_type == "attack":
             weapon = req.weapon or _default_weapon_for_actor(actor)
             result = execute_attack_action(combat_state, current.id, target.id, weapon)
+            
+            # Get weapon info for response
+            weapon_info = get_weapon_for_combat(actor, req.weapon)
+            weapon_display_name = weapon_info.name if weapon_info else weapon
             player_narrative = _generate_narrative(result, current.name, target.name)
             response = {
                 "action_type": "attack",

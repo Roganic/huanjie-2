@@ -762,18 +762,75 @@ function CombatScreen({
 }: CombatScreenProps) {
   const currentParticipant = combat.participants.find((p) => p.id === combat.current_actor_id);
   const isPlayerTurn = currentParticipant?.is_player ?? false;
-  const enemies = combat.participants.filter((p) => !p.is_player);
+  const enemies = combat.participants.filter((p) => !p.is_player && p.hp > 0);
   const weapons = ["longsword", "shortsword", "dagger", "shortbow"];
+
+  // Sort participants by initiative for initiative order display
+  const sortedParticipants = [...combat.participants].sort((a, b) => b.initiative - a.initiative);
+
+  const getHpStatus = (hp: number, max: number): "high" | "medium" | "low" => {
+    const ratio = hp / max;
+    if (ratio > 0.6) return "high";
+    if (ratio > 0.3) return "medium";
+    return "low";
+  };
 
   return (
     <div className="combat-screen">
+      {/* Combat Header with Round Info */}
       <div className="combat-header">
-        <div className="combat-round">第 {combat.round_number} 轮</div>
-        <div className="combat-turn">
-          {isPlayerTurn ? "你的回合" : `${currentParticipant?.name} 的回合`}
+        <div className="combat-round">⚔️ 第 {combat.round_number} 轮</div>
+        <div className={`combat-turn ${isPlayerTurn ? "player-turn" : "enemy-turn"}`}>
+          {isPlayerTurn ? "▶ 你的回合" : `⏳ ${currentParticipant?.name} 的回合`}
         </div>
       </div>
 
+      {/* Initiative Order - Clear Turn Order Display */}
+      <div className="initiative-order-panel">
+        <div className="initiative-order-header">
+          <span className="initiative-order-title">先攻顺序</span>
+          <span className="initiative-order-hint">按先攻值排序</span>
+        </div>
+        <div className="initiative-order-list">
+          {sortedParticipants.map((participant, index) => {
+            const isCurrent = participant.id === combat.current_actor_id;
+            const isDefeated = participant.hp <= 0;
+            return (
+              <div
+                key={participant.id}
+                className={`initiative-item ${isCurrent ? "current" : ""} ${
+                  participant.is_player ? "player" : "enemy"
+                } ${isDefeated ? "defeated" : ""}`}
+              >
+                <div className="initiative-rank">{index + 1}</div>
+                <div className="initiative-avatar">{participant.is_player ? "🧙" : "👹"}</div>
+                <div className="initiative-info">
+                  <div className="initiative-name">
+                    {participant.name}
+                    {isCurrent && <span className="turn-indicator">▶</span>}
+                  </div>
+                  <div className="initiative-hp-bar">
+                    <div
+                      className={`initiative-hp-fill ${getHpStatus(participant.hp, participant.hp_max)}`}
+                      style={{ width: `${Math.max(0, (participant.hp / participant.hp_max) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="initiative-stats">
+                  <div className="initiative-value" title="先攻值">
+                    {participant.initiative}
+                  </div>
+                  <div className={`initiative-hp-text ${getHpStatus(participant.hp, participant.hp_max)}`}>
+                    {participant.hp}/{participant.hp_max}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Combat Arena - Current Actors */}
       <div className="combat-arena">
         {combat.participants.map((participant) => (
           <div
@@ -784,15 +841,23 @@ function CombatScreen({
           >
             <div className="combat-actor-avatar">{participant.is_player ? "🧙" : "👹"}</div>
             <div className="combat-actor-info">
-              <div className="combat-actor-name">{participant.name}</div>
+              <div className="combat-actor-name">
+                {participant.name}
+                {participant.id === combat.current_actor_id && (
+                  <span className="current-turn-badge">当前</span>
+                )}
+              </div>
+              <div className="combat-actor-stats">
+                <span className="combat-actor-ac" title="护甲等级">🛡️ {participant.ac}</span>
+              </div>
               <div className="combat-actor-hp-bar">
                 <div
-                  className="combat-actor-hp-fill"
-                  style={{ width: `${(participant.hp / participant.hp_max) * 100}%` }}
+                  className={`combat-actor-hp-fill ${getHpStatus(participant.hp, participant.hp_max)}`}
+                  style={{ width: `${Math.max(0, (participant.hp / participant.hp_max) * 100)}%` }}
                 />
               </div>
-              <div className="combat-actor-hp-text">
-                {participant.hp}/{participant.hp_max} HP
+              <div className={`combat-actor-hp-text ${getHpStatus(participant.hp, participant.hp_max)}`}>
+                HP: {participant.hp}/{participant.hp_max}
               </div>
             </div>
             {participant.conditions.length > 0 && (
@@ -894,23 +959,57 @@ function CombatEndScreen({ combat, onReturn }: CombatEndScreenProps) {
       <div className={`combat-result ${combat.status}`}>
         <div className="combat-result-icon">{isVictory ? "🏆" : isEscape ? "🏃" : "💀"}</div>
         <h2>
-          {isVictory ? "战斗胜利！" : isEscape ? "成功逃脱" : "战斗失败"}
+          {isVictory ? "🎉 战斗胜利！" : isEscape ? "🏃 成功逃脱" : "💀 战斗失败"}
         </h2>
-        <p>
-          战斗持续了 {combat.round_number} 轮
+        <p className="combat-result-description">
+          {isVictory 
+            ? "你成功击败了所有敌人！" 
+            : isEscape 
+              ? "你成功逃离了战斗。" 
+              : "你在战斗中倒下了…"}
         </p>
+        <div className="combat-result-stats">
+          <div className="result-stat">
+            <span className="result-stat-label">战斗轮数</span>
+            <span className="result-stat-value">{combat.round_number}</span>
+          </div>
+          <div className="result-stat">
+            <span className="result-stat-label">存活着</span>
+            <span className="result-stat-value">
+              {combat.participants.filter(p => p.hp > 0).length}/{combat.participants.length}
+            </span>
+          </div>
+        </div>
         <div className="combat-result-participants">
           {combat.participants.map((p) => (
             <div key={p.id} className={`result-participant ${p.is_player ? "player" : "enemy"}`}>
-              <span>{p.name}</span>
-              <span className={p.hp <= 0 ? "defeated" : "survived"}>
-                {p.hp <= 0 ? "倒下" : `${p.hp}/${p.hp_max} HP`}
-              </span>
+              <div className="result-participant-info">
+                <span className="result-participant-avatar">{p.is_player ? "🧙" : "👹"}</span>
+                <span className="result-participant-name">{p.name}</span>
+              </div>
+              <div className={`result-participant-status ${p.hp <= 0 ? "defeated" : "survived"}`}>
+                {p.hp <= 0 ? (
+                  <>
+                    <span className="status-icon">💀</span>
+                    <span>倒下</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="status-icon">❤️</span>
+                    <span>{p.hp}/{p.hp_max} HP</span>
+                  </>
+                )}
+              </div>
             </div>
           ))}
         </div>
+        {isVictory && (
+          <div className="auto-return-hint">
+            3秒后自动返回探索…
+          </div>
+        )}
         <button className="return-btn" onClick={onReturn}>
-          返回冒险
+          {isVictory ? "继续冒险 →" : "返回"}
         </button>
       </div>
     </div>
@@ -1494,6 +1593,11 @@ function App() {
       setMessages([]);
       setTimeline([]);
       setInput("");
+      // Clear combat state
+      setCombat(null);
+      setCombatNarrative("");
+      setSelectedTarget(null);
+      setIsCombatNarrativeStreaming(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setMessages((previous) => [
@@ -2012,13 +2116,30 @@ function App() {
         });
         // Refresh bootstrap state to get updated game_phase
         await refreshState();
-        // If combat ended, show result
+        // If combat ended, show result and auto-return to exploration after delay
         if (finalResult.combat_state.status !== "active") {
+          const isVictory = finalResult.combat_state.status === "victory";
           addToTimeline({
             type: "system",
-            title: finalResult.combat_state.status === "victory" ? "战斗胜利" : "战斗结束",
+            title: isVictory ? "战斗胜利" : "战斗结束",
             details: `战斗在 ${finalResult.combat_state.round_number} 轮后结束`,
           });
+          // Auto-return to exploration after showing victory/defeat screen for 3 seconds
+          if (isVictory) {
+            setTimeout(() => {
+              returnToAdventure();
+              // Add victory message to chat
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: Date.now(),
+                  role: "system",
+                  text: "🎉 战斗胜利！你成功击败了所有敌人，继续你的冒险吧。",
+                  timestamp: Date.now(),
+                },
+              ]);
+            }, 3000);
+          }
         }
       }
     } catch (error) {

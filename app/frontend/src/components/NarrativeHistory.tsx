@@ -108,6 +108,9 @@ function CompactResolutionSummary({ res }: { res: ActionResponse }) {
 
 export function NarrativeHistory({ messages, streamingPreview, sending }: NarrativeHistoryProps) {
   const gmMessages = messages.filter((m) => m.role === "gm");
+  // Show only the most recent 5 narrative entries
+  const recentMessages = gmMessages.slice(-5);
+  const hasMoreMessages = gmMessages.length > 5;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -119,12 +122,15 @@ export function NarrativeHistory({ messages, streamingPreview, sending }: Narrat
       <div className="narrative-history-header">
         <span className="narrative-history-icon">📜</span>
         <span className="narrative-history-title">叙事历史</span>
+        {hasMoreMessages && (
+          <span className="narrative-history-count">显示最近 5 条，共 {gmMessages.length} 条</span>
+        )}
       </div>
       <div className="narrative-list">
-        {gmMessages.length === 0 && !sending && (
+        {recentMessages.length === 0 && !sending && (
           <div className="narrative-empty">输入一个行动开始冒险…</div>
         )}
-        {gmMessages.map((message) => (
+        {recentMessages.map((message) => (
           <div key={message.id} className="narrative-item">
             <div className="narrative-text">
               {(message.resolution?.narration || message.text)

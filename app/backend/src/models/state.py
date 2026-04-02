@@ -53,6 +53,13 @@ class GamePhase(str, Enum):
     ADVENTURE = "adventure"
 
 
+class AdventurePhase(str, Enum):
+    """Sub-phase within adventure: exploration, combat, or ended."""
+    EXPLORATION = "exploration"
+    COMBAT = "combat"
+    ENDED = "ended"
+
+
 class Skill(BaseModel):
     name: str
     ability: str
@@ -96,6 +103,7 @@ class NarrativeHistoryEntry(BaseModel):
 class BootstrapState(BaseModel):
     session_id: str
     phase: GamePhase
+    game_phase: AdventurePhase = Field(default=AdventurePhase.EXPLORATION, description="Current adventure phase: exploration, combat, or ended")
     actor: Actor | None = None
     scene: Scene
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)

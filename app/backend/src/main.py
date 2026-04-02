@@ -6,8 +6,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes import combat
-from .routers import action, character, health, state
+from .routers import action, character, combat, health, state
 
 
 def _get_allowed_origins() -> list[str]:

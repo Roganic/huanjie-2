@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, HTTPException, Request
@@ -11,14 +12,32 @@ from fastapi.responses import StreamingResponse
 
 from ..agent.orchestrator import resolve_action_with_agent
 from ..models.action import ActionRequest, ActionResponse
+from ..models.state import AdventurePhase
 from ..state import (
     has_character,
     require_bootstrap_state,
     reset_current_session,
+    set_combat_scene,
     set_current_session,
+    _get_session,
+    _resolve_session_id,
+    _save_session,
 )
 
 router = APIRouter(tags=["game"])
+
+# Combat trigger keywords - if these appear in action intent, auto-trigger combat
+_COMBAT_TRIGGER_KEYWORDS = [
+    "attack", "fight", "combat", "hit", "strike", "stab", "slash", "shoot",
+    "kill", "defeat", "engage", "ambush", "assault", "battle",
+    "攻击", "战斗", "打", "杀", "砍", "刺", "射击", "开战", "开战",
+]
+
+
+def _should_trigger_combat(intent: str, approach: str) -> bool:
+    """Check if an action should trigger combat based on keywords."""
+    text = f"{intent} {approach}".lower()
+    return any(keyword in text for keyword in _COMBAT_TRIGGER_KEYWORDS)
 
 
 def _sse_event(event: str, data: dict) -> str:
@@ -90,6 +109,16 @@ async def submit_action(req: ActionRequest, request: Request):
                 yield _sse_event("error", {"message": error_message})
 
             return StreamingResponse(error_stream(), media_type="text/event-stream")
+
+        # Check if this action should trigger combat
+        # Only trigger if we're currently in exploration phase
+        session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+        if session.game_phase == AdventurePhase.EXPLORATION:
+            if _should_trigger_combat(req.intent, req.approach):
+                # Transition to combat
+                set_combat_scene(session_id)
+                # Re-fetch session to get updated state
+                session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
 
         accepts_stream = "text/event-stream" in request.headers.get("accept", "")
         if not accepts_stream:

@@ -12,6 +12,7 @@ interface Message {
 
 type HealthStatus = "loading" | "ok" | "error";
 type GamePhase = "character_creation" | "adventure";
+type AdventurePhase = "exploration" | "combat" | "ended";
 type CharacterClass = "warrior" | "mage" | "rogue";
 
 interface CheckDetail {
@@ -98,6 +99,7 @@ interface NarrativeHistoryEntry {
 interface BootstrapState {
   session_id: string;
   phase: GamePhase;
+  game_phase: AdventurePhase;
   actor: Actor | null;
   scene: Scene;
   narrative_history: NarrativeHistoryEntry[];
@@ -1422,6 +1424,9 @@ function App() {
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
   const newConditions = useMemo(() => stateDiff.newConditions, [stateDiff]);
   const inAdventure = bootstrap?.phase === "adventure" && bootstrap.actor !== null;
+  const gamePhase = bootstrap?.game_phase ?? "exploration";
+  const inCombat = gamePhase === "combat";
+  const combatEnded = gamePhase === "ended";
 
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
@@ -2056,6 +2061,8 @@ function App() {
             ? `命中，造成 ${finalResult.damage} 点伤害`
             : "未命中",
         });
+        // Refresh bootstrap state to get updated game_phase
+        await refreshState();
         // If combat ended, show result
         if (finalResult.combat_state.status !== "active") {
           addToTimeline({
@@ -2091,6 +2098,8 @@ function App() {
       }
       const data = await response.json();
       setCombat(null);
+      // Refresh bootstrap state to get updated game_phase
+      await refreshState();
       addToTimeline({
         type: "system",
         title: "战斗结束",
@@ -2105,15 +2114,15 @@ function App() {
     }
   };
 
-  const returnToAdventure = () => {
+  const returnToAdventure = async () => {
     setCombat(null);
     setCombatNarrative("");
     setSelectedTarget(null);
-    refreshState();
+    await refreshState();
   };
 
-  const inCombat = combat?.status === "active";
-  const combatEnded = combat && combat.status !== "active";
+  // Combat state is now managed by backend via game_phase
+  // Local combat state is only used for combat UI details when in combat
 
   return (
     <div className="app">

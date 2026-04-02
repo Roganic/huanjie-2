@@ -242,6 +242,14 @@ class NPC(BaseModel):
     dialogue_count: int = Field(default=0, description="Number of dialogue interactions with this NPC")
 
 
+class SceneExit(BaseModel):
+    """A scene exit direction and target."""
+    direction: str = Field(description="Display name for the exit direction")
+    target_scene_id: str = Field(description="ID of the target scene")
+    
+    model_config = {"populate_by_name": True}
+
+
 class Scene(BaseModel):
     id: str
     name: str
@@ -250,6 +258,7 @@ class Scene(BaseModel):
     npcs: list[NPC] = Field(default_factory=list, description="NPCs present in this scene")
     time: int = Field(default=0, description="Abstract time ticks elapsed")
     flags: list[str] = Field(default_factory=list, description="Mutable scene state flags")
+    exits: list[SceneExit] = Field(default_factory=list, description="Available exits from this scene")
 
 
 class NarrativeHistoryEntry(BaseModel):

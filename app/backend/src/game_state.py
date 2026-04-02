@@ -18,6 +18,7 @@ from .models.state import (
     Scene,
     SceneHistoryEntry,
 )
+from .persistence.models import CombatStateData, SaveSummary
 from .state import (
     SessionData,
     _bootstrap_from_session,
@@ -32,14 +33,15 @@ from .state import (
 )
 
 
-def save_current_game(session_id: str | None = None) -> dict[str, Any]:
-    """Save the current game state to the save file.
+def save_current_game(session_id: str | None = None, save_name: str = "") -> dict[str, Any]:
+    """Save the current game state to a new save file.
     
     Args:
         session_id: Optional session ID to save. Uses current session if not provided.
+        save_name: Optional display name for the save.
         
     Returns:
-        Dict with save metadata including timestamp.
+        Dict with save metadata including save_id, timestamp, etc.
     """
     resolved_session_id = _resolve_session_id(session_id)
     
@@ -49,14 +51,16 @@ def save_current_game(session_id: str | None = None) -> dict[str, Any]:
         # Build combat state data if in combat
         combat_state_data = None
         if session.game_phase == AdventurePhase.COMBAT:
-            combat_state_data = persistence.CombatStateData(
+            combat_state_data = CombatStateData(
                 combat_id="combat-01",
                 round_number=1,
                 turn_index=0,
                 status="active",
             )
         
-        return persistence.save_game(
+        return persistence.save_game_with_id(
+            save_id=None,  # Auto-generate save_id
+            save_name=save_name,
             session_id=session.session_id,
             phase=session.phase,
             game_phase=session.game_phase,
@@ -69,16 +73,20 @@ def save_current_game(session_id: str | None = None) -> dict[str, Any]:
         )
 
 
-def load_saved_game() -> BootstrapState | None:
+def load_saved_game(save_id: str | None = None) -> BootstrapState | None:
     """Load game from save file and restore session state.
     
+    Args:
+        save_id: Optional save ID to load. If None, loads the most recent save.
+        
     Also copies the saved state to the default session so that
     clients without a session_id will get the saved state.
     
     Returns:
         BootstrapState if save exists and was loaded successfully, None otherwise.
     """
-    save_data = persistence.load_game()
+    # If no save_id specified, try to load the default save or most recent
+    save_data = persistence.load_game(save_id)
     if save_data is None:
         return None
     
@@ -109,6 +117,18 @@ def load_saved_game() -> BootstrapState | None:
     return get_bootstrap_state(session_id=save_data.session_id)
 
 
+def load_game_by_id(save_id: str) -> BootstrapState | None:
+    """Load a specific save by ID.
+    
+    Args:
+        save_id: The save ID to load.
+        
+    Returns:
+        BootstrapState if save exists and was loaded successfully, None otherwise.
+    """
+    return load_saved_game(save_id)
+
+
 def reset_and_clear_save(session_id: str | None = None) -> BootstrapState:
     """Reset game state and clear the save file.
     
@@ -134,25 +154,37 @@ def has_saved_game() -> bool:
     return persistence.has_save_file()
 
 
-def get_save_info() -> dict[str, Any] | None:
+def get_save_info(save_id: str | None = None) -> dict[str, Any] | None:
     """Get information about the saved game if it exists.
     
+    Args:
+        save_id: Optional save ID. If None, gets info for default save.
+        
     Returns:
         Dict with save metadata if save exists, None otherwise.
     """
-    save_data = persistence.load_game()
-    if save_data is None:
-        return None
+    return persistence.get_save_info(save_id)
+
+
+def list_all_saves() -> list[SaveSummary]:
+    """List all available saves.
     
-    return {
-        "saved_at": save_data.saved_at,
-        "session_id": save_data.session_id,
-        "phase": save_data.phase.value,
-        "game_phase": save_data.game_phase.value,
-        "has_character": save_data.character is not None,
-        "character_name": save_data.character.name if save_data.character else None,
-        "scene_name": save_data.scene.name if save_data.scene else None,
-    }
+    Returns:
+        List of save summaries, sorted by save time (newest first).
+    """
+    return persistence.list_saves()
+
+
+def delete_save_by_id(save_id: str) -> bool:
+    """Delete a specific save.
+    
+    Args:
+        save_id: The save ID to delete.
+        
+    Returns:
+        True if save was deleted, False otherwise.
+    """
+    return persistence.delete_save(save_id)
 
 
 def try_auto_load_on_startup() -> BootstrapState | None:

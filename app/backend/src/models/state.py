@@ -243,6 +243,13 @@ class SpellSlot(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class ClassFeatures(BaseModel):
+    """Class-specific feature usage tracking."""
+    second_wind_used: bool = False
+    action_surge_used: bool = False
+    sneak_attack_available: bool = True
+
+
 class Actor(BaseModel):
     id: str
     name: str
@@ -262,6 +269,8 @@ class Actor(BaseModel):
     equipped: EquippedItems = Field(default_factory=EquippedItems)
     # Spell slots for spellcasting classes
     spell_slots: list[SpellSlot] = Field(default_factory=list)
+    # Class feature tracking
+    class_features: ClassFeatures = Field(default_factory=ClassFeatures)
 
 
 class NPCType(str, Enum):

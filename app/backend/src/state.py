@@ -26,6 +26,7 @@ from .models.state import (
     CharacterEquipped,
     CharacterCreateRequest,
     CharacterSkill,
+    ClassFeatures,
     DEFAULT_ARMORS,
     DEFAULT_CONSUMABLES,
     DEFAULT_WEAPONS,
@@ -624,6 +625,13 @@ def create_character(
                 SpellSlot(level=1, max=2, current=2),
             ]
 
+        # Initialize class features based on class
+        class_features = ClassFeatures()
+        if req.character_class == CharacterClass.WARRIOR:
+            class_features = ClassFeatures(second_wind_used=False, action_surge_used=False)
+        elif req.character_class == CharacterClass.ROGUE:
+            class_features = ClassFeatures(sneak_attack_available=True)
+
         session.actor = Actor(
             id=actor_id,
             name=req.name.strip(),
@@ -640,6 +648,7 @@ def create_character(
             inventory=inventory,
             equipped=equipped,
             spell_slots=spell_slots,
+            class_features=class_features,
         )
         session.phase = GamePhase.ADVENTURE
         # Initialize scene with NPCs from scene system
@@ -1031,6 +1040,7 @@ def _create_fresh_session(session_id: str) -> SessionData:
             skills=warrior_skills,
             inventory=inventory,
             equipped=equipped,
+            class_features=ClassFeatures(second_wind_used=False, action_surge_used=False),
         )
         session.phase = GamePhase.ADVENTURE
         # Scene with actor in actors list for backward compatibility
@@ -1141,6 +1151,97 @@ def remove_item_from_inventory(item_name: str, session_id: str | None = None) ->
         session.actor = session.actor.model_copy(update={"inventory": new_inventory})
         _save_session(session)
         return removed
+
+
+def use_second_wind(session_id: str | None = None) -> dict:
+    """Use Second Wind class feature.
+    
+    Returns:
+        Dict with success, hp_healed, new_hp, error
+    """
+    import random
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        actor = session.actor
+        if actor is None:
+            return {"success": False, "error": "No character found"}
+        if actor.character_class != CharacterClass.WARRIOR:
+            return {"success": False, "error": "Second Wind is only available to warriors"}
+        if actor.class_features.second_wind_used:
+            return {"success": False, "error": "Second Wind already used this rest"}
+        
+        # Heal: 1d10 + warrior level
+        roll = random.randint(1, 10)
+        hp_healed = roll + (actor.level or 1)
+        new_hp = min(actor.hp_max, actor.hp + hp_healed)
+        
+        new_features = ClassFeatures(
+            second_wind_used=True,
+            action_surge_used=actor.class_features.action_surge_used,
+            sneak_attack_available=actor.class_features.sneak_attack_available,
+        )
+        session.actor = actor.model_copy(
+            update={"hp": new_hp, "class_features": new_features}
+        )
+        _save_session(session)
+        return {
+            "success": True,
+            "hp_healed": hp_healed,
+            "new_hp": new_hp,
+            "roll": roll,
+        }
+
+
+def use_action_surge(session_id: str | None = None) -> dict:
+    """Use Action Surge class feature.
+    
+    Returns:
+        Dict with success, extra_action_available, error
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        actor = session.actor
+        if actor is None:
+            return {"success": False, "error": "No character found"}
+        if actor.character_class != CharacterClass.WARRIOR:
+            return {"success": False, "error": "Action Surge is only available to warriors"}
+        if actor.class_features.action_surge_used:
+            return {"success": False, "error": "Action Surge already used this rest"}
+        
+        new_features = ClassFeatures(
+            second_wind_used=actor.class_features.second_wind_used,
+            action_surge_used=True,
+            sneak_attack_available=actor.class_features.sneak_attack_available,
+        )
+        session.actor = actor.model_copy(
+            update={"class_features": new_features}
+        )
+        _save_session(session)
+        return {
+            "success": True,
+            "extra_action_available": True,
+        }
+
+
+def reset_class_features(session_id: str | None = None) -> None:
+    """Reset all class feature uses (called on short/long rest)."""
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        actor = session.actor
+        if actor is None:
+            return
+        
+        new_features = ClassFeatures()
+        if actor.character_class == CharacterClass.WARRIOR:
+            new_features = ClassFeatures(second_wind_used=False, action_surge_used=False)
+        elif actor.character_class == CharacterClass.ROGUE:
+            new_features = ClassFeatures(sneak_attack_available=True)
+        
+        session.actor = actor.model_copy(update={"class_features": new_features})
+        _save_session(session)
 
 
 def _is_expired(session: SessionData) -> bool:

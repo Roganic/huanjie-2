@@ -80,6 +80,7 @@ class AttackResult(BaseModel):
     target_ac: int
     hit: bool
     damage: Optional[DamageDetail] = None
+    sneak_attack_damage: Optional[DamageDetail] = None
 
 
 class CombatOutcome(str, Enum):

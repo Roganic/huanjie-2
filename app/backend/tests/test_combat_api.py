@@ -19,11 +19,11 @@ def client():
     return AsyncClient(transport=transport, base_url="http://test")
 
 
-async def _create_character(client: AsyncClient, name: str = "TestHero") -> str:
+async def _create_character(client: AsyncClient, name: str = "TestHero", character_class: str = "warrior") -> str:
     """Create a character and return session_id."""
     resp = await client.post("/character/create", json={
         "name": name,
-        "character_class": "warrior",
+        "character_class": character_class,
         "ability_generation": "standard_array",
     })
     assert resp.status_code == 200
@@ -351,3 +351,71 @@ async def test_full_combat_flow(client):
         assert end_resp.status_code == 200
         end_data = end_resp.json()
         assert end_data["status"] == "victory"
+
+
+# ---------------------------------------------------------------------------
+# Class Features: Sneak Attack
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_sneak_attack_triggers_for_rogue_with_advantage(client):
+    """Rogue with advantage condition triggers sneak attack damage."""
+    from src.state import apply_effects
+    from src.models.action import Effect
+
+    async with client as c:
+        session_id = await _create_character(c, name="RogueTest", character_class="rogue")
+        
+        # Add advantage condition to rogue
+        apply_effects([
+            Effect(target="RogueTest", field="conditions_add", delta="advantage", description="获得优势")
+        ], session_id=session_id)
+        
+        # Start combat
+        start_resp = await c.post("/combat/start", json={}, headers={"X-Session-Id": session_id})
+        assert start_resp.status_code == 200
+        combat_data = start_resp.json()
+        enemy = next((p for p in combat_data["participants"] if not p["is_player"]), None)
+        assert enemy is not None
+        
+        # Attack until we get a hit to verify sneak attack
+        for _ in range(20):
+            resp = await c.post("/combat/action", json={
+                "action_type": "attack",
+                "target_id": enemy["id"],
+                "weapon": "shortsword",
+            }, headers={"X-Session-Id": session_id})
+            
+            assert resp.status_code == 200
+            data = resp.json()
+            if data.get("hit"):
+                assert "sneak_attack_damage" in data
+                assert data["sneak_attack_damage"] > 0
+                break
+            
+            if data["combat_state"]["status"] != "active":
+                break
+
+
+@pytest.mark.asyncio
+async def test_sneak_attack_does_not_trigger_for_warrior(client):
+    """Warrior does not trigger sneak attack damage."""
+    async with client as c:
+        session_id = await _create_character(c, name="WarriorTest", character_class="warrior")
+        
+        # Start combat
+        start_resp = await c.post("/combat/start", json={}, headers={"X-Session-Id": session_id})
+        assert start_resp.status_code == 200
+        combat_data = start_resp.json()
+        enemy = next((p for p in combat_data["participants"] if not p["is_player"]), None)
+        assert enemy is not None
+        
+        resp = await c.post("/combat/action", json={
+            "action_type": "attack",
+            "target_id": enemy["id"],
+            "weapon": "longsword",
+        }, headers={"X-Session-Id": session_id})
+        
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "sneak_attack_damage" not in data

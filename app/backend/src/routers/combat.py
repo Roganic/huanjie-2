@@ -237,7 +237,7 @@ async def combat_state_endpoint(request: Request):
         "combat_id": f"combat-{session_id}",
         "session_id": session_id,
         "round_number": combat_state.round_number,
-        "turn_index": combat_state.turn_index,
+        "turn_index": combat_state.current_turn_index,
         "current_actor_id": combat_state.current_combatant().id if combat_state.current_combatant() else None,
         "current_turn": combat_state.current_combatant().id if combat_state.current_combatant() else None,
         "turn_order": combat_state.turn_order,
@@ -397,7 +397,27 @@ async def combat_action(request: Request):
 
         if req.action_type == "attack":
             weapon = req.weapon or _default_weapon_for_actor(actor)
-            result = execute_attack_action(combat_state, current.id, target.id, weapon)
+            
+            # Determine sneak attack eligibility for rogues
+            sneak_attack = False
+            sneak_attack_dice = "1d6"
+            if actor.character_class and actor.character_class.value == "rogue":
+                has_advantage = "advantage" in actor.conditions
+                has_ally_nearby = any(
+                    c.type == CombatantType.PLAYER and c.id != current.id
+                    for c in combat_state.combatants
+                )
+                if has_advantage or has_ally_nearby:
+                    sneak_attack = True
+                    # 1d6 per 2 levels (minimum 1d6)
+                    dice_count = max(1, ((actor.level or 1) + 1) // 2)
+                    sneak_attack_dice = f"{dice_count}d6"
+            
+            result = execute_attack_action(
+                combat_state, current.id, target.id, weapon,
+                sneak_attack=sneak_attack,
+                sneak_attack_dice=sneak_attack_dice,
+            )
             
             # Get weapon info for response
             weapon_info = get_weapon_for_combat(actor, req.weapon)
@@ -415,6 +435,8 @@ async def combat_action(request: Request):
                 "actor": current.name,
                 "target": target.name,
             }
+            if result.sneak_attack_damage is not None:
+                response["sneak_attack_damage"] = result.sneak_attack_damage.total
         elif req.action_type == "skill_check":
             # Simple skill check in combat (always succeeds for prototype)
             skill_name = req.skill or "perception"

@@ -57,7 +57,12 @@ _CHARACTER_CREATION_SCENE_INIT = dict(
 
 def _get_adventure_scene_init() -> dict:
     """Get the initial adventure scene with NPCs."""
+    # Use new scene_map system for exits
+    from .scene_map import get_default_scene_node, VILLAGE_SQUARE_NODE
+    
     scene = get_default_exploration_scene()
+    node = get_default_scene_node()
+    
     result = {
         "id": scene.id,
         "name": scene.name,
@@ -65,21 +70,16 @@ def _get_adventure_scene_init() -> dict:
         "actors": [],
         "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
     }
-    # Handle exits if available (SceneData may have exits or connected_scenes)
-    if hasattr(scene, 'exits') and scene.exits:
-        from .scenes.data import SceneExit
+    
+    # Use new scene_map exits
+    if node and node.exits:
         result["exits"] = [
-            SceneExit(direction=conn, target_scene_id=conn).model_dump(mode="json")
-            for conn in scene.connected_scenes
-        ]
-    elif hasattr(scene, 'connected_scenes') and scene.connected_scenes:
-        from .scenes.data import SceneExit
-        result["exits"] = [
-            SceneExit(direction=conn, target_scene_id=conn).model_dump(mode="json")
-            for conn in scene.connected_scenes
+            {"direction": exit_info.direction, "target_scene_id": exit_info.target_scene_id}
+            for exit_info in node.exits
         ]
     else:
         result["exits"] = []
+    
     return result
 
 
@@ -454,16 +454,24 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
         True if scene was switched, False if scene_id not found
     """
     from .scene import get_scene_by_id
+    from .scene_map import get_scene_node
     
     scene_data = get_scene_by_id(scene_id)
     if scene_data is None:
         return False
+    
+    # Get scene node from new scene_map for exits
+    scene_node = get_scene_node(scene_id)
     
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:
         session = _get_session(resolved_session_id, create_if_missing=True)
         # Preserve the player actor in the actors list
         actors = [session.actor.id] if session.actor else []
+        
+        # Get exits from scene_map node if available
+        exits = scene_node.to_scene_exit_list() if scene_node else scene_data.exits
+        
         session.scene = Scene(
             id=scene_data.id,
             name=scene_data.name,
@@ -471,7 +479,7 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
             actors=actors,
             npcs=scene_data.npcs,
             time=session.scene.time,  # Preserve time from previous scene
-            exits=scene_data.exits,  # Include exits for navigation
+            exits=exits,  # Include exits for navigation
         )
         _save_session(session)
     return True

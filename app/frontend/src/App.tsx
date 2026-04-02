@@ -314,6 +314,15 @@ const STATUS_ICONS: Record<string, string> = {
   掩护: "🛡️",
 };
 
+const DIRECTION_LABELS: Record<string, string> = {
+  north: "北",
+  south: "南",
+  east: "东",
+  west: "西",
+  up: "上",
+  down: "下",
+};
+
 const PROVIDERS: ProviderOption[] = [
   { id: "", label: "自动" },
   { id: "kimi", label: "Kimi" },
@@ -651,9 +660,10 @@ function SceneCard({ scene, playerName, previousScene, onExitClick }: { scene: S
                 key={index}
                 className="exit-button"
                 onClick={() => onExitClick?.(exit.direction)}
-                title={`前往 ${exit.direction}`}
+                title={`前往 ${DIRECTION_LABELS[exit.direction] || exit.direction}`}
+                disabled={!onExitClick}
               >
-                → {exit.direction}
+                → {DIRECTION_LABELS[exit.direction] || exit.direction}
               </button>
             ))}
           </div>
@@ -2058,10 +2068,19 @@ function App() {
   };
 
   const handleExitClick = (direction: string) => {
-    // Auto-fill movement command to input
-    const movementCommands = ["前往", "去", "走向", "进入"];
+    // Auto-fill movement command to input with Chinese direction
+    const directionMap: Record<string, string> = {
+      north: "向北",
+      south: "向南",
+      east: "向东",
+      west: "向西",
+      up: "向上",
+      down: "向下",
+    };
+    const chineseDirection = directionMap[direction] || direction;
+    const movementCommands = ["前往", "去", "走向"];
     const command = movementCommands[Math.floor(Math.random() * movementCommands.length)];
-    setInput(`${command}${direction}`);
+    setInput(`${command}${chineseDirection}`);
   };
 
   const send = async () => {

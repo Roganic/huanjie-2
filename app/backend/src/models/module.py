@@ -342,7 +342,7 @@ class EngineStoryNode(BaseModel):
     triggers: list[StoryTrigger] = Field(default_factory=list)
 
 
-class ModuleDefinition(BaseModel):
+class EngineModuleDefinition(BaseModel):
     """Static definition of an adventure module (engine version)."""
     id: str
     name: str
@@ -354,7 +354,7 @@ class ModuleDefinition(BaseModel):
 class ActiveModuleState(BaseModel):
     """Runtime module state attached to a session (engine version)."""
     module_id: str
-    current_story_node: str = Field(..., description="ID of the current story node")
+    current_story_node: Optional[str] = Field(default=None, description="ID of the current story node")
     visited_nodes: list[str] = Field(default_factory=list)
     completed_quests: list[str] = Field(default_factory=list)
     active_flags: list[str] = Field(default_factory=list)
@@ -363,23 +363,10 @@ class ActiveModuleState(BaseModel):
 
 
 # -----------------------------------------------------------------------------
-# Built-in default module for when no module is loaded
-# -----------------------------------------------------------------------------
-
-_DEFAULT_MODULE = Module(
-    id="default",
-    name="自由探索",
-    description="无模组模式，由 AI DM 自由创作剧情",
-    starting_scene_id=None,
-    starting_node_id=None,
-)
-
-
-# -----------------------------------------------------------------------------
 # Starter Module: Village & Dungeon
 # -----------------------------------------------------------------------------
 
-STARTER_MODULE = ModuleDefinition(
+STARTER_MODULE = EngineModuleDefinition(
     id="starter-village-dungeon",
     name="村庄与地下城",
     description="一个经典的入门冒险：从村庄出发，探索地下城入口，进入战斗。",
@@ -472,21 +459,36 @@ STARTER_MODULE = ModuleDefinition(
 )
 
 
-MODULE_REGISTRY: dict[str, ModuleDefinition] = {
-    STARTER_MODULE.id: STARTER_MODULE,
+# Built-in default module for when no module is loaded
+_DEFAULT_MODULE = Module(
+    id="default",
+    name="自由探索",
+    description="无模组模式，由 AI DM 自由创作剧情",
+    starting_scene_id=None,
+    starting_node_id=None,
+)
+
+
+# Aliases for backward compatibility with older code that uses different names
+ModuleDefinition = Module          # module_engine.py uses ModuleDefinition
+
+
+# In-memory module registry (supports both Module and EngineModuleDefinition)
+MODULE_REGISTRY: dict[str, Module] = {
+    _DEFAULT_MODULE.id: _DEFAULT_MODULE,
 }
 
 
-def get_module(module_id: str) -> Optional[ModuleDefinition]:
+def get_module(module_id: str) -> Optional[Module]:
     """Get a module by ID from the registry."""
     return MODULE_REGISTRY.get(module_id)
 
 
-def get_default_module() -> ModuleDefinition:
-    """Return the default starter module."""
-    return STARTER_MODULE
+def get_default_module() -> Module:
+    """Return the built-in default module."""
+    return _DEFAULT_MODULE
 
 
-def register_module(module: ModuleDefinition) -> None:
+def register_module(module: Module) -> None:
     """Register a module in the registry."""
     MODULE_REGISTRY[module.id] = module

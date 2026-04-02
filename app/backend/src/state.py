@@ -60,8 +60,13 @@ def _get_adventure_scene_init() -> dict:
     }
 
 
-# Export for backward compatibility
-_ADVENTURE_SCENE_INIT = _get_adventure_scene_init()
+# Compatibility constant for routers that expect this name
+_ADVENTURE_SCENE_INIT = {
+    "id": "tavern-01",
+    "name": "锈迹斑斑的灯笼酒馆",
+    "description": "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒。",
+    "actors": [],
+}
 
 _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
     CharacterClass.WARRIOR: {
@@ -388,6 +393,90 @@ def check_and_update_combat_status(session_id: str | None = None) -> bool:
             _save_session(session)
             return True
         return False
+
+
+def get_combat_state(session_id: str | None = None):
+    """Get combat state for narrative context.
+    
+    This is a compatibility function that returns a minimal CombatState
+    for use by the narrative generator. Full combat state is managed
+    by the combat module.
+    
+    Args:
+        session_id: Optional session ID (uses current if not provided)
+    
+    Returns:
+        CombatState with is_active flag indicating if in combat
+    """
+    from .models.action import CombatState
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        
+        is_active = session.game_phase == AdventurePhase.COMBAT
+        
+        # Build minimal combat state from session data
+        turn_order = []
+        combatant_hp = {}
+        combatant_names = {}
+        
+        if session.actor:
+            turn_order.append(session.actor.id)
+            combatant_hp[session.actor.id] = session.actor.hp
+            combatant_names[session.actor.id] = session.actor.name
+        
+        if session.enemy:
+            turn_order.append(session.enemy.id)
+            combatant_hp[session.enemy.id] = session.enemy.hp
+            combatant_names[session.enemy.id] = session.enemy.name
+        
+        return CombatState(
+            is_active=is_active,
+            round_number=1,
+            current_turn_index=0,
+            turn_order=turn_order,
+            combatant_hp=combatant_hp,
+            combatant_names=combatant_names,
+        )
+
+
+def start_combat_session(session_id: str | None = None) -> None:
+    """Mark combat as active for the session.
+    
+    This is a compatibility function for the narrative system.
+    Full combat management is handled by the combat module.
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        session.game_phase = AdventurePhase.COMBAT
+        _save_session(session)
+
+
+def end_combat_session(outcome: str | None = None, session_id: str | None = None) -> None:
+    """Mark combat as ended for the session.
+    
+    This is a compatibility function for the narrative system.
+    Full combat management is handled by the combat module.
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        session.game_phase = AdventurePhase.EXPLORATION
+        _save_session(session)
+
+
+def update_combatant_hp(combatant_id: str, new_hp: int, session_id: str | None = None) -> None:
+    """Update combatant HP (compatibility function for narrative system)."""
+    # HP is already updated through apply_effects, this is a no-op for compatibility
+    pass
+
+
+def advance_combat_round(session_id: str | None = None) -> None:
+    """Advance combat round (compatibility function for narrative system)."""
+    # Round tracking is handled by combat module, this is a no-op for compatibility
+    pass
 
 
 def has_character(session_id: str | None = None) -> bool:
@@ -808,140 +897,3 @@ def _delete_session(session_id: str) -> None:
 
 def _is_expired(session: SessionData) -> bool:
     return (time.time() - session.updated_at) > SESSION_TTL_SECONDS
-
-
-# -----------------------------------------------------------------------------
-# Combat State Management
-# -----------------------------------------------------------------------------
-
-from dataclasses import dataclass, field
-from typing import Any
-
-
-@dataclass
-class CombatState:
-    """Runtime combat state for a session."""
-    session_id: str
-    is_active: bool = False
-    round_number: int = 1
-    turn_index: int = 0
-    turn_order: list[str] = field(default_factory=list)
-    combatant_hp: dict[str, int] = field(default_factory=dict)
-    combatant_names: dict[str, str] = field(default_factory=dict)
-    combat_log: list[dict[str, Any]] = field(default_factory=list)
-    outcome: str | None = None
-
-
-# In-memory combat state store
-_combat_states: dict[str, CombatState] = {}
-
-
-def get_combat_state(session_id: str | None = None) -> CombatState:
-    """Get or create combat state for a session.
-    
-    Args:
-        session_id: Optional session ID. Uses current session if not provided.
-        
-    Returns:
-        CombatState for the session
-    """
-    resolved_session_id = _resolve_session_id(session_id)
-    
-    if resolved_session_id not in _combat_states:
-        _combat_states[resolved_session_id] = CombatState(
-            session_id=resolved_session_id,
-            is_active=False,
-        )
-    
-    return _combat_states[resolved_session_id]
-
-
-def start_combat_session(session_id: str | None = None) -> CombatState:
-    """Start a new combat session.
-    
-    Args:
-        session_id: Optional session ID. Uses current session if not provided.
-        
-    Returns:
-        Initialized CombatState
-    """
-    resolved_session_id = _resolve_session_id(session_id)
-    
-    # Get session for actor info
-    session = _get_session(resolved_session_id, create_if_missing=True)
-    
-    combat_state = CombatState(
-        session_id=resolved_session_id,
-        is_active=True,
-        round_number=1,
-        turn_index=0,
-    )
-    
-    # Add combatants
-    if session.actor:
-        combat_state.turn_order.append(session.actor.id)
-        combat_state.combatant_hp[session.actor.id] = session.actor.hp
-        combat_state.combatant_names[session.actor.id] = session.actor.name
-    
-    if session.enemy:
-        combat_state.turn_order.append(session.enemy.id)
-        combat_state.combatant_hp[session.enemy.id] = session.enemy.hp
-        combat_state.combatant_names[session.enemy.id] = session.enemy.name
-    
-    _combat_states[resolved_session_id] = combat_state
-    return combat_state
-
-
-def end_combat_session(outcome: str, session_id: str | None = None) -> CombatState:
-    """End the current combat session.
-    
-    Args:
-        outcome: Combat outcome ('victory', 'defeat', 'retreat')
-        session_id: Optional session ID. Uses current session if not provided.
-        
-    Returns:
-        Updated CombatState
-    """
-    resolved_session_id = _resolve_session_id(session_id)
-    
-    if resolved_session_id not in _combat_states:
-        return get_combat_state(session_id)
-    
-    combat_state = _combat_states[resolved_session_id]
-    combat_state.is_active = False
-    combat_state.outcome = outcome
-    
-    return combat_state
-
-
-def advance_combat_round(session_id: str | None = None) -> CombatState:
-    """Advance to the next combat round.
-    
-    Args:
-        session_id: Optional session ID. Uses current session if not provided.
-        
-    Returns:
-        Updated CombatState
-    """
-    resolved_session_id = _resolve_session_id(session_id)
-    
-    combat_state = get_combat_state(session_id)
-    if not combat_state.is_active:
-        return combat_state
-    
-    combat_state.round_number += 1
-    combat_state.turn_index = 0
-    
-    return combat_state
-
-
-def update_combatant_hp(combatant_id: str, hp: int, session_id: str | None = None) -> None:
-    """Update a combatant's HP in the combat state.
-    
-    Args:
-        combatant_id: ID of the combatant
-        hp: New HP value
-        session_id: Optional session ID. Uses current session if not provided.
-    """
-    combat_state = get_combat_state(session_id)
-    combat_state.combatant_hp[combatant_id] = hp

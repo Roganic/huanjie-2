@@ -954,33 +954,6 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
         elif eff.field == "spell_slot_consumed" and isinstance(eff.delta, int):
             # Spell slot already consumed by spell resolver, this is just for tracking
             pass
-        elif eff.field == "inventory_add" and isinstance(eff.delta, str):
-            # Add an item to inventory by item ID or name
-            from .scenes.data import get_scene_by_id
-            from .models.state import InventoryItem, ItemType
-            # Try to find the item in the current scene's loot_items
-            item_to_add = None
-            current_scene_data = get_scene_by_id(session.scene.id) if session.scene else None
-            if current_scene_data:
-                for loot_item in current_scene_data.loot_items:
-                    if loot_item.id == eff.delta or loot_item.name == eff.delta:
-                        item_to_add = loot_item
-                        break
-            # If not found in loot, create a simple item record
-            if item_to_add is None:
-                item_to_add = InventoryItem(
-                    id=eff.delta,
-                    name=eff.delta,
-                    type=ItemType.WEAPON,
-                    description=eff.description,
-                )
-            if session.actor is not None:
-                # Don't add duplicates
-                existing_ids = [i.id for i in actor.inventory]
-                if item_to_add.id not in existing_ids:
-                    session.actor = actor.model_copy(
-                        update={"inventory": [*actor.inventory, item_to_add]}
-                    )
         elif eff.field == "inventory_remove" and isinstance(eff.delta, str):
             # Remove consumed item from inventory
             if session.actor is not None:
@@ -990,6 +963,46 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
                 ]
                 session.actor = actor.model_copy(
                     update={"inventory": new_inventory}
+                )
+        elif eff.field == "inventory_add" and isinstance(eff.delta, str):
+            # Add item to inventory
+            if session.actor is not None:
+                item_name = eff.delta
+                # Try to find item definition in scene loot_items
+                new_item = None
+                from .scene import get_scene_by_id
+                scene_data = get_scene_by_id(session.scene.id)
+                if scene_data and scene_data.loot_items:
+                    for loot_item in scene_data.loot_items:
+                        if loot_item.name == item_name:
+                            new_item = loot_item
+                            break
+                # Fallback: try default items by name
+                if new_item is None:
+                    for weapon in DEFAULT_WEAPONS.values():
+                        if weapon.name == item_name:
+                            new_item = InventoryItem.from_weapon(weapon)
+                            break
+                if new_item is None:
+                    for armor in DEFAULT_ARMORS.values():
+                        if armor.name == item_name:
+                            new_item = InventoryItem.from_armor(armor)
+                            break
+                if new_item is None:
+                    for consumable in DEFAULT_CONSUMABLES.values():
+                        if consumable.name == item_name:
+                            new_item = InventoryItem.from_consumable(consumable)
+                            break
+                if new_item is None:
+                    # Generic fallback item
+                    new_item = InventoryItem(
+                        id=item_name.lower().replace(" ", "_").replace("　", "_"),
+                        name=item_name,
+                        type=ItemType.MISC,
+                        description="一个物品。",
+                    )
+                session.actor = actor.model_copy(
+                    update={"inventory": [*actor.inventory, new_item]}
                 )
         elif eff.field == "spell_slots_restored":
             # Spell slots already restored by rest resolver, this is just for tracking
@@ -1458,54 +1471,21 @@ def reset_explored_nodes(session_id: str | None = None) -> None:
 
 
 def get_map_state(session_id: str | None = None) -> dict:
-    """Get the full map state including topology and exploration.
+    """Get the full map state including current node and explored nodes.
     
     Args:
         session_id: The session ID (uses current session if None)
         
     Returns:
-        Dict with current_node, nodes, connections, and explored_nodes
+        Dict with map nodes, current_node, and explored_nodes
     """
-    from .map import generate_map_from_scenes
-    from .scene_map import SCENE_MAP
+    from .map import build_map_response
     
     resolved_session_id = _resolve_session_id(session_id)
-    session = _get_session(resolved_session_id, create_if_missing=True)
-    
-    # Get current scene
-    current_scene_id = session.scene.id
-    
-    # Get explored nodes (ensure current is included)
-    explored_nodes = list(session.explored_nodes)
-    if current_scene_id not in explored_nodes:
-        explored_nodes.append(current_scene_id)
-    
-    # Build map topology
-    nodes = generate_map_from_scenes()
-    
-    # Build connections from scene map
-    connections = []
-    for scene_id, node in SCENE_MAP.items():
-        for exit_info in node.exits:
-            connections.append({
-                "from_node": scene_id,
-                "to_node": exit_info.target_scene_id,
-                "direction": exit_info.direction,
-            })
-    
-    return {
-        "current_node": current_scene_id,
-        "nodes": [node.model_dump() for node in nodes],
-        "connections": connections,
-        "explored_nodes": explored_nodes,
-    }
-
-
-def get_character_rest_status(session_id: str | None = None) -> dict | None:
-    """获取角色的休息状态，包括生命骰和法术槽信息。
-
-    由 game/state.py 提供核心实现，此处为向后兼容的委托函数。
-    """
-    from .game.state import get_character_rest_status as _get_rest_status
-    resolved_id = _resolve_session_id(session_id)
-    return _get_rest_status(resolved_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        current_scene_id = session.scene.id
+        explored_nodes = list(session.explored_nodes)
+        if current_scene_id not in explored_nodes:
+            explored_nodes = explored_nodes + [current_scene_id]
+        return build_map_response(current_scene_id, explored_nodes)

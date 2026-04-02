@@ -63,12 +63,8 @@ def _should_trigger_combat(intent: str, approach: str) -> bool:
 
 
 # Item use keywords
-# Note: "use" is intentionally NOT included because it's too common in English
-# Use "use item", "use potion", etc. for explicit item use
 _ITEM_USE_PREFIXES = [
-    "使用", "用", "consume", "drink", "喝",
-    # Specific item use patterns
-    "use healing", "use potion", "use item",
+    "使用", "用", "use", "consume", "drink", "喝",
 ]
 
 
@@ -77,13 +73,12 @@ def _is_item_use_action(intent: str, approach: str) -> bool:
     text = f"{intent} {approach}".lower().strip()
     for prefix in _ITEM_USE_PREFIXES:
         if prefix.isascii():
-            # English prefixes: require word boundary (space after prefix)
-            prefix_lower = prefix.lower()
-            if text.startswith(prefix_lower + " ") or f" {prefix_lower} " in text:
+            # English prefixes: only match at start of text
+            if text.startswith(prefix.lower() + " ") or text == prefix.lower():
                 return True
         else:
-            # Chinese prefixes
-            if text.startswith(prefix) or f" {prefix} " in text:
+            # Chinese prefixes: only match at start of text
+            if text.startswith(prefix) or text.startswith(f"{prefix}"):
                 return True
     return False
 
@@ -343,10 +338,7 @@ async def submit_action(req: ActionRequest, request: Request):
             
             if element is not None:
                 # Handle scene interaction with skill check
-                result, interaction_result = handle_scene_interaction(req, element)
-                # Apply effects (inventory_add, hp changes, etc.)
-                if result.effects:
-                    apply_effects(result.effects, session_id=session_id)
+                result, _ = handle_scene_interaction(req, element)
             else:
                 # Use agent orchestrator for non-scene interactions
                 result = await asyncio.to_thread(resolve_action_with_agent, req)

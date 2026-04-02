@@ -18,7 +18,7 @@ from src.models.action import (
     Effect,
     Outcome,
 )
-from src.models.state import Scene
+from src.models.state import Scene, InventoryItem, ItemType
 from src.state import (
     get_actor,
     get_enemy,
@@ -28,8 +28,14 @@ from src.state import (
     reset_current_session,
     set_combat_scene,
     set_current_session,
+    _get_session,
+    _SESSION_LOCK,
+    _save_session,
 )
 from src.agent.orchestrator import resolve_action_with_agent
+from src.loot import generate_combat_loot
+from src.rules.experience import get_enemy_xp_reward, calculate_level_up
+from src.rules.calculations import CLASS_HIT_DICE
 
 router = APIRouter(tags=["combat"])
 
@@ -47,6 +53,7 @@ class CombatParticipant(BaseModel):
     ac: int
     initiative: int
     is_player: bool
+    type: str = "enemy"  # "player" or "enemy"
     conditions: list[str] = []
 
 
@@ -95,6 +102,7 @@ class CombatActionResponse(BaseModel):
     target_id: Optional[str] = None
     hit: Optional[bool] = None
     damage: Optional[int] = None
+    sneak_attack_damage: Optional[int] = None
     effects: list[Effect] = []
     narrative: str
     combat_state: CombatState
@@ -133,6 +141,7 @@ def _actor_to_participant(actor, is_player: bool, initiative: int) -> CombatPart
         ac=actor.ac,
         initiative=initiative,
         is_player=is_player,
+        type="player" if is_player else "enemy",
         conditions=actor.conditions or [],
     )
 
@@ -217,6 +226,31 @@ def _resolve_combat_action(
     # Resolve action using orchestrator
     action_resp = resolve_action_with_agent(action_req)
 
+    # Calculate sneak attack damage for rogues
+    sneak_attack_damage: Optional[int] = None
+    if req.action_type == "attack":
+        player_actor = get_actor(session_id=session_id)
+        if player_actor and player_actor.character_class and player_actor.character_class.value == "rogue":
+            # Check for advantage or ally nearby
+            has_advantage = "advantage" in (player_actor.conditions or [])
+            has_ally_nearby = any(
+                p.is_player and p.id != actor_id 
+                for p in combat.participants
+            )
+            if has_advantage or has_ally_nearby:
+                # Roll sneak attack dice: 1d6 per 2 levels (min 1d6)
+                dice_count = max(1, ((player_actor.level or 1) + 1) // 2)
+                import random
+                sneak_damage = sum(random.randint(1, 6) for _ in range(dice_count))
+                sneak_attack_damage = sneak_damage
+                # Add to existing damage if hit
+                if action_resp.outcome == Outcome.SUCCESS and action_resp.attack and action_resp.attack.damage:
+                    # Apply sneak attack damage to target
+                    for p in combat.participants:
+                        if p.id == req.target_id or p.name == req.target_id:
+                            p.hp = max(0, p.hp - sneak_damage)
+                            break
+
     # Update participant HP from effects
     for effect in action_resp.effects:
         if effect.field == "hp":
@@ -238,7 +272,7 @@ def _resolve_combat_action(
         action_type=req.action_type,
         target_id=req.target_id,
         hit=action_resp.outcome == Outcome.SUCCESS if req.action_type == "attack" else None,
-        damage=action_resp.attack.damage.total if action_resp.attack and action_resp.attack.damage else None,
+        damage=action_resp.attack.damage.total if action_resp.attack and action_resp.attack.damage else 0,
         narrative=action_resp.narration,
         timestamp=int(asyncio.get_event_loop().time() * 1000),
     )
@@ -256,11 +290,111 @@ def _resolve_combat_action(
         actor_id=actor_id,
         target_id=req.target_id,
         hit=action_resp.outcome == Outcome.SUCCESS if req.action_type == "attack" else None,
-        damage=action_resp.attack.damage.total if action_resp.attack and action_resp.attack.damage else None,
+        damage=action_resp.attack.damage.total if action_resp.attack and action_resp.attack.damage else 0,
+        sneak_attack_damage=sneak_attack_damage,
         effects=action_resp.effects,
         narrative=action_resp.narration,
         combat_state=combat,
     )
+
+
+def _award_victory_rewards(session_id: str, combat: CombatState) -> dict | None:
+    """Award XP and loot when combat ends in victory."""
+    with _SESSION_LOCK:
+        session = _get_session(session_id, create_if_missing=False)
+        if session is None or session.actor is None:
+            return None
+        
+        actor = session.actor
+        
+        # Find defeated enemies
+        defeated_enemies: list[tuple[str, str]] = []
+        for p in combat.participants:
+            if not p.is_player and (p.hp <= 0 or "defeated" in p.conditions):
+                defeated_enemies.append((p.id, p.name))
+        
+        if not defeated_enemies:
+            return None
+        
+        # Generate loot
+        loot = generate_combat_loot(defeated_enemies)
+        loot_items_for_response: list[dict] = []
+        inventory_items_to_add: list[InventoryItem] = []
+        
+        for entry in loot.loot_entries:
+            entry_items: list[dict] = []
+            for item in entry.items:
+                entry_items.append({
+                    "name": item.name,
+                    "quantity": item.quantity,
+                    "description": item.description,
+                })
+                inventory_items_to_add.append(InventoryItem(
+                    id=item.item_id,
+                    name=item.name,
+                    type=ItemType.MISC,
+                    description=item.description or "战利品",
+                ))
+            if entry_items:
+                loot_items_for_response.append({
+                    "enemy_name": entry.enemy_name,
+                    "items": entry_items,
+                })
+        
+        # Add items to inventory
+        if inventory_items_to_add:
+            new_inventory = [*session.actor.inventory, *inventory_items_to_add]
+            session.actor = session.actor.model_copy(update={"inventory": new_inventory})
+        
+        # Get XP reward (use first defeated enemy)
+        enemy_name = defeated_enemies[0][1]
+        xp_gained = get_enemy_xp_reward(enemy_name)
+        
+        # Calculate level-up
+        con_modifier = actor.abilities.modifier("con")
+        new_xp, level_up_result = calculate_level_up(
+            current_level=actor.level,
+            current_xp=actor.experience_points,
+            xp_gained=xp_gained,
+            con_modifier=con_modifier,
+            character_class=actor.character_class,
+        )
+        
+        # Update actor
+        updates: dict = {"experience_points": new_xp}
+        
+        if level_up_result and level_up_result.leveled_up:
+            updates["level"] = level_up_result.new_level
+            updates["proficiency_bonus"] = level_up_result.new_proficiency_bonus
+            # Recalculate HP max
+            hit_die = CLASS_HIT_DICE[actor.character_class]
+            base_hp = hit_die + con_modifier
+            if level_up_result.new_level > 1:
+                hp_per_level = (hit_die // 2) + 1 + con_modifier
+                new_hp_max = base_hp + hp_per_level * (level_up_result.new_level - 1)
+            else:
+                new_hp_max = base_hp
+            updates["hp_max"] = new_hp_max
+            updates["hp"] = new_hp_max  # Heal to full on level up
+        
+        session.actor = actor.model_copy(update=updates)
+        _save_session(session)
+        
+        result: dict = {
+            "xp_gained": xp_gained,
+            "total_xp": new_xp,
+            "loot_gained": loot_items_for_response,
+        }
+        
+        if level_up_result and level_up_result.leveled_up:
+            result["level_up"] = {
+                "old_level": level_up_result.old_level,
+                "new_level": level_up_result.new_level,
+                "hp_increase": level_up_result.hp_increase,
+                "new_proficiency_bonus": level_up_result.new_proficiency_bonus,
+            }
+        
+        return result
 
 
 def _get_action_intent(req: CombatActionRequest) -> str:
@@ -383,6 +517,7 @@ async def start_combat(req: StartCombatRequest, request: Request):
             "current_actor_id": combat.current_actor_id,
             "initiative_order": combat.initiative_order,
             "participants": [p.model_dump() for p in combat.participants],
+            "combatants": [p.model_dump() for p in combat.participants],
             "scene": scene.model_dump(),
         }
     finally:
@@ -419,7 +554,24 @@ async def combat_action(req: CombatActionRequest, request: Request):
         # Check if client accepts streaming
         accepts_stream = "text/event-stream" in request.headers.get("accept", "")
         if not accepts_stream:
-            return result.model_dump()
+            response_data = result.model_dump(exclude_none=True)
+            # Add victory result fields if combat ended
+            if combat.status == "victory":
+                victory_result = _award_victory_rewards(session_id, combat)
+                if victory_result:
+                    response_data["loot_gained"] = victory_result.get("loot_gained", [])
+                    response_data["xp_gained"] = victory_result.get("xp_gained", 0)
+                    response_data["total_xp"] = victory_result.get("total_xp", 0)
+                    if "level_up" in victory_result:
+                        response_data["level_up"] = victory_result["level_up"]
+                    response_data["victory"] = True
+                else:
+                    response_data["loot_gained"] = []
+                    response_data["xp_gained"] = 0
+            else:
+                response_data["loot_gained"] = []
+            response_data["combat_ended"] = combat.status != "active"
+            return response_data
 
         return StreamingResponse(
             _stream_combat_response(result),
@@ -461,6 +613,7 @@ async def get_combat_state(request: Request):
         "current_actor_id": combat.current_actor_id,
         "initiative_order": combat.initiative_order,
         "participants": [p.model_dump() for p in combat.participants],
+        "combatants": [p.model_dump() for p in combat.participants],
         "log": [entry.model_dump() for entry in combat.log[-10:]],  # Last 10 entries
     }
 

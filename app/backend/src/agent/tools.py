@@ -326,7 +326,7 @@ def tool_generate_narrative(
         combat_round=combat_round,
         is_combat_ended=is_combat_ended,
         combat_outcome=combat_outcome,
-        npc_target=npc_target,
+        session_id=state.session_id if hasattr(state, 'session_id') else None,
     )
     
     return NarrativeResult(

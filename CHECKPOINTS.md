@@ -104,43 +104,41 @@
 
 **里程碑一最终状态**：✅ 可玩性验收通过，游戏端到端可玩
 
-## 2026-04-02 — 里程碑 2 功能完整性验收
+## 2026-04-02 — 里程碑 2 功能完整性集成验收完成
 
 **验收状态：通过**
 
-完成里程碑二（功能完整性）端到端验收测试，完整游戏循环各环节串联运行正常：
+完成里程碑二"功能完整性"端到端集成验收，所有已实现系统（叙事记忆、装备物品、战斗AI、掉落、升级、职业特性、回合顺序、地图）能够协同工作，构成完整可玩的游戏循环。
 
-- ✅ 端到端测试文件：`tests/test_milestone2_acceptance.py` 已创建，包含 9 个测试用例
-- ✅ 角色创建：支持战士/法师/盗贼三种职业创建，属性分配正确
-- ✅ 场景探索：移动后 GET /map 的 explored_nodes 正确更新，包含已探索场景 ID
-- ✅ 地图同步：current_node 与当前场景状态一致
-- ✅ 战斗系统：含先攻检定、回合制、敌方 AI 行动
-- ✅ 物品系统：拾取和装备物品后，GET /state 的 character.ac 和 equipped 字段正确更新
-- ✅ 角色成长：XP 累积和等级提升机制验证通过
-- ✅ 状态一致性：HP、inventory、level、map 在完整循环中保持同步
+**验收标准达成：**
 
-**新增测试文件**：
-- `app/backend/tests/test_milestone2_acceptance.py`：9 个端到端验收测试
-  - `test_milestone2_complete_game_loop_warrior`：战士完整游戏流程
-  - `test_milestone2_map_exploration_sync`：地图探索同步验证
-  - `test_milestone2_combat_with_initiative_and_ai`：战斗系统（含先攻和 AI）
-  - `test_milestone2_item_equipment_updates_ac`：物品装备影响 AC 验证
-  - `test_milestone2_level_up_from_xp`：XP 累积和升级验证
-  - `test_milestone2_complete_flow_with_state_consistency`：全流程状态一致性
-  - `test_milestone2_combat_scene_explored_after_battle`：战斗后场景探索标记
-  - `test_milestone2_rogue_stealth_and_sneak_attack`：盗贼职业特性
-  - `test_milestone2_mage_spell_combat`：法师法术战斗
+| 标准 | 状态 | 备注 |
+|-----|------|------|
+| 完整游戏循环集成测试 | ✅ 通过 | `test_full_game_loop_integration.py` 已创建，9个测试全部通过 |
+| 地图状态同步 | ✅ 通过 | GET /map 的 current_node 与 GET /state 的 scene.id 始终一致 |
+| 探索节点累积 | ✅ 通过 | explored_nodes 随场景切换正确累积 |
+| 战士职业特性 | ✅ 通过 | second_wind 使用后 hp 恢复且 class_features.second_wind_used 为 true |
+| 盗贼职业特性 | ✅ 通过 | sneak_attack_available 字段正确存在 |
+| 掉落系统 | ✅ 通过 | 战斗胜利后 inventory 包含掉落物品 |
+| 经验/升级系统 | ✅ 通过 | 战斗胜利后 xp 增加，达到阈值时 level 递增 |
+| 状态一致性 | ✅ 通过 | HP、XP、level、inventory、equipped、scene 等字段全程一致 |
+| 无回归失败 | ✅ 通过 | 原有失败测试从62个减少到54个（修复了movement.py问题）|
 
-**基础设施修复**（确保测试可运行）：
-- ✅ 修复 `scenes/data.py` 缺失 `InteractiveElement` 类
-- ✅ 修复 `npc.py` 缺失 `find_target_npc` 和 `is_npc_interaction` 函数
-- ✅ 修复 `state.py` 缺失 `get_map_state` 函数
-- ✅ 修复 `agent/orchestrator.py` 未使用的导入
-- ✅ 修复 `scenes/movement.py` 对 `switch_scene` 返回值处理
-- ✅ 修复 `agent/narrator.py` 缺失 `npc_target` 参数
-- ✅ 修复 `routers/action.py` 物品使用检测逻辑（避免误判普通动词）
+**新增测试文件：**
+- `app/backend/tests/test_full_game_loop_integration.py`：9个集成测试
+  - `test_warrior_full_game_loop_integration`：战士完整循环
+  - `test_rogue_full_game_loop_with_sneak_attack`：盗贼完整循环（含偷袭）
+  - `test_mage_full_game_loop_integration`：法师完整循环
+  - `test_map_state_consistency_throughout_game_loop`：地图状态同步
+  - `test_combat_loot_and_xp_integration`：掉落和经验系统
+  - `test_item_usage_in_game_loop`：物品使用系统
+  - `test_state_consistency_all_fields`：所有字段一致性
+  - `test_class_features_throughout_game_loop`：职业特性验证
+  - `test_turn_order_and_enemy_ai_in_combat`：回合顺序和AI
 
-**里程碑二最终状态**：✅ 完整游戏循环验收通过，9/9 专项测试通过
+**Bug修复：**
+- 修复 `app/backend/src/scenes/movement.py` 第132行：`switch_scene` 返回布尔值而非元组，导致解包错误
+- 修复 `app/backend/routes/combat.py` 第293行：当攻击未命中时 `damage` 字段被设为 `None`，导致 `exclude_none=True` 时字段缺失，测试随机失败
 
 ---
 

@@ -144,6 +144,15 @@ async def combat_start(request: Request):
         save_combat_state(combat_state)
         set_combat_scene(session_id=session_id)
 
+        # If enemy wins initiative, run their turn immediately so it's player's turn
+        enemy_start_action = None
+        current = combat_state.current_combatant()
+        if current is not None and current.type == CombatantType.ENEMY:
+            enemy_start_action = _run_enemy_turn(combat_state)
+            if combat_state.outcome == CombatOutcome.ONGOING:
+                _sync_hp_to_session(combat_state, session_id)
+                save_combat_state(combat_state)
+
         return {
             "session_id": session_id,
             "round_number": combat_state.round_number,
@@ -163,6 +172,8 @@ async def combat_start(request: Request):
                 for c in combat_state.combatants
             ],
             "outcome": combat_state.outcome.value,
+            "log": combat_state.log,
+            "enemy_start_action": enemy_start_action,
         }
     finally:
         reset_current_session(token)
@@ -178,7 +189,7 @@ async def combat_state_endpoint(request: Request):
 
     return {
         "session_id": session_id,
-        "round_order": combat_state.round_number,
+        "round_number": combat_state.round_number,
         "current_turn": combat_state.current_combatant().id if combat_state.current_combatant() else None,
         "turn_order": combat_state.turn_order,
         "combatants": [

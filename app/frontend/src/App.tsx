@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import { CombatMode } from "./CombatMode";
 
 interface Message {
   id: number;
@@ -11,7 +12,7 @@ interface Message {
 }
 
 type HealthStatus = "loading" | "ok" | "error";
-type GamePhase = "character_creation" | "adventure";
+type GamePhase = "character_creation" | "adventure" | "combat";
 type CharacterClass = "warrior" | "mage" | "rogue";
 
 interface CheckDetail {
@@ -1207,12 +1208,13 @@ function App() {
     abilityGeneration: "standard_array",
   });
   const [creationError, setCreationError] = useState<string | null>(null);
+  const [inCombat, setInCombat] = useState(false);
   const messagesEnd = useRef<HTMLDivElement>(null);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
   const newConditions = useMemo(() => stateDiff.newConditions, [stateDiff]);
-  const inAdventure = bootstrap?.phase === "adventure" && bootstrap.actor !== null;
+  const inAdventure = (bootstrap?.phase === "adventure" || bootstrap?.phase === "combat") && bootstrap.actor !== null;
 
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
@@ -1772,7 +1774,7 @@ function App() {
           </button>
           <HealthDot status={health} />
           <span className="subtitle">
-            {inAdventure ? "AI 跑团原型" : "角色创建阶段"}
+            {inCombat ? "战斗模式" : inAdventure ? "AI 跑团原型" : "角色创建阶段"}
           </span>
         </div>
       </header>
@@ -1793,9 +1795,20 @@ function App() {
         <section>
           <h2>{inAdventure ? "角色" : "职业预览"}</h2>
           {inAdventure && bootstrap?.actor ? (
-            <ul>
-              <li className="active">{bootstrap.actor.name}</li>
-            </ul>
+            <>
+              <ul>
+                <li className="active">{bootstrap.actor.name}</li>
+              </ul>
+              {!inCombat && (
+                <button
+                  className="combat-enter-btn"
+                  onClick={() => setInCombat(true)}
+                  disabled={sending || resetting}
+                >
+                  ⚔️ 进入战斗
+                </button>
+              )}
+            </>
           ) : actorPreview ? (
             <ul>
               <li className="active">{CLASS_LABELS[actorPreview.character_class ?? "warrior"]}</li>
@@ -1807,7 +1820,15 @@ function App() {
       </aside>
 
       <main className="chat">
-        {inAdventure ? (
+        {inCombat ? (
+          <CombatMode
+            sessionId={sessionId}
+            apiUrl={apiUrl}
+            buildSessionHeaders={buildSessionHeaders}
+            refreshState={refreshState}
+            onExit={() => setInCombat(false)}
+          />
+        ) : inAdventure ? (
           <>
             <div className="messages">
               {messages.length === 0 && <div className="empty-hint">输入一个行动开始冒险…</div>}

@@ -510,12 +510,15 @@ def generate_narration(
 
     narrative = _run_provider(prompt)
     if narrative:
-        # Use comprehensive validation including numeric authority checks
+        # Use comprehensive validation including numeric authority checks and scene context
         validation = validate_narrative_for_overreach(
             action_result=narrative.action_result,
             scene_progression=narrative.scene_progression,
             gm_prompt=narrative.gm_prompt,
             context=context,
+            scene_name=scene.name,
+            scene_description=scene.description,
+            scene_npcs=scene.npcs,
         )
         
         if validation.is_valid:
@@ -545,6 +548,9 @@ def generate_narration(
                 scene_progression=retry_narrative.scene_progression,
                 gm_prompt=retry_narrative.gm_prompt,
                 context=context,
+                scene_name=scene.name,
+                scene_description=scene.description,
+                scene_npcs=scene.npcs,
             )
             if retry_validation.is_valid:
                 return retry_narrative

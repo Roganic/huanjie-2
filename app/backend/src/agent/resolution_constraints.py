@@ -278,6 +278,35 @@ def build_narrative_prompt(
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
 ) -> str:
     """Build the prompt with explicit hard-constraint and narrative sections."""
+    # Log scene context and NPCs being used in prompt
+    npc_names = [npc.name for npc in scene.npcs] if scene.npcs else []
+    logger.info(
+        "Building narrative prompt with scene context",
+        extra={
+            "scene_name": scene.name,
+            "scene_id": scene.id,
+            "npcs": npc_names,
+            "npc_count": len(npc_names),
+            "history_entries": len(narrative_history) if narrative_history else 0,
+        },
+    )
+    
+    # Log recent action summaries
+    if narrative_history:
+        recent_summaries = [
+            entry.action_summary 
+            for entry in narrative_history[-5:]
+            if entry.action_summary
+        ]
+        logger.info(
+            "Recent action summaries in prompt: %d entries",
+            len(recent_summaries),
+            extra={
+                "recent_action_summaries": recent_summaries,
+                "total_history": len(narrative_history),
+            },
+        )
+    
     lines: list[str] = []
 
     lines.append("【硬约束区 / HARD CONSTRAINTS】")
@@ -647,11 +676,142 @@ def detect_unauthorized_state_changes(text: str) -> list[dict]:
     return violations
 
 
+# Scene context validation patterns
+SCENE_CONTRADICTION_PATTERNS = [
+    # Pattern to detect mention of wrong location
+    re.compile(r"(不在|离开|远离)\s*\w+\s*(场景|地点|地方)"),
+]
+
+
+def validate_scene_context(
+    narrative_text: str,
+    scene_name: str,
+    npcs: list,
+    connected_scenes: Optional[list[str]] = None,
+) -> list[dict]:
+    """Validate that narrative content is consistent with scene context.
+    
+    This function checks if the narrative contradicts the current scene
+    setting (wrong location, NPCs that don't exist, etc.).
+    
+    Args:
+        narrative_text: The narrative text to validate
+        scene_name: The current scene name
+        npcs: List of NPCs present in the scene
+        connected_scenes: Optional list of connected scene names
+        
+    Returns:
+        List of violation dictionaries with type and description
+    """
+    violations: list[dict] = []
+    text = narrative_text.lower()
+    
+    # Get list of NPC names in the scene
+    npc_names = [npc.name.lower() for npc in npcs] if npcs else []
+    
+    # Check for mentions of NPCs not present in the scene
+    # This is a simplified check - we look for references to named characters
+    # that aren't in the scene's NPC list
+    import re as re_module
+    # Pattern to find character names (simplified heuristic)
+    name_pattern = re_module.compile(r'[\u4e00-\u9fff]{2,4}|[A-Z][a-z]+')
+    found_names = name_pattern.findall(narrative_text)
+    
+    for name in found_names:
+        name_lower = name.lower()
+        # Skip common words that might match
+        if name_lower in ("you", "your", "the", "a", "an", "gm", "pc", "npc"):
+            continue
+        # If this looks like a character name but isn't in scene NPCs, flag it
+        # Only flag if it's a clear reference (appears multiple times or with titles)
+        if name_lower not in npc_names and len(name) >= 2:
+            # Check for titles that suggest it's an NPC reference
+            titles = ["先生", "女士", "老", "小", "大人", "阁下", "队长", "首领", "村长"]
+            has_title = any(title in narrative_text[narrative_text.find(name):narrative_text.find(name)+len(name)+4] 
+                          for title in titles)
+            if has_title:
+                violations.append({
+                    "type": "npc_not_in_scene",
+                    "description": f"Narrative references '{name}' who is not present in current scene",
+                    "scene_name": scene_name,
+                    "present_npcs": npc_names,
+                    "referenced_name": name,
+                })
+    
+    return violations
+
+
+def find_scene_contradictions(
+    action_result: str,
+    scene_progression: str,
+    gm_prompt: str,
+    scene_name: str,
+    scene_description: str,
+    npcs: list,
+) -> list[str]:
+    """Check if narrative contradicts scene context.
+    
+    Args:
+        action_result: The action result narrative
+        scene_progression: The scene progression narrative
+        gm_prompt: The GM prompt
+        scene_name: Current scene name
+        scene_description: Current scene description
+        npcs: NPCs present in the scene
+        
+    Returns:
+        List of contradiction reason strings
+    """
+    combined = f" {action_result.lower()} {scene_progression.lower()} {gm_prompt.lower()} "
+    reasons: list[str] = []
+    
+    npc_names = [npc.name for npc in npcs] if npcs else []
+    
+    # Check if narrative mentions NPCs not in scene
+    # This is a basic check - looking for NPC names that might be from other scenes
+    other_scene_npcs = {
+        # Tavern NPCs
+        "老马库斯", "银弦艾拉", "戴兜帽的商人",
+        "marcus", "ella", "merchant",
+        # Dungeon entrance NPCs  
+        "托尔金", "thorin",
+        # Combat NPCs
+        "哥布林斥候", "哥布林萨满", "座狼",
+        "goblin scout", "goblin shaman", "dire wolf",
+    }
+    
+    for npc_name in other_scene_npcs:
+        if npc_name.lower() in combined and npc_name not in npc_names:
+            # Check if this NPC is actually not supposed to be here
+            reasons.append(f"references_npc_not_in_scene[{npc_name}]")
+    
+    # Check for scene name consistency - if narrative mentions a different scene
+    known_scenes = {
+        "锈迹斑斑的灯笼酒馆", "灯笼酒馆", "酒馆",
+        "遗忘地下城入口", "地下城入口",
+        "地下城通道",
+    }
+    
+    for known_scene in known_scenes:
+        if known_scene in combined and known_scene != scene_name:
+            # Check if it's referring to a different scene as current location
+            location_indicators = ["在", "位于", "来到", "身处", "站在"]
+            for indicator in location_indicators:
+                if f"{indicator}{known_scene}" in combined.replace(" ", ""):
+                    reasons.append(f"wrong_scene_location[mentions '{known_scene}' as current]")
+                    break
+    
+    return list(dict.fromkeys(reasons))
+
+
 def validate_narrative_for_overreach(
     action_result: str,
     scene_progression: str,
     gm_prompt: str,
     context: NarrationConstraintContext | None = None,
+    scene_name: Optional[str] = None,
+    scene_description: Optional[str] = None,
+    scene_npcs: Optional[list] = None,
 ) -> ValidationResult:
     """Validate narrative text for AI overreach across all constraint categories.
     
@@ -660,6 +820,7 @@ def validate_narrative_for_overreach(
     1. Numeric Authority: AI cannot declare/modify numeric values (HP, damage, etc.)
     2. Plot Control: AI cannot force story progression beyond rule engine results
     3. Combat Integrity: AI cannot contradict combat outcomes (hit/miss, defeat, etc.)
+    4. Scene Context: AI narrative should respect current scene setting and NPCs
     
     When violations are detected, they are logged and the narrative is marked
     for fallback to safe templates.
@@ -669,6 +830,9 @@ def validate_narrative_for_overreach(
         scene_progression: The scene_progression field from narration
         gm_prompt: The gm_prompt field from narration
         context: Optional constraint context for additional validation
+        scene_name: Optional current scene name for scene context validation
+        scene_description: Optional scene description for context validation
+        scene_npcs: Optional list of NPCs in the scene
         
     Returns:
         ValidationResult with is_valid flag, violations list, and marked narrative
@@ -695,6 +859,18 @@ def validate_narrative_for_overreach(
     if context:
         contradictions = find_contradictions(action_result, scene_progression, context)
         all_violations.extend(contradictions)
+    
+    # Category 5: Scene Context Contradictions
+    if scene_name and scene_npcs is not None:
+        scene_contradictions = find_scene_contradictions(
+            action_result=action_result,
+            scene_progression=scene_progression,
+            gm_prompt=gm_prompt,
+            scene_name=scene_name,
+            scene_description=scene_description or "",
+            npcs=scene_npcs,
+        )
+        all_violations.extend(scene_contradictions)
     
     is_valid = len(all_violations) == 0
     

@@ -353,6 +353,7 @@ def set_combat_scene(session_id: str | None = None) -> None:
             description=COMBAT_ENCOUNTER_SCENE.description,
             actors=actors,
             npcs=COMBAT_ENCOUNTER_SCENE.npcs,
+            time=session.scene.time,  # Preserve time from previous scene
         )
         session.game_phase = AdventurePhase.COMBAT
         _save_session(session)

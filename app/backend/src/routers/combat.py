@@ -168,8 +168,25 @@ async def combat_start(request: Request):
             "session_id": session_id,
             "round_number": combat_state.round_number,
             "current_turn": combat_state.current_combatant().id if combat_state.current_combatant() else None,
+            "current_actor_id": combat_state.current_combatant().id if combat_state.current_combatant() else None,
             "turn_order": combat_state.turn_order,
+            "initiative_order": combat_state.turn_order,
+            "status": "active" if combat_state.outcome == CombatOutcome.ONGOING else combat_state.outcome.value,
             "combatants": [
+                {
+                    "id": c.id,
+                    "name": c.name,
+                    "type": c.type.value,
+                    "hp": c.hp,
+                    "hp_max": c.hp_max,
+                    "ac": c.ac,
+                    "initiative": c.initiative,
+                    "status": c.status.value,
+                    "is_player": c.type == CombatantType.PLAYER,
+                }
+                for c in combat_state.combatants
+            ],
+            "participants": [
                 {
                     "id": c.id,
                     "name": c.name,
@@ -342,7 +359,7 @@ async def combat_action(request: Request):
     try:
         combat_state = load_combat_state(session_id)
         if combat_state is None:
-            raise HTTPException(status_code=404, detail="No active combat found.")
+            raise HTTPException(status_code=400, detail="No active combat found.")
 
         if combat_state.outcome != CombatOutcome.ONGOING:
             raise HTTPException(status_code=400, detail=f"Combat already ended: {combat_state.outcome.value}")
@@ -366,6 +383,9 @@ async def combat_action(request: Request):
             result = execute_attack_action(combat_state, current.id, target.id, weapon)
             player_narrative = _generate_narrative(result, current.name, target.name)
             response = {
+                "action_type": "attack",
+                "actor_id": current.id,
+                "target_id": target.id,
                 "hit": result.hit,
                 "damage": result.damage.total if result.hit and result.damage else 0,
                 "updated_hp": target.hp,
@@ -379,6 +399,9 @@ async def combat_action(request: Request):
             skill_name = req.skill or "perception"
             player_narrative = f"{current.name} 在战斗中尝试 {skill_name} 检定。"
             response = {
+                "action_type": "skill_check",
+                "actor_id": current.id,
+                "target_id": target.id,
                 "hit": None,
                 "damage": 0,
                 "updated_hp": target.hp,
@@ -430,6 +453,28 @@ async def combat_action(request: Request):
         response["enemy_actions"] = enemy_actions
         response["combat_ended"] = combat_state.outcome != CombatOutcome.ONGOING
         response["victory"] = combat_state.outcome == CombatOutcome.VICTORY
+        
+        # Add combat_state for test compatibility
+        response["combat_state"] = {
+            "combat_id": f"combat-{session_id}",
+            "round_number": combat_state.round_number,
+            "current_actor_id": combat_state.current_combatant().id if combat_state.current_combatant() else None,
+            "participants": [
+                {
+                    "id": c.id,
+                    "name": c.name,
+                    "hp": c.hp,
+                    "hp_max": c.hp_max,
+                    "ac": c.ac,
+                    "initiative": c.initiative,
+                    "is_player": c.type == CombatantType.PLAYER,
+                    "conditions": list(c.conditions),
+                }
+                for c in combat_state.combatants
+            ],
+            "status": "active" if combat_state.outcome == CombatOutcome.ONGOING else combat_state.outcome.value,
+            "log": combat_state.log,
+        }
         
         # Add XP and level-up info to response
         if xp_result:

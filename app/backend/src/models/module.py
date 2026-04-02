@@ -352,7 +352,7 @@ class ActiveModule(BaseModel):
     current_scene_id: Optional[str] = None
     completed_nodes: list[str] = Field(default_factory=list)
     active_flags: list[str] = Field(default_factory=list)
-    
+
     model_config = {"populate_by_name": True}
 
 
@@ -447,12 +447,25 @@ STARTER_MODULE = ModuleDefinition(
     starting_node_id="node-village-arrival",
 )
 
-MODULE_REGISTRY: dict[str, ModuleDefinition] = {
+
+# Built-in default module for when no module is loaded
+_DEFAULT_MODULE = Module(
+    id="default",
+    name="自由探索",
+    description="无模组模式，由 AI DM 自由创作剧情",
+    starting_scene_id=None,
+    starting_node_id=None,
+)
+
+
+# In-memory module registry (holds both Module and ModuleDefinition instances)
+MODULE_REGISTRY: dict[str, Union[Module, ModuleDefinition]] = {
     STARTER_MODULE.id: STARTER_MODULE,
+    _DEFAULT_MODULE.id: _DEFAULT_MODULE,
 }
 
 
-def get_module(module_id: str) -> Optional[ModuleDefinition]:
+def get_module(module_id: str) -> Union[Module, ModuleDefinition, None]:
     """Get a module definition from the registry."""
     return MODULE_REGISTRY.get(module_id)
 
@@ -460,3 +473,13 @@ def get_module(module_id: str) -> Optional[ModuleDefinition]:
 def get_default_module() -> ModuleDefinition:
     """Get the default starter module."""
     return STARTER_MODULE
+
+
+def get_default_fallback_module() -> Module:
+    """Return the built-in default Module for free-form play."""
+    return _DEFAULT_MODULE
+
+
+def register_module(module: Union[Module, ModuleDefinition]) -> None:
+    """Register a module in the registry."""
+    MODULE_REGISTRY[module.id] = module

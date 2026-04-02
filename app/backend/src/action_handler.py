@@ -269,3 +269,50 @@ def get_equipped_armor_info(actor) -> Optional[dict]:
         "base_ac": armor.base_ac,
         "ac": actor.ac,
     }
+
+
+# ---------------------------------------------------------------------------
+# Scene movement stubs (required for import compatibility)
+# ---------------------------------------------------------------------------
+
+MOVEMENT_VERBS: set[str] = set()
+COMBAT_KEYWORDS: set[str] = set()
+
+
+def is_movement_action(intent: str, approach: str) -> bool:
+    """Check if the action is a movement action."""
+    return False
+
+
+def can_move_in_current_state() -> bool:
+    """Check if movement is allowed in the current game state."""
+    return True
+
+
+class MovementResult:
+    """Result of a movement attempt."""
+    def __init__(self, success: bool = False, message: str = "", target_scene_id: str | None = None):
+        self.success = success
+        self.message = message
+        self.target_scene_id = target_scene_id
+
+
+def handle_movement(intent: str, approach: str, session_id: str | None = None) -> MovementResult:
+    """Handle a movement action."""
+    return MovementResult(success=False, message="Movement not implemented.")
+
+
+def get_available_exits(session_id: str | None = None) -> list[dict]:
+    """Get available exits for the current scene."""
+    return []
+
+
+def get_current_scene_info(session_id: str | None = None) -> dict:
+    """Get information about the current scene."""
+    from .state import get_scene
+    scene = get_scene(session_id)
+    return {
+        "id": scene.id,
+        "name": scene.name,
+        "description": scene.description,
+    }

@@ -94,12 +94,20 @@ class NarrativeHistoryEntry(BaseModel):
     created_at: int = Field(default=0, description="Client-friendly creation timestamp in ms")
 
 
+class SceneHistoryEntry(BaseModel):
+    action_type: str
+    check_result: dict[str, Any] = Field(default_factory=dict)
+    narrative_keywords: list[str] = Field(default_factory=list)
+    npc_changes: list[str] = Field(default_factory=list)
+
+
 class BootstrapState(BaseModel):
     session_id: str
     phase: GamePhase
     actor: Actor | None = None
     scene: Scene
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
+    scene_history: list[SceneHistoryEntry] = Field(default_factory=list)
 
 
 class AttributeWithModifier(BaseModel):

@@ -94,6 +94,12 @@ interface EquippedItems {
   armor: InventoryItem | null;
 }
 
+interface SpellSlot {
+  level: number;
+  max: number;
+  current: number;
+}
+
 interface Actor {
   id: string;
   name: string;
@@ -109,6 +115,7 @@ interface Actor {
   skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
   experience_points?: number;
   equipped?: EquippedItems;
+  spell_slots?: SpellSlot[];
 }
 
 interface NPC {
@@ -648,6 +655,41 @@ function XpBar({ current, needed, level }: { current: number; needed: number; le
   );
 }
 
+function SpellSlotsPanel({ slots, previousSlots }: { slots: SpellSlot[]; previousSlots?: SpellSlot[] }) {
+  if (!slots || slots.length === 0) return null;
+  
+  return (
+    <div className="spell-slots-section">
+      <div className="spell-slots-header">
+        <span className="spell-slots-label">法术槽位</span>
+      </div>
+      <div className="spell-slots-list">
+        {slots.map((slot) => {
+          const previousSlot = previousSlots?.find((s) => s.level === slot.level);
+          const hasChanged = previousSlot && previousSlot.current !== slot.current;
+          const isDepleted = slot.current === 0;
+          
+          return (
+            <div 
+              key={slot.level} 
+              className={`spell-slot-item ${isDepleted ? 'depleted' : ''} ${hasChanged ? 'changed' : ''}`}
+            >
+              <span className="spell-slot-level">{slot.level}环</span>
+              <span className="spell-slot-values">
+                <span className={`spell-slot-current ${hasChanged ? 'changed' : ''}`}>
+                  {slot.current}
+                </span>
+                <span className="spell-slot-separator">/</span>
+                <span className="spell-slot-max">{slot.max}</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CharacterCard({
   actor,
   previousActor,
@@ -660,6 +702,7 @@ function CharacterCard({
   const xp = actor.experience_points ?? 0;
   const level = actor.level ?? 1;
   const xpProgress = getXpProgress(xp, level);
+  const isMage = actor.character_class === "mage";
 
   return (
     <div className="character-card">
@@ -684,6 +727,14 @@ function CharacterCard({
       <HpBar hp={actor.hp} max={actor.hp_max} previousHp={previousActor?.hp} />
       
       <XpBar current={xpProgress.current} needed={xpProgress.needed} level={level} />
+
+      {/* Spell Slots - Only for mages */}
+      {isMage && actor.spell_slots && actor.spell_slots.length > 0 && (
+        <SpellSlotsPanel 
+          slots={actor.spell_slots} 
+          previousSlots={previousActor?.spell_slots} 
+        />
+      )}
 
       {actor.conditions && actor.conditions.length > 0 && (
         <div className="status-effects">
@@ -912,23 +963,29 @@ function Timeline({
 // Scrollable Narrative History (shows all records, auto-scrolls)
 // ---------------------------------------------------------------------------
 
+interface ScrollableNarrativeHistoryProps {
+  messages: Message[];
+  streamingPreview: StreamingPreview | null;
+  sending: boolean;
+  gamePhase?: "exploration" | "combat" | "ended";
+  xpGained?: number;
+  levelUp?: LevelUpInfo | null;
+}
+
 function ScrollableNarrativeHistory({
   messages,
   streamingPreview,
   sending,
   gamePhase,
-}: {
-  messages: Message[];
-  streamingPreview: StreamingPreview | null;
-  sending: boolean;
-  gamePhase?: "exploration" | "combat" | "ended";
-}) {
+  xpGained,
+  levelUp,
+}: ScrollableNarrativeHistoryProps) {
   const gmMessages = messages.filter((m) => m.role === "gm");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending, streamingPreview]);
+  }, [messages, sending, streamingPreview, xpGained, levelUp]);
 
   const isCombat = gamePhase === "combat";
 
@@ -1003,6 +1060,32 @@ function ScrollableNarrativeHistory({
             )}
           </div>
         ))}
+        
+        {/* XP Gained Notification */}
+        {!sending && xpGained !== undefined && xpGained > 0 && (
+          <div className="narrative-item xp-gained-item">
+            <div className="xp-gained-notification">
+              <span className="xp-gained-icon">✨</span>
+              <span className="xp-gained-text">+{xpGained} XP</span>
+            </div>
+          </div>
+        )}
+        
+        {/* Level Up Notification */}
+        {!sending && levelUp && (
+          <div className="narrative-item level-up-item">
+            <div className="level-up-notification-narrative">
+              <span className="level-up-narrative-icon">🎊</span>
+              <div className="level-up-narrative-content">
+                <div className="level-up-narrative-title">升至 {levelUp.new_level} 级！</div>
+                <div className="level-up-narrative-details">
+                  HP +{levelUp.hp_increase} · 熟练加值 +{levelUp.new_proficiency_bonus}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {sending && streamingPreview && (
           <div className={`narrative-item streaming ${isCombat ? "narrative-combat-item" : ""}`}>
             <div className="narrative-text">
@@ -2785,6 +2868,8 @@ function App() {
               streamingPreview={streamingPreview}
               sending={sending}
               gamePhase={gamePhase}
+              xpGained={lastCombatXp}
+              levelUp={lastCombatLevelUp}
             />
             <div className="input-bar">
               <input

@@ -3819,6 +3819,201 @@
   content: '✨';
 }
 
+/* XP Gained Notification in Narrative */
+.narrative-item.xp-gained-item {
+  background: linear-gradient(135deg, rgba(199, 168, 109, 0.15), rgba(199, 168, 109, 0.05));
+  border-color: rgba(199, 168, 109, 0.5);
+  animation: xpGainedSlideIn 0.4s ease-out;
+}
+
+@keyframes xpGainedSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.xp-gained-notification {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+}
+
+.xp-gained-icon {
+  font-size: 18px;
+  animation: xpIconPulse 1s ease-in-out infinite;
+}
+
+@keyframes xpIconPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+.xp-gained-text {
+  font-size: 16px;
+  font-weight: 700;
+  color: #c7a86d;
+  font-family: monospace;
+}
+
+/* Level Up Notification in Narrative */
+.narrative-item.level-up-item {
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.2), rgba(75, 0, 130, 0.1));
+  border-color: rgba(138, 43, 226, 0.6);
+  animation: levelUpSlideIn 0.5s ease-out, levelUpGlow 2s ease-in-out infinite;
+}
+
+@keyframes levelUpSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes levelUpGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(138, 43, 226, 0.4); }
+  50% { box-shadow: 0 0 20px 4px rgba(138, 43, 226, 0.2); }
+}
+
+.level-up-notification-narrative {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.level-up-narrative-icon {
+  font-size: 32px;
+  animation: levelUpIconBounce 1s ease-in-out infinite;
+}
+
+@keyframes levelUpIconBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.level-up-narrative-content {
+  flex: 1;
+}
+
+.level-up-narrative-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #b388ff;
+  margin-bottom: 4px;
+}
+
+.level-up-narrative-details {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ---- Spell Slots Display ---- */
+
+.spell-slots-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.spell-slots-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.spell-slots-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.spell-slots-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.spell-slot-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.15), rgba(75, 0, 130, 0.08));
+  border: 1px solid rgba(138, 43, 226, 0.4);
+  border-radius: 8px;
+  font-size: 12px;
+  transition: all var(--transition-fast);
+}
+
+.spell-slot-item:hover {
+  border-color: rgba(138, 43, 226, 0.6);
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.2), rgba(75, 0, 130, 0.12));
+}
+
+.spell-slot-item.depleted {
+  opacity: 0.5;
+  background: var(--bg-panel);
+  border-color: var(--border-light);
+}
+
+.spell-slot-item.changed {
+  animation: spellSlotPulse 0.6s ease-out;
+}
+
+@keyframes spellSlotPulse {
+  0% { box-shadow: 0 0 0 0 rgba(138, 43, 226, 0.6); }
+  50% { box-shadow: 0 0 12px 3px rgba(138, 43, 226, 0.3); }
+  100% { box-shadow: 0 0 0 0 rgba(138, 43, 226, 0); }
+}
+
+.spell-slot-level {
+  font-size: 10px;
+  color: #b388ff;
+  font-weight: 500;
+}
+
+.spell-slot-values {
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.spell-slot-current {
+  color: #b388ff;
+  transition: color var(--transition-fast);
+}
+
+.spell-slot-current.changed {
+  animation: value-flash-purple 0.6s ease-out;
+}
+
+@keyframes value-flash-purple {
+  0% { color: #b388ff; }
+  50% { color: #e0b0ff; text-shadow: 0 0 8px rgba(138, 43, 226, 0.8); }
+  100% { color: #b388ff; }
+}
+
+.spell-slot-separator {
+  color: var(--text-muted);
+  margin: 0 2px;
+}
+
+.spell-slot-max {
+  color: var(--text-muted);
+}
+
 /* ---- Equipped Items Display ---- */
 
 .equipped-items {

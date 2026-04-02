@@ -244,6 +244,10 @@ class SessionData(BaseModel):
         default_factory=dict,
         description="NPC dialogue states by NPC ID"
     )
+    visited_scenes: dict[str, int] = Field(
+        default_factory=dict,
+        description="Map of scene_id to visit count"
+    )
     updated_at: float = Field(default_factory=time.time)
 
 
@@ -444,7 +448,7 @@ def set_exploration_phase(session_id: str | None = None) -> None:
         _save_session(session)
 
 
-def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
+def switch_scene(scene_id: str, session_id: str | None = None) -> tuple[bool, str]:
     """Switch to a different scene.
     
     Args:
@@ -452,14 +456,15 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
         session_id: The session ID (uses current session if None)
         
     Returns:
-        True if scene was switched, False if scene_id not found
+        Tuple of (success: bool, source_scene_name: str) where source_scene_name
+        is the name of the scene before switching (empty if switch failed)
     """
     from .scene import get_scene_by_id
     from .scene_map import get_scene_node
     
     scene_data = get_scene_by_id(scene_id)
     if scene_data is None:
-        return False
+        return False, ""
     
     # Get scene node from new scene_map for exits
     scene_node = get_scene_node(scene_id)
@@ -467,11 +472,17 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:
         session = _get_session(resolved_session_id, create_if_missing=True)
+        source_scene_name = session.scene.name
+        
         # Preserve the player actor in the actors list
         actors = [session.actor.id] if session.actor else []
         
         # Get exits from scene_map node if available
         exits = scene_node.to_scene_exit_list() if scene_node else scene_data.exits
+        
+        # Increment visit count for the target scene
+        visited_count = session.visited_scenes.get(scene_id, 0) + 1
+        session.visited_scenes[scene_id] = visited_count
         
         session.scene = Scene(
             id=scene_data.id,
@@ -481,9 +492,10 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
             npcs=scene_data.npcs,
             time=session.scene.time,  # Preserve time from previous scene
             exits=exits,  # Include exits for navigation
+            visited_count=visited_count,
         )
         _save_session(session)
-    return True
+    return True, source_scene_name
 
 
 def get_game_phase(session_id: str | None = None) -> AdventurePhase:
@@ -650,7 +662,9 @@ def create_character(
             actors=[session.actor.id],
             npcs=scene_data.npcs,
             exits=scene_data.exits,
+            visited_count=1,
         )
+        session.visited_scenes = {scene_data.id: 1}
         session.enemy = Actor(**_ENEMY_INIT)
         session.narrative_history = []
         session.scene_history = []
@@ -1039,7 +1053,9 @@ def _create_fresh_session(session_id: str) -> SessionData:
             actors=[actor_id],
             npcs=scene_data.npcs,
             exits=scene_data.exits,
+            visited_count=1,
         )
+        session.visited_scenes = {scene_data.id: 1}
 
     return session
 

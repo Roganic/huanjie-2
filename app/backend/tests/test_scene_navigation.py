@@ -166,8 +166,9 @@ class TestSceneSwitching:
         session_id = bootstrap.session_id
         
         # Switch to village square
-        result = switch_scene("village-square-01", session_id)
-        assert result is True
+        success, source_name = switch_scene("village-square-01", session_id)
+        assert success is True
+        assert source_name == bootstrap.scene.name
         
         # Verify scene was updated with exits
         scene = get_scene(session_id)
@@ -179,8 +180,9 @@ class TestSceneSwitching:
         """switch_scene should return False for non-existent scene."""
         from src.state import switch_scene
         
-        result = switch_scene("non-existent-scene")
-        assert result is False
+        success, source_name = switch_scene("non-existent-scene")
+        assert success is False
+        assert source_name == ""
 
 
 class TestMovementDoesNotTriggerCombat:

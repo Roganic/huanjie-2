@@ -1397,6 +1397,7 @@ function App() {
   const [health, setHealth] = useState<HealthStatus>("loading");
   const [sending, setSending] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [creatingCharacter, setCreatingCharacter] = useState(false);
   const [bootstrap, setBootstrap] = useState<BootstrapState | null>(null);
   const [previousBootstrap, setPreviousBootstrap] = useState<BootstrapState | null>(null);
@@ -1592,6 +1593,45 @@ function App() {
       ]);
     } finally {
       setResetting(false);
+    }
+  };
+
+  const saveGame = async () => {
+    if (saving) return;
+
+    setSaving(true);
+    try {
+      const response = await fetch(apiUrl("/save"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId),
+      });
+      if (!response.ok) {
+        if (response.status === 404) {
+          storeSessionId(null);
+          setSessionId(null);
+          await recoverExpiredSession("会话已过期，已创建新会话。");
+          return;
+        }
+        throw new Error(await response.text());
+      }
+      const result = await response.json();
+      setMessages((previous) => [
+        ...previous,
+        { id: Date.now(), role: "system", text: `游戏已存档 (${new Date(result.timestamp).toLocaleString("zh-CN")})`, timestamp: Date.now() },
+      ]);
+      addToTimeline({
+        type: "system",
+        title: "游戏存档",
+        details: `存档时间: ${new Date(result.timestamp).toLocaleString("zh-CN")}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((previous) => [
+        ...previous,
+        { id: Date.now(), role: "system", text: `存档失败: ${message}`, timestamp: Date.now() },
+      ]);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -2149,6 +2189,9 @@ function App() {
               ))}
             </select>
           </div>
+          <button className="header-button" onClick={saveGame} disabled={saving || sending || creatingCharacter}>
+            {saving ? "存档中…" : "存档"}
+          </button>
           <button className="header-button" onClick={resetSession} disabled={resetting || sending || creatingCharacter}>
             {resetting ? "重置中…" : "重置"}
           </button>

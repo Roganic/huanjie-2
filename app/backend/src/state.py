@@ -316,6 +316,14 @@ def append_narrative_history(
             entry,
         ][-MAX_STORED_NARRATIVE_HISTORY:]
         _save_session(session)
+        
+        # Persist to save file for session restoration after restart
+        try:
+            from . import game_state
+            game_state.save_current_game(session_id=resolved_session_id)
+        except Exception:
+            # Don't fail action if save fails
+            pass
 
 
 def get_narrative_context(
@@ -558,6 +566,14 @@ def create_character(
         session.narrative_history = []
         session.scene_history = []
         _save_session(session)
+        
+        # Persist to save file for session restoration after restart
+        try:
+            from . import game_state
+            game_state.save_current_game(session_id=resolved_session_id)
+        except Exception:
+            # Don't fail character creation if save fails
+            pass
     return get_bootstrap_state(session_id=resolved_session_id)
 
 

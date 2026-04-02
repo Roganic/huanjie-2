@@ -160,3 +160,26 @@ def create_fresh_adventure_scene() -> Scene:
         actors=[],
         time=0,
     )
+
+
+def reset_session(session_id: str) -> dict[str, Any]:
+    """Clear the save file and return initial state info.
+    
+    This is used when the player wants to start a new game.
+    
+    Args:
+        session_id: The session ID to reset.
+        
+    Returns:
+        Dict with reset status and initial phase.
+    """
+    # Clear the save file
+    was_deleted = clear_save()
+    
+    return {
+        "success": True,
+        "session_id": session_id,
+        "phase": GamePhase.CHARACTER_CREATION.value,
+        "game_phase": AdventurePhase.EXPLORATION.value,
+        "save_file_deleted": was_deleted,
+    }

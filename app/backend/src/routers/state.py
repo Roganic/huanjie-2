@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ..memory_manager import get_recent_event_memories
 from ..models.state import BootstrapState
+from ..persistence import reset_session as persistence_reset_session
 from ..state import (
     create_session,
     get_bootstrap_state,
@@ -80,6 +81,30 @@ async def reset(request: Request):
                 session_id=session_id,
             )
             result = get_bootstrap_state(session_id=session_id)
+        return result
+    finally:
+        reset_current_session(token)
+
+
+@router.post("/session/reset", response_model=BootstrapState)
+async def session_reset(request: Request):
+    """Clear persistence file and reset to initial character creation state.
+    
+    This endpoint is used when the player wants to start a completely new game.
+    It clears the save file and returns the session to character creation phase.
+    """
+    from ..state import DEFAULT_SESSION_ID
+    
+    provided_session_id = _request_session_id(request)
+    session_id = provided_session_id or DEFAULT_SESSION_ID
+    
+    # Clear the persistence file
+    persistence_reset_session(session_id)
+    
+    token = set_current_session(session_id)
+    try:
+        # Reset the session state to fresh
+        result = reset_state(session_id=session_id)
         return result
     finally:
         reset_current_session(token)

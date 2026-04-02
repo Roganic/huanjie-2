@@ -116,6 +116,11 @@ interface Actor {
   experience_points?: number;
   equipped?: EquippedItems;
   spell_slots?: SpellSlot[];
+  class_features?: {
+    second_wind_used?: boolean;
+    action_surge_used?: boolean;
+    sneak_attack_available?: boolean;
+  };
 }
 
 interface NPC {
@@ -1112,6 +1117,7 @@ function ScrollableNarrativeHistory({
 
 interface CombatScreenProps {
   combat: CombatState;
+  actor: Actor | null;
   combatNarrative: string;
   isNarrativeStreaming: boolean;
   selectedTarget: string | null;
@@ -1119,12 +1125,14 @@ interface CombatScreenProps {
   selectedWeapon: string;
   onWeaponChange: (weapon: string) => void;
   onAction: (actionType: CombatActionType) => void;
+  onClassFeatureAction: (feature: "second_wind" | "action_surge") => void;
   onFlee: () => void;
   loading: boolean;
 }
 
 function CombatScreen({
   combat,
+  actor,
   combatNarrative,
   isNarrativeStreaming,
   selectedTarget,
@@ -1132,6 +1140,7 @@ function CombatScreen({
   selectedWeapon,
   onWeaponChange,
   onAction,
+  onClassFeatureAction,
   onFlee,
   loading,
 }: CombatScreenProps) {
@@ -1295,6 +1304,38 @@ function CombatScreen({
               ))}
             </select>
           </div>
+          {/* Class feature buttons */}
+          {actor?.character_class === "warrior" && (
+            <div className="combat-class-features">
+              {!actor.class_features?.second_wind_used && (
+                <button
+                  className="combat-btn second-wind"
+                  onClick={() => onClassFeatureAction("second_wind")}
+                  disabled={loading}
+                  title="恢复 1d10 + 等级 生命值"
+                >
+                  ❤️ Second Wind
+                </button>
+              )}
+              {!actor.class_features?.action_surge_used && (
+                <button
+                  className="combat-btn action-surge"
+                  onClick={() => onClassFeatureAction("action_surge")}
+                  disabled={loading}
+                  title="额外获得一次行动"
+                >
+                  ⚡ Action Surge
+                </button>
+              )}
+            </div>
+          )}
+          {actor?.character_class === "rogue" && (
+            <div className="combat-class-features">
+              <span className={`sneak-attack-badge ${actor.class_features?.sneak_attack_available ? "available" : "unavailable"}`}>
+                🗡️ 偷袭 {actor.class_features?.sneak_attack_available ? "可用" : "已用"}
+              </span>
+            </div>
+          )}
           <div className="combat-action-buttons">
             <button
               className="combat-btn attack"
@@ -2582,6 +2623,45 @@ function App() {
     }
   };
 
+  const executeClassFeatureAction = async (feature: "second_wind" | "action_surge") => {
+    if (!sessionId || combatLoading) return;
+    setCombatLoading(true);
+    try {
+      const response = await fetch(apiUrl("/action"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId, {
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          scene_id: bootstrap?.scene.id || "combat",
+          actor: bootstrap?.actor?.name || "",
+          intent: feature,
+          approach: "",
+        }),
+      });
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      const data = await response.json();
+      addToTimeline({
+        type: "action",
+        title: feature === "second_wind" ? "Second Wind" : "Action Surge",
+        outcome: "success",
+        details: data.narration || "",
+      });
+      await refreshState();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "system", text: message, timestamp: Date.now() },
+      ]);
+    } finally {
+      setCombatLoading(false);
+    }
+  };
+
   const executeCombatAction = async (actionType: CombatActionType) => {
     if (!sessionId || !combat || combatLoading) return;
     if (combat.current_actor_id !== combat.participants.find((p) => p.is_player)?.id) {
@@ -2845,6 +2925,7 @@ function App() {
         {inCombat && combat ? (
           <CombatScreen
             combat={combat}
+            actor={bootstrap?.actor || null}
             combatNarrative={combatNarrative}
             isNarrativeStreaming={isCombatNarrativeStreaming}
             selectedTarget={selectedTarget}
@@ -2852,6 +2933,7 @@ function App() {
             selectedWeapon={selectedWeapon}
             onWeaponChange={setSelectedWeapon}
             onAction={executeCombatAction}
+            onClassFeatureAction={executeClassFeatureAction}
             onFlee={() => endCombat("flee")}
             loading={combatLoading}
           />

@@ -68,7 +68,9 @@ def roll_initiative(
     """
     roller = dice_roller or _default_d20
     for c in combatants:
-        c.initiative = roller() + c.dexterity_modifier()
+        roll = roller()
+        c.initiative_roll = roll
+        c.initiative = roll + c.dexterity_modifier()
     return sorted(combatants, key=lambda c: c.initiative, reverse=True)
 
 

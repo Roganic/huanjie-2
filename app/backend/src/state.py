@@ -57,14 +57,29 @@ _CHARACTER_CREATION_SCENE_INIT = dict(
 def _get_adventure_scene_init() -> dict:
     """Get the initial adventure scene with NPCs."""
     scene = get_default_exploration_scene()
-    return {
+    result = {
         "id": scene.id,
         "name": scene.name,
         "description": scene.description,
         "actors": [],
         "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
-        "exits": [exit.model_dump(mode="json") for exit in scene.exits],
     }
+    # Handle exits if available (SceneData may have exits or connected_scenes)
+    if hasattr(scene, 'exits') and scene.exits:
+        from .scenes.data import SceneExit
+        result["exits"] = [
+            SceneExit(direction=conn, target_scene_id=conn).model_dump(mode="json")
+            for conn in scene.connected_scenes
+        ]
+    elif hasattr(scene, 'connected_scenes') and scene.connected_scenes:
+        from .scenes.data import SceneExit
+        result["exits"] = [
+            SceneExit(direction=conn, target_scene_id=conn).model_dump(mode="json")
+            for conn in scene.connected_scenes
+        ]
+    else:
+        result["exits"] = []
+    return result
 
 
 _ADVENTURE_SCENE_INIT = _get_adventure_scene_init()

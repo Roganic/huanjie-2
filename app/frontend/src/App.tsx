@@ -195,6 +195,17 @@ interface CharacterDraft {
   abilityGeneration: "standard_array" | "random_4d6" | "manual";
 }
 
+interface SaveFile {
+  save_id: string;
+  save_name: string;
+  character_name: string | null;
+  class: string | null;
+  hp: number | null;
+  hp_max: number | null;
+  scene_name: string | null;
+  saved_at: string;
+}
+
 type Skill = {
   name: string;
   ability: keyof AbilityScores;
@@ -1449,6 +1460,11 @@ function App() {
   const [creationError, setCreationError] = useState<string | null>(null);
   // Combat state
   const [combat, setCombat] = useState<CombatState | null>(null);
+  // Save/Load state
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [savesList, setSavesList] = useState<SaveFile[]>([]);
+  const [loadingSaves, setLoadingSaves] = useState(false);
+  const [loadingGame, setLoadingGame] = useState(false);
   const [combatLoading, setCombatLoading] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [selectedWeapon, setSelectedWeapon] = useState<string>("longsword");
@@ -1669,6 +1685,85 @@ function App() {
       ]);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const fetchSavesList = async () => {
+    setLoadingSaves(true);
+    try {
+      const response = await fetch(apiUrl("/saves"));
+      if (!response.ok) {
+        throw new Error(`获取存档列表失败 (${response.status})`);
+      }
+      const data = await response.json();
+      setSavesList(data.saves || []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((previous) => [
+        ...previous,
+        { id: Date.now(), role: "system", text: `获取存档列表失败: ${message}`, timestamp: Date.now() },
+      ]);
+    } finally {
+      setLoadingSaves(false);
+    }
+  };
+
+  const openLoadDialog = async () => {
+    await fetchSavesList();
+    setShowLoadDialog(true);
+  };
+
+  const loadGame = async (saveId: string) => {
+    if (loadingGame) return;
+
+    setLoadingGame(true);
+    try {
+      const response = await fetch(apiUrl("/load"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ save_id: saveId }),
+      });
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("存档文件不存在");
+        } else if (response.status === 400) {
+          const errorText = await response.text();
+          throw new Error(`存档文件损坏: ${errorText}`);
+        }
+        throw new Error(`读档失败 (${response.status})`);
+      }
+      const data: BootstrapState = await response.json();
+      
+      // Update session and state
+      setSessionId(data.session_id);
+      storeSessionId(data.session_id);
+      setBootstrap(data);
+      setPreviousBootstrap(null);
+      setMessages(restoreMessagesFromHistory(data.narrative_history));
+      setTimeline(restoreTimelineFromHistory(data.narrative_history));
+      setCombat(null);
+      setCombatNarrative("");
+      setSelectedTarget(null);
+      setIsCombatNarrativeStreaming(false);
+      setShowLoadDialog(false);
+      
+      setMessages((previous) => [
+        ...previous,
+        { id: Date.now(), role: "system", text: `存档已加载，欢迎回来，${data.actor?.name || "冒险者"}！`, timestamp: Date.now() },
+      ]);
+      addToTimeline({
+        type: "system",
+        title: "读取存档",
+        details: `角色: ${data.actor?.name || "未知"}, 场景: ${data.scene.name}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((previous) => [
+        ...previous,
+        { id: Date.now(), role: "system", text: `读档失败: ${message}`, timestamp: Date.now() },
+      ]);
+    } finally {
+      setLoadingGame(false);
     }
   };
 
@@ -2251,7 +2346,10 @@ function App() {
             </select>
           </div>
           <button className="header-button" onClick={saveGame} disabled={saving || sending || creatingCharacter}>
-            {saving ? "存档中…" : "存档"}
+            {saving ? "存档中…" : "保存游戏"}
+          </button>
+          <button className="header-button" onClick={openLoadDialog} disabled={loadingSaves || sending || creatingCharacter}>
+            {loadingSaves ? "加载中…" : "读取存档"}
           </button>
           <button className="header-button" onClick={resetSession} disabled={resetting || sending || creatingCharacter}>
             {resetting ? "重置中…" : "重置"}
@@ -2460,6 +2558,59 @@ function App() {
           <Timeline entries={timeline} onToggle={toggleTimelineEntry} />
         </section>
       </aside>
+
+      {/* Load Game Dialog */}
+      {showLoadDialog && (
+        <div className="load-dialog-overlay" onClick={() => setShowLoadDialog(false)}>
+          <div className="load-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="load-dialog-header">
+              <h2>📂 读取存档</h2>
+              <button className="close-btn" onClick={() => setShowLoadDialog(false)}>✕</button>
+            </div>
+            <div className="load-dialog-content">
+              {loadingSaves ? (
+                <div className="loading-saves">加载存档列表中…</div>
+              ) : savesList.length === 0 ? (
+                <div className="no-saves">暂无存档</div>
+              ) : (
+                <div className="saves-list">
+                  {savesList.map((save) => (
+                    <div key={save.save_id} className="save-item">
+                      <div className="save-info">
+                        <div className="save-name">{save.save_name}</div>
+                        <div className="save-details">
+                          {save.character_name ? (
+                            <span className="save-character">
+                              {save.character_name}
+                              {save.class && ` · ${CLASS_LABELS[save.class as CharacterClass] || save.class}`}
+                              {save.hp !== null && save.hp_max !== null && ` · HP ${save.hp}/${save.hp_max}`}
+                            </span>
+                          ) : (
+                            <span className="save-no-character">未创建角色</span>
+                          )}
+                          {save.scene_name && (
+                            <span className="save-scene"> 📍 {save.scene_name}</span>
+                          )}
+                        </div>
+                        <div className="save-time">
+                          {new Date(save.saved_at).toLocaleString("zh-CN")}
+                        </div>
+                      </div>
+                      <button
+                        className="load-btn"
+                        onClick={() => loadGame(save.save_id)}
+                        disabled={loadingGame}
+                      >
+                        {loadingGame ? "加载中…" : "读取"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

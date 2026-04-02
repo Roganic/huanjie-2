@@ -958,7 +958,7 @@ function CombatScreen({
             <select
               value={selectedTarget || ""}
               onChange={(e) => onTargetChange(e.target.value)}
-              disabled={loading}
+              disabled={loading || isNarrativeStreaming}
             >
               {enemies.map((enemy) => (
                 <option key={enemy.id} value={enemy.id}>
@@ -972,7 +972,7 @@ function CombatScreen({
             <select
               value={selectedWeapon}
               onChange={(e) => onWeaponChange(e.target.value)}
-              disabled={loading}
+              disabled={loading || isNarrativeStreaming}
             >
               {weapons.map((w) => (
                 <option key={w} value={w}>
@@ -985,18 +985,18 @@ function CombatScreen({
             <button
               className="combat-btn attack"
               onClick={() => onAction("attack")}
-              disabled={loading}
+              disabled={loading || isNarrativeStreaming}
             >
-              {loading ? "执行中…" : "⚔️ 攻击"}
+              {loading || isNarrativeStreaming ? "执行中…" : "⚔️ 攻击"}
             </button>
             <button
               className="combat-btn defend"
               onClick={() => onAction("defend")}
-              disabled={loading}
+              disabled={loading || isNarrativeStreaming}
             >
               🛡️ 防御
             </button>
-            <button className="combat-btn flee" onClick={onFlee} disabled={loading}>
+            <button className="combat-btn flee" onClick={onFlee} disabled={loading || isNarrativeStreaming}>
               🏃 逃跑
             </button>
           </div>

@@ -24,6 +24,13 @@ from ..models.action import (
     Outcome,
 )
 from ..models.state import Actor, NarrativeHistoryEntry, Scene
+from ..memory import (
+    MemoryConfig,
+    SessionMemory,
+    add_memory_entry,
+    get_memory_context,
+    get_session_memory,
+)
 from .providers import get_provider
 from .resolution_constraints import (
     NarrationConstraintContext,
@@ -419,6 +426,7 @@ def generate_narration(
     combat_round: Optional[int] = None,
     is_combat_ended: Optional[bool] = None,
     combat_outcome: Optional[str] = None,
+    session_id: Optional[str] = None,
 ) -> NarrationBundle:
     """Generate structured narrative text for an action resolution.
     
@@ -440,6 +448,7 @@ def generate_narration(
         combat_round: Optional combat round number
         is_combat_ended: Whether combat has ended
         combat_outcome: Combat outcome if ended ('victory', 'defeat')
+        session_id: Optional session ID for memory tracking
         
     Returns:
         Narration bundle for action result and scene progression
@@ -456,6 +465,8 @@ def generate_narration(
         is_combat_ended=is_combat_ended,
         combat_outcome=combat_outcome,
     )
+    
+    # Build prompt with narrative history for context
     prompt = _build_narrative_prompt(
         req=req,
         actor=actor,
@@ -472,6 +483,27 @@ def generate_narration(
         combat_outcome=combat_outcome,
     )
 
+    # Log session memory context for observability
+    history_count = len(narrative_history) if narrative_history else 0
+    if history_count > 0:
+        # Extract recent entries for logging
+        recent_entries = narrative_history[-3:] if history_count >= 3 else narrative_history
+        recent_summaries = [
+            f"[{i+1}] {e.action_summary[:50]}..." if len(e.action_summary) > 50 else f"[{i+1}] {e.action_summary}"
+            for i, e in enumerate(recent_entries)
+        ]
+        logger.info(
+            "Narrative prompt includes %d history entries",
+            history_count,
+            extra={
+                "session_id": session_id,
+                "history_count": history_count,
+                "recent_history": recent_summaries,
+                "actor": actor.name,
+                "action_intent": req.intent[:100],
+            },
+        )
+
     # Log combat narrative prompts for observability
     if attack_result:
         logger.info(
@@ -486,6 +518,7 @@ def generate_narration(
                 "target_hp": target.hp if target else None,
                 "combat_round": combat_round,
                 "is_combat_ended": is_combat_ended,
+                "history_in_context": history_count,
                 "prompt_preview": prompt[:800],
             },
         )

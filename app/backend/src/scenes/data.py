@@ -119,10 +119,11 @@ VILLAGE_SQUARE_SCENE = SceneData(
         "去地下城入口探险",
         "与村民交谈收集情报",
     ],
-    connected_scenes=["tavern-01", "dungeon-entrance-01"],
+    connected_scenes=["tavern-01", "dungeon-entrance-01", "forest-path-01"],
     exits=[
         SceneExit(direction="酒馆", target_scene_id="tavern-01"),
-        SceneExit(direction="森林入口", target_scene_id="dungeon-entrance-01"),
+        SceneExit(direction="地下城入口", target_scene_id="dungeon-entrance-01"),
+        SceneExit(direction="森林小径", target_scene_id="forest-path-01"),
     ],
     loot_items=[
         InventoryItem(id="dagger", name="匕首", type="weapon", damage_dice="1d4", attack_ability="dex", description="一把锋利的匕首。"),
@@ -199,11 +200,13 @@ DUNGEON_ENTRANCE_SCENE = SceneData(
         "返回村庄广场",
         "在入口处搜索线索",
     ],
-    connected_scenes=["village-square-01", "tavern-01", "combat-encounter-01"],
+    connected_scenes=["village-square-01", "tavern-01", "combat-encounter-01", "ancient-temple-01", "vault-01"],
     exits=[
         SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
         SceneExit(direction="酒馆", target_scene_id="tavern-01"),
-        SceneExit(direction="地下城", target_scene_id="combat-entrance-01"),
+        SceneExit(direction="地下城通道", target_scene_id="combat-encounter-01"),
+        SceneExit(direction="古庙废墟", target_scene_id="ancient-temple-01"),
+        SceneExit(direction="地下宝库", target_scene_id="vault-01"),
     ],
 )
 
@@ -241,12 +244,160 @@ COMBAT_ENCOUNTER_SCENE = SceneData(
     ],
 )
 
+# Scene 5: Forest Path (branch path from village square)
+FOREST_PATH_SCENE = SceneData(
+    id="forest-path-01",
+    name="幽暗森林小径",
+    description=(
+        "一条蜿蜒穿过古老森林的小径，参天大树遮蔽了大部分阳光，只有零星的光束穿透树冠。"
+        "空气中弥漫着潮湿泥土和松针的气息，远处偶尔传来不明生物的叫声。"
+        "小径两侧长满了各种草药植物，一个经验丰富的采集者也许能找到有价值的东西。"
+        "小径向前延伸通往古庙废墟，向后则回到村庄广场。"
+    ),
+    actors=[],
+    npcs=[
+        NPC(id="forest-hermit-01", name="隐士阿德里安", type=NPCType.FRIENDLY,
+            description="住在森林中的老隐士，精通草药知识，对森林中的秘密了如指掌。",
+            race="人类", occupation="隐士"),
+        NPC(id="forest-wolf-01", name="野狼", type=NPCType.HOSTILE,
+            description="一只在森林中游荡的野狼，正在警惕地打量着入侵者。",
+            race="野兽", occupation="野生动物"),
+    ],
+    available_actions=[
+        "与隐士阿德里安交谈，询问草药知识",
+        "搜索草药（感知检定 DC 12）",
+        "观察野狼的动向",
+        "向前前往古庙废墟",
+        "返回村庄广场",
+    ],
+    connected_scenes=["village-square-01", "ancient-temple-01"],
+    exits=[
+        SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
+        SceneExit(direction="古庙废墟", target_scene_id="ancient-temple-01"),
+    ],
+    interactive_elements=[
+        InteractiveElement(
+            id="herb-gathering-01",
+            name="草药丛",
+            action_name="搜索草药",
+            skill="perception",
+            dc=12,
+            success_narrative="你仔细搜索了草药丛，找到了几株珍贵的治愈草！",
+            failure_narrative="你翻遍了草丛，但只找到了一些普通的杂草，什么有用的都没有。",
+            reward_item="healing_herb",
+            reward_info="治愈草：可以恢复少量生命值",
+        ),
+    ],
+)
+
+# Scene 6: Ancient Temple Ruins (deep exploration with combat)
+ANCIENT_TEMPLE_SCENE = SceneData(
+    id="ancient-temple-01",
+    name="古庙废墟",
+    description=(
+        "一座被岁月侵蚀的古老神庙，大部分屋顶已经坍塌，只剩下几根粗大的石柱矗立着。"
+        "地面上散落着破碎的祭坛碎片和风化的石像。"
+        "神庙深处隐约可见一个发光的祭坛，散发出神秘的蓝色光芒。"
+        "几只亡灵骷髅正在废墟中游荡，守护着这片被遗忘的圣地。"
+    ),
+    actors=[],
+    npcs=[
+        NPC(id="skeleton-warrior-01", name="骷髅战士", type=NPCType.HOSTILE,
+            description="一具披着锈蚀铠甲的骷髅，手持断剑，眼眶中燃烧着幽蓝色的鬼火。",
+            race="亡灵", occupation="守卫"),
+        NPC(id="skeleton-archer-01", name="骷髅弓手", type=NPCType.HOSTILE,
+            description="一具骷髅弓手，手持腐朽的弓，正在废墟高处巡逻。",
+            race="亡灵", occupation="弓手"),
+        NPC(id="ghost-priest-01", name="幽灵祭司", type=NPCType.NEUTRAL,
+            description="一个半透明的幽灵，穿着古代祭司的服装，神情悲伤地飘荡在神庙中。",
+            race="亡灵", occupation="祭司"),
+    ],
+    available_actions=[
+        "与骷髅战士战斗",
+        "尝试与幽灵祭司交谈",
+        "检查发光的祭坛",
+        "搜索神庙废墟",
+        "返回森林小径",
+        "前往地下城入口",
+    ],
+    connected_scenes=["forest-path-01", "dungeon-entrance-01", "vault-01"],
+    exits=[
+        SceneExit(direction="森林小径", target_scene_id="forest-path-01"),
+        SceneExit(direction="地下城入口", target_scene_id="dungeon-entrance-01"),
+        SceneExit(direction="地下宝库", target_scene_id="vault-01"),
+    ],
+    interactive_elements=[
+        InteractiveElement(
+            id="glowing-altar-01",
+            name="发光祭坛",
+            action_name="检查祭坛",
+            skill="arcana",
+            dc=14,
+            success_narrative="你解读了祭坛上的古代符文，获得了神秘的魔法知识，祭坛中央出现了一个发光的神圣护符！",
+            failure_narrative="你试图解读祭坛上的符文，但古老的魔法太过复杂，触发了一道电弧，让你轻微受伤。",
+            reward_item="holy_amulet",
+            reward_info="神圣护符：古代神庙的守护之物，蕴含神圣力量",
+        ),
+    ],
+)
+
+# Scene 7: The Vault (treasure room - with chest event)
+VAULT_SCENE = SceneData(
+    id="vault-01",
+    name="古老宝库",
+    description=(
+        "地下深处的一间石室，墙壁上镶嵌着发出微光的水晶，照亮了整个空间。"
+        "中央的石台上放着一个古老的宝箱，铁锁已经锈迹斑斑，周围散落着一些金币和珠宝碎片。"
+        "空气中弥漫着古老魔法的气息，让人既兴奋又警惕。"
+        "宝箱旁边还有一具倒下的骷髅，手中握着一把精致的钥匙。"
+    ),
+    actors=[],
+    npcs=[
+        NPC(id="treasure-guardian-01", name="宝库守护傀儡", type=NPCType.HOSTILE,
+            description="守护着宝箱的魔法构造体，虽然已经残破但仍然危险，用空洞的眼睛盯着入侵者。",
+            race="构造体", occupation="守护者"),
+    ],
+    available_actions=[
+        "搜索宝箱（技巧检定 DC 12）",
+        "检查骷髅手中的钥匙",
+        "搜索散落的金币",
+        "与宝库守护傀儡战斗",
+        "返回地下城入口",
+        "返回古庙废墟",
+    ],
+    connected_scenes=["dungeon-entrance-01", "ancient-temple-01"],
+    exits=[
+        SceneExit(direction="地下城入口", target_scene_id="dungeon-entrance-01"),
+        SceneExit(direction="古庙废墟", target_scene_id="ancient-temple-01"),
+    ],
+    loot_items=[
+        InventoryItem(id="longsword", name="精钢长剑", type="weapon", damage_dice="1d8", attack_ability="str", description="一把做工精良的长剑，刀刃依然锋利。"),
+        InventoryItem(id="chainmail", name="锁子甲", type="armor", base_ac=13, add_dex_modifier=False, description="一套保存完好的锁子甲，防护力不俗。"),
+    ],
+    interactive_elements=[
+        InteractiveElement(
+            id="treasure-chest-01",
+            name="古老宝箱",
+            action_name="搜索",
+            skill="sleight_of_hand",
+            dc=12,
+            success_narrative="你巧妙地撬开了宝箱的锁，箱子里装满了金币，还有一枚闪闪发光的魔法戒指！",
+            failure_narrative="你尝试撬开宝箱，但锁扣太过复杂，你的工具在锁芯里折断了，宝箱纹丝未动。",
+            reward_item="magic_ring",
+            reward_info="魔法戒指：蕴含古老魔法的戒指，佩戴后能增强持有者的意志力",
+        ),
+    ],
+)
+
 # Scene registry for lookups
 SCENE_REGISTRY: dict[str, SceneData] = {
     VILLAGE_SQUARE_SCENE.id: VILLAGE_SQUARE_SCENE,
     TAVERN_SCENE.id: TAVERN_SCENE,
     DUNGEON_ENTRANCE_SCENE.id: DUNGEON_ENTRANCE_SCENE,
     COMBAT_ENCOUNTER_SCENE.id: COMBAT_ENCOUNTER_SCENE,
+    FOREST_PATH_SCENE.id: FOREST_PATH_SCENE,
+    ANCIENT_TEMPLE_SCENE.id: ANCIENT_TEMPLE_SCENE,
+    VAULT_SCENE.id: VAULT_SCENE,
 }
 
 # Scene transition keywords
@@ -293,6 +444,32 @@ SCENE_TRANSITION_KEYWORDS: dict[str, str] = {
     "进入通道": "combat-encounter-01",
     "深入": "combat-encounter-01",
     "前进": "combat-encounter-01",
+
+    # To forest path
+    "forest": "forest-path-01",
+    "森林小径": "forest-path-01",
+    "幽暗森林": "forest-path-01",
+    "小径": "forest-path-01",
+    "去森林": "forest-path-01",
+    "前往森林": "forest-path-01",
+
+    # To ancient temple
+    "temple": "ancient-temple-01",
+    "古庙": "ancient-temple-01",
+    "废墟": "ancient-temple-01",
+    "古庙废墟": "ancient-temple-01",
+    "神庙": "ancient-temple-01",
+    "去古庙": "ancient-temple-01",
+    "前往古庙": "ancient-temple-01",
+
+    # To vault
+    "vault": "vault-01",
+    "宝库": "vault-01",
+    "宝箱": "vault-01",
+    "地下宝库": "vault-01",
+    "古老宝库": "vault-01",
+    "去宝库": "vault-01",
+    "前往宝库": "vault-01",
 }
 
 

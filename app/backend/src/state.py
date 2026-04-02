@@ -954,6 +954,33 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
         elif eff.field == "spell_slot_consumed" and isinstance(eff.delta, int):
             # Spell slot already consumed by spell resolver, this is just for tracking
             pass
+        elif eff.field == "inventory_add" and isinstance(eff.delta, str):
+            # Add an item to inventory by item ID or name
+            from .scenes.data import get_scene_by_id
+            from .models.state import InventoryItem, ItemType
+            # Try to find the item in the current scene's loot_items
+            item_to_add = None
+            current_scene_data = get_scene_by_id(session.scene.id) if session.scene else None
+            if current_scene_data:
+                for loot_item in current_scene_data.loot_items:
+                    if loot_item.id == eff.delta or loot_item.name == eff.delta:
+                        item_to_add = loot_item
+                        break
+            # If not found in loot, create a simple item record
+            if item_to_add is None:
+                item_to_add = InventoryItem(
+                    id=eff.delta,
+                    name=eff.delta,
+                    type=ItemType.WEAPON,
+                    description=eff.description,
+                )
+            if session.actor is not None:
+                # Don't add duplicates
+                existing_ids = [i.id for i in actor.inventory]
+                if item_to_add.id not in existing_ids:
+                    session.actor = actor.model_copy(
+                        update={"inventory": [*actor.inventory, item_to_add]}
+                    )
         elif eff.field == "inventory_remove" and isinstance(eff.delta, str):
             # Remove consumed item from inventory
             if session.actor is not None:

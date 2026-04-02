@@ -11,6 +11,7 @@ class MapNode(BaseModel):
     name: str = Field(description="Display name of the scene")
     description: str = Field(description="Brief description of the scene")
     exits: list[dict[str, str]] = Field(default_factory=list, description="Available exits")
+    connections: list[str] = Field(default_factory=list, description="Connected scene IDs")
 
 
 class MapConnection(BaseModel):

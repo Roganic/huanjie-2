@@ -14,7 +14,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .models.action import Effect
+from .models.action import CombatState, Effect
 from .scene import SceneData, get_default_exploration_scene, get_scene_by_id
 from .models.state import (
     AbilityScores,
@@ -58,6 +58,9 @@ def _get_adventure_scene_init() -> dict:
         "actors": [],
         "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
     }
+
+
+_ADVENTURE_SCENE_INIT = _get_adventure_scene_init()
 
 _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
     CharacterClass.WARRIOR: {
@@ -166,6 +169,42 @@ SESSION_STORE_DIR.mkdir(parents=True, exist_ok=True)
 
 _CURRENT_SESSION_ID: ContextVar[str | None] = ContextVar("current_session_id", default=None)
 _SESSION_LOCK = threading.RLock()
+
+# Module-level combat state for agent orchestration
+_combat_state: CombatState | None = None
+
+
+def get_combat_state() -> CombatState:
+    global _combat_state
+    if _combat_state is None:
+        _combat_state = CombatState()
+    return _combat_state
+
+
+def start_combat_session() -> None:
+    global _combat_state
+    _combat_state = CombatState(is_active=True)
+
+
+def end_combat_session(outcome: str) -> None:
+    global _combat_state
+    if _combat_state is not None:
+        _combat_state.is_active = False
+        _combat_state.combat_ended = True
+        _combat_state.outcome = outcome
+
+
+def advance_combat_round() -> None:
+    global _combat_state
+    if _combat_state is not None:
+        _combat_state.round_number += 1
+
+
+def update_combatant_hp(combatant_id: str, hp: int) -> None:
+    global _combat_state
+    if _combat_state is None:
+        _combat_state = CombatState()
+    _combat_state.combatant_hp[combatant_id] = hp
 
 
 class SessionData(BaseModel):

@@ -16,9 +16,6 @@ from pydantic import BaseModel, Field
 
 from .models.action import CombatState, Effect
 from .scene import SceneData, get_default_exploration_scene, get_scene_by_id
-
-# Import persistence module for saving game state
-from . import game_state
 from .models.state import (
     AbilityScores,
     Actor,
@@ -322,6 +319,7 @@ def append_narrative_history(
         
         # Persist to save file for session restoration after restart
         try:
+            from . import game_state
             game_state.save_current_game(session_id=resolved_session_id)
         except Exception:
             # Don't fail action if save fails
@@ -571,6 +569,7 @@ def create_character(
         
         # Persist to save file for session restoration after restart
         try:
+            from . import game_state
             game_state.save_current_game(session_id=resolved_session_id)
         except Exception:
             # Don't fail character creation if save fails

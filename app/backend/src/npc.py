@@ -42,6 +42,7 @@ TAVERN_KEEPER = NPC(
     description="灯笼酒馆的老板，一位白发苍苍的老兵，瞎了一只眼但笑容温暖。",
     race="人类",
     occupation="酒馆老板",
+    role="merchant",
 )
 
 TAVERN_BARD = NPC(
@@ -51,6 +52,7 @@ TAVERN_BARD = NPC(
     description="在角落演奏竖琴的吟游诗人，据说知道很多古老传说。",
     race="精灵",
     occupation="吟游诗人",
+    role="quest_giver",
 )
 
 SUSPICIOUS_MERCHANT = NPC(
@@ -60,6 +62,7 @@ SUSPICIOUS_MERCHANT = NPC(
     description="独自坐在阴影中的神秘商人，时不时打量着进出的客人。",
     race="未知",
     occupation="商人",
+    role="merchant",
 )
 
 # Dungeon entrance NPCs
@@ -70,6 +73,7 @@ WOUNDED_ADVENTURER = NPC(
     description="从地下城逃出来的受伤冒险者，神情惊恐。",
     race="矮人",
     occupation="冒险者",
+    role="quest_giver",
 )
 
 GUARD_CORPSE = NPC(
@@ -79,6 +83,7 @@ GUARD_CORPSE = NPC(
     description="倒在地下城入口旁的石像守卫，身上布满了战斗的痕迹。",
     race="构造体",
     occupation="守卫",
+    role="guard",
 )
 
 # Combat encounter NPCs (enemies)
@@ -89,6 +94,7 @@ GOBLIN_SCOUT = NPC(
     description="一只瘦小的哥布林，手持锈迹斑斑的匕首，眼中闪烁着贪婪的光芒。",
     race="哥布林",
     occupation="斥候",
+    role="enemy",
 )
 
 GOBLIN_SHAMAN = NPC(
@@ -98,6 +104,7 @@ GOBLIN_SHAMAN = NPC(
     description="头戴骨饰的哥布林施法者，正在低声念诵某种咒语。",
     race="哥布林",
     occupation="萨满",
+    role="enemy",
 )
 
 WOLF_COMPANION = NPC(
@@ -107,6 +114,7 @@ WOLF_COMPANION = NPC(
     description="一只体型巨大的灰狼，獠牙外露，口水滴落在地上。",
     race="野兽",
     occupation="战斗伙伴",
+    role="enemy",
 )
 
 # NPC collections by scene
@@ -142,3 +150,62 @@ def get_npcs_by_ids(npc_ids: list[str]) -> list[NPC]:
 def get_npc_names_for_scene(npc_ids: list[str]) -> list[str]:
     """Get NPC names for display in a scene."""
     return [npc.name for npc_id in npc_ids if (npc := get_npc_by_id(npc_id)) is not None]
+
+
+# NPC interaction keywords
+_NPC_INTERACTION_KEYWORDS = [
+    # Chinese
+    "说话", "交谈", "聊天", "对话", "询问", "打听", "问", "聊", "谈",
+    "打招呼", "问候", "求助", "请求", "商量", "讨论", "说服", "劝说",
+    "贿赂", "交易", "购买", "卖", "买", "雇佣", "邀请",
+    # English
+    "talk", "speak", "chat", "converse", "ask", "inquire", "greet",
+    "question", "persuade", "convince", "bribe", "trade", "buy", "sell",
+    "hire", "invite", "approach", "address",
+]
+
+
+def _is_npc_interaction_text(text: str) -> bool:
+    """Check if text contains NPC interaction keywords."""
+    text_lower = text.lower()
+    return any(keyword in text_lower for keyword in _NPC_INTERACTION_KEYWORDS)
+
+
+def is_npc_interaction(intent: str, approach: str) -> bool:
+    """Check if an action intent/approach indicates NPC interaction."""
+    return _is_npc_interaction_text(intent) or _is_npc_interaction_text(approach)
+
+
+def find_target_npc(intent: str, approach: str, npcs: list[NPC]) -> Optional[NPC]:
+    """Find the target NPC from action text based on name matching.
+    
+    Args:
+        intent: The player's action intent
+        approach: The player's action approach
+        npcs: List of NPCs present in the current scene
+        
+    Returns:
+        The matched NPC if found, None otherwise
+    """
+    combined = f"{intent} {approach}".lower()
+    
+    for npc in npcs:
+        # Check for exact name match
+        if npc.name.lower() in combined:
+            return npc
+        # Check for ID match (without hyphens for flexibility)
+        npc_id_simple = npc.id.replace("-", "").lower()
+        if npc_id_simple in combined.replace("-", " ").lower():
+            return npc
+        # Check for race/occupation match if unique in scene
+        if npc.race and npc.race.lower() in combined:
+            # Only match if this race is unique in the scene
+            race_matches = [n for n in npcs if n.race and n.race.lower() == npc.race.lower()]
+            if len(race_matches) == 1:
+                return npc
+        if npc.occupation and npc.occupation.lower() in combined:
+            occupation_matches = [n for n in npcs if n.occupation and n.occupation.lower() == npc.occupation.lower()]
+            if len(occupation_matches) == 1:
+                return npc
+    
+    return None

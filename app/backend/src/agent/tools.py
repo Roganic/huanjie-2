@@ -285,6 +285,7 @@ def tool_generate_narrative(
     combat_round: Optional[int] = None,
     is_combat_ended: Optional[bool] = None,
     combat_outcome: Optional[str] = None,
+    npc_target: Optional[Any] = None,
 ) -> NarrativeResult:
     """Generate narrative text for the action resolution.
     
@@ -297,6 +298,7 @@ def tool_generate_narrative(
         combat_round: Optional combat round number
         is_combat_ended: Whether combat has ended
         combat_outcome: Combat outcome if ended
+        npc_target: Optional NPC target for interaction narrative
         
     Returns:
         NarrativeResult with generated narrative
@@ -324,6 +326,7 @@ def tool_generate_narrative(
         combat_round=combat_round,
         is_combat_ended=is_combat_ended,
         combat_outcome=combat_outcome,
+        npc_target=npc_target,
     )
     
     return NarrativeResult(

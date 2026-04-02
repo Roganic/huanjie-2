@@ -31,6 +31,7 @@ from ..models.action import (
     SavingThrowDetail,
 )
 from ..models.state import Actor, NarrativeHistoryEntry
+from ..npc import find_target_npc, is_npc_interaction
 from ..state import (
     append_narrative_history,
     end_combat_session,
@@ -127,6 +128,13 @@ class GMAgent:
         if req.action_type == ActionType.SKILL_CHECK or req.skill is not None:
             return self._resolve_skill_check(req, actor)
         
+        # Check for NPC interaction before generic action resolution
+        scene = get_scene()
+        if is_npc_interaction(req.intent, req.approach):
+            target_npc = find_target_npc(req.intent, req.approach, scene.npcs)
+            if target_npc is not None:
+                return self._resolve_npc_interaction(req, actor, target_npc)
+        
         return self._resolve_generic_action(req, actor)
     
     def _call_get_current_state(self) -> CurrentStateResult:
@@ -183,6 +191,7 @@ class GMAgent:
         combat_round: Optional[int] = None,
         is_combat_ended: Optional[bool] = None,
         combat_outcome: Optional[str] = None,
+        npc_target: Optional[Any] = None,
     ) -> NarrativeResult:
         """Call generate_narrative tool and record result."""
         result = tool_generate_narrative(
@@ -196,6 +205,7 @@ class GMAgent:
             combat_round=combat_round,
             is_combat_ended=is_combat_ended,
             combat_outcome=combat_outcome,
+            npc_target=npc_target,
         )
         self.tool_results.append(result)
         return result
@@ -353,6 +363,49 @@ class GMAgent:
         
         # Resolve as ability check
         return self._resolve_ability_check(req, actor, action_summary)
+    
+    def _resolve_npc_interaction(
+        self,
+        req: ActionRequest,
+        actor: Actor,
+        target_npc: Any,
+    ) -> ActionResponse:
+        """Resolve an NPC interaction action.
+        
+        NPC interactions follow a dedicated narrative path:
+        - No combat is triggered
+        - No character stats are modified
+        - The narrative is generated with the target NPC's identity in context
+        - The result is recorded in narrative history
+        """
+        action_summary = f"{req.actor} interacts with {target_npc.name}: {req.intent}"
+        
+        # Generate narrative with NPC target context
+        narrative_result = self._call_generate_narrative(
+            req=req,
+            outcome=Outcome.SUCCESS,
+            npc_target=target_npc,
+        )
+        
+        # Record to narrative history (no state effects for NPC interactions)
+        self._record_narrative_history(
+            action_summary=action_summary,
+            resolution_type=ResolutionType.AUTO_SUCCESS,
+            outcome=Outcome.SUCCESS,
+            narration_result=narrative_result,
+        )
+        
+        return ActionResponse(
+            action_summary=action_summary,
+            resolution_type=ResolutionType.AUTO_SUCCESS,
+            check=None,
+            attack=None,
+            outcome=Outcome.SUCCESS,
+            effects=[],  # NPC interactions do not modify character stats
+            narration=narrative_result.narrative,
+            scene_progression=narrative_result.scene_progression,
+            gm_prompt=narrative_result.gm_prompt,
+        )
     
     def _resolve_auto_success(
         self,

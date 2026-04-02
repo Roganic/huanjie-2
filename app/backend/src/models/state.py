@@ -239,6 +239,7 @@ class NPC(BaseModel):
     description: str = Field(default="", description="Brief description of the NPC")
     race: Optional[str] = Field(default=None, description="NPC race/species")
     occupation: Optional[str] = Field(default=None, description="NPC occupation or role")
+    role: Optional[str] = Field(default=None, description="NPC role type for narrative context (merchant/guard/quest_giver/etc)")
 
 
 class Scene(BaseModel):

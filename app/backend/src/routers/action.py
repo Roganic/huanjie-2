@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from ..agent.orchestrator import resolve_action_with_agent
 from ..models.action import ActionRequest, ActionResponse
 from ..models.state import AdventurePhase
+from ..npc import find_target_npc, is_npc_interaction
 from ..scene import get_scene_transition, build_scene_context_for_prompt, get_scene_by_id
 from ..state import (
     has_character,
@@ -122,6 +123,10 @@ async def submit_action(req: ActionRequest, request: Request):
                 switch_scene(target_scene_id, session_id)
                 # Re-fetch session to get updated state
                 session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+            # Check if this action is an NPC interaction - if so, do NOT trigger combat
+            elif is_npc_interaction(req.intent, req.approach) and find_target_npc(req.intent, req.approach, session.scene.npcs):
+                # NPC interaction stays in exploration phase
+                pass
             # Check if this action should trigger combat
             elif _should_trigger_combat(req.intent, req.approach):
                 # Transition to combat

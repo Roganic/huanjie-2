@@ -39,6 +39,7 @@ from .models.state import (
     SceneHistoryEntry,
     Skill,
 )
+from .memory import MemoryConfig, SessionMemory, get_session_memory, serialize_session_memory, deserialize_session_memory
 
 _CHARACTER_CREATION_SCENE_INIT = dict(
     id="character-creation-01",
@@ -60,6 +61,16 @@ def _get_adventure_scene_init() -> dict:
         "actors": [],
         "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
     }
+
+
+# Adventure scene init for combat end transition
+_ADVENTURE_SCENE_INIT = {
+    "id": "exploration-01",
+    "name": "边境林地",
+    "description": "战斗结束后，你环顾四周。这片边境林地静谧而幽深，阳光透过树叶的缝隙洒落。",
+    "actors": [],
+    "npcs": [],
+}
 
 _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
     CharacterClass.WARRIOR: {
@@ -182,6 +193,13 @@ MAX_STORED_NARRATIVE_HISTORY = 50
 MAX_SCENE_HISTORY = 10
 DEFAULT_PROMPT_HISTORY_ENTRIES = 5
 DEFAULT_PROMPT_HISTORY_CHARS = 1800
+
+# Session memory configuration
+DEFAULT_MEMORY_CONFIG = MemoryConfig(
+    max_entries=10,  # Keep last 10 actions in memory
+    max_prompt_entries=5,  # Include up to 5 in prompt
+    max_prompt_chars=2000,  # Limit prompt size
+)
 DEFAULT_SESSION_ID = "default-session"
 SESSION_TTL_SECONDS = max(60, int(os.getenv("SESSION_TTL_SECONDS", "43200")))
 SESSION_STORE_DIR = Path(
@@ -203,6 +221,8 @@ class SessionData(BaseModel):
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
     scene_history: list[SceneHistoryEntry] = Field(default_factory=list)
     updated_at: float = Field(default_factory=time.time)
+    # Session memory for AI narrative context (serialized)
+    memory_data: dict | None = Field(default=None, description="Serialized session memory data")
 
 
 _sessions: dict[str, SessionData] = {}
@@ -274,6 +294,44 @@ def get_narrative_history(session_id: str | None = None) -> list[NarrativeHistor
 def get_scene_history(session_id: str | None = None) -> list[SceneHistoryEntry]:
     session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
     return list(session.scene_history)
+
+
+def get_session_memory_for_session(session_id: str | None = None) -> SessionMemory:
+    """Get the session memory for the given session ID.
+    
+    Initializes memory from persisted data if available.
+    
+    Args:
+        session_id: Optional session ID (uses current if not provided)
+    
+    Returns:
+        SessionMemory instance for the session
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    session = _get_session(resolved_session_id, create_if_missing=True)
+    
+    # Initialize memory from persisted data if available
+    if session.memory_data:
+        try:
+            memory = deserialize_session_memory(session.memory_data)
+            # Ensure it uses the correct session ID
+            if memory.session_id != resolved_session_id:
+                memory.session_id = resolved_session_id
+            return memory
+        except Exception:
+            pass  # Fall back to creating new memory
+    
+    return get_session_memory(resolved_session_id, DEFAULT_MEMORY_CONFIG)
+
+
+def _persist_session_memory(session: SessionData) -> None:
+    """Persist session memory to session data."""
+    try:
+        memory = serialize_session_memory(session.session_id)
+        if memory:
+            session.memory_data = memory
+    except Exception:
+        pass  # Memory persistence is best-effort
 
 
 def append_scene_history(
@@ -354,6 +412,95 @@ def set_exploration_phase(session_id: str | None = None) -> None:
         session = _get_session(resolved_session_id, create_if_missing=True)
         session.game_phase = AdventurePhase.EXPLORATION
         _save_session(session)
+
+
+def get_combat_state(session_id: str | None = None):
+    """Get combat state for narrative context.
+    
+    This is a compatibility function that returns a minimal CombatState
+    for use by the narrative generator. Full combat state is managed
+    by the combat module.
+    
+    Args:
+        session_id: Optional session ID (uses current if not provided)
+    
+    Returns:
+        CombatState with is_active flag indicating if in combat
+    """
+    from .models.action import CombatState
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        
+        is_active = session.game_phase == AdventurePhase.COMBAT
+        
+        # Build minimal combat state from session data
+        return CombatState(
+            is_active=is_active,
+            round_number=1,
+            current_turn_index=0,
+            turn_order=[session.actor.id] if session.actor else [],
+            combatant_hp={
+                session.actor.id: session.actor.hp
+            } if session.actor else {},
+            combatant_names={
+                session.actor.id: session.actor.name
+            } if session.actor else {},
+        )
+
+
+def start_combat_session(session_id: str | None = None) -> None:
+    """Mark the session as entering combat.
+    
+    Args:
+        session_id: Optional session ID (uses current if not provided)
+    """
+    set_combat_scene(session_id)
+
+
+def end_combat_session(session_id: str | None = None) -> None:
+    """Mark the session as leaving combat.
+    
+    Args:
+        session_id: Optional session ID (uses current if not provided)
+    """
+    set_exploration_phase(session_id)
+
+
+def update_combatant_hp(combatant_id: str, new_hp: int, session_id: str | None = None) -> None:
+    """Update a combatant's HP in the session.
+    
+    Args:
+        combatant_id: ID of the combatant to update
+        new_hp: New HP value
+        session_id: Optional session ID (uses current if not provided)
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        
+        if session.actor and session.actor.id == combatant_id:
+            session.actor = session.actor.model_copy(update={"hp": max(0, new_hp)})
+            _save_session(session)
+        elif session.enemy and session.enemy.id == combatant_id:
+            session.enemy = session.enemy.model_copy(update={"hp": max(0, new_hp)})
+            _save_session(session)
+
+
+def advance_combat_round(session_id: str | None = None) -> None:
+    """Advance the combat round counter.
+    
+    This is a no-op for the current implementation as rounds
+    are tracked by the external combat module. Kept for API
+    compatibility.
+    
+    Args:
+        session_id: Optional session ID (uses current if not provided)
+    """
+    # Combat round advancement is handled by the external combat module
+    # This function exists for API compatibility
+    pass
 
 
 def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
@@ -814,6 +961,8 @@ def _load_session(session_id: str) -> SessionData | None:
 
 def _save_session(session: SessionData) -> None:
     session.updated_at = time.time()
+    # Persist session memory if it exists
+    _persist_session_memory(session)
     _persist_session(session)
 
 

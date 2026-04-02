@@ -23,9 +23,16 @@ from ..models.action import (
     Effect,
     Outcome,
 )
-from ..models.state import Actor, NarrativeHistoryEntry, NPC, Scene
-from ..config import get_llm_config
-from ..llm_client import OpenAICompatibleClient
+from ..models.state import Actor, NarrativeHistoryEntry, Scene
+from ..memory import (
+    MemoryConfig,
+    SessionMemory,
+    add_memory_entry,
+    get_memory_context,
+    get_session_memory,
+)
+from ..state import _resolve_session_id
+from .providers import get_provider
 from .resolution_constraints import (
     NarrationConstraintContext,
     ValidationResult,
@@ -112,7 +119,6 @@ def _build_hard_constraints(
     combat_round: Optional[int] = None,
     is_combat_ended: Optional[bool] = None,
     combat_outcome: Optional[str] = None,
-    npc_target: Optional[NPC] = None,
 ) -> list[str]:
     """Backward-compatible wrapper around centralized constraint mapping."""
     return build_hard_constraints(
@@ -127,7 +133,6 @@ def _build_hard_constraints(
             combat_round=combat_round,
             is_combat_ended=is_combat_ended,
             combat_outcome=combat_outcome,
-            npc_target=npc_target,
         )
     )
 
@@ -146,7 +151,7 @@ def _build_narrative_prompt(
     combat_round: Optional[int] = None,
     is_combat_ended: Optional[bool] = None,
     combat_outcome: Optional[str] = None,
-    npc_target: Optional[NPC] = None,
+    memory_context: Optional[list[dict]] = None,
 ) -> str:
     """Backward-compatible wrapper around centralized prompt building."""
     return build_narrative_prompt(
@@ -164,9 +169,9 @@ def _build_narrative_prompt(
             combat_round=combat_round,
             is_combat_ended=is_combat_ended,
             combat_outcome=combat_outcome,
-            npc_target=npc_target,
         ),
         narrative_history=narrative_history,
+        memory_context=memory_context,
     )
 
 
@@ -182,7 +187,6 @@ def _fallback_action_result(
     attack_result: Optional[dict] = None,
     is_combat_ended: Optional[bool] = None,
     combat_round: Optional[int] = None,
-    npc_target: Optional[NPC] = None,
 ) -> str:
     """Generate a template fallback narrative when API is unavailable."""
     
@@ -220,13 +224,6 @@ def _fallback_action_result(
                 f"but misses as the {target} dances aside at the last moment."
             )
     
-    # NPC interaction fallback
-    if npc_target:
-        return (
-            f"{actor.name} approaches {npc_target.name} and tries to {req.intent}. "
-            f"The interaction proceeds as expected, with {npc_target.name} responding in kind."
-        )
-
     # General action fallback
     if outcome == Outcome.SUCCESS:
         return (
@@ -247,7 +244,6 @@ def _fallback_scene_progression(
     outcome: Outcome,
     attack_result: Optional[dict] = None,
     is_combat_ended: Optional[bool] = None,
-    npc_target: Optional[NPC] = None,
 ) -> str:
     """Return a deterministic scene progression when AI is unavailable."""
     if attack_result:
@@ -260,12 +256,6 @@ def _fallback_scene_progression(
         return (
             f"The {target} regains footing as the fight resets for a heartbeat, and nearby movement grows tense. "
             f"You can reposition, watch for a counterattack, or call out to control the next exchange."
-        )
-
-    if npc_target:
-        return (
-            f"The conversation with {npc_target.name} settles into the atmosphere of {scene.name}. "
-            f"Others nearby continue their business, though some may be listening."
         )
 
     if outcome == Outcome.SUCCESS:
@@ -303,7 +293,6 @@ def _fallback_gm_prompt(
     attack_result: Optional[dict] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
     is_combat_ended: Optional[bool] = None,
-    npc_target: Optional[NPC] = None,
 ) -> str:
     history_callback = _build_history_callback(narrative_history)
     time_pressure = (
@@ -322,12 +311,6 @@ def _fallback_gm_prompt(
         return (
             f"{target} has seen your line now and the fight threatens to turn back on you."
             f"{history_callback}{time_pressure} What do you do before the counterpressure lands?"
-        )
-
-    if npc_target:
-        return (
-            f"{npc_target.name} seems to be waiting for your next words or action."
-            f"{history_callback}{time_pressure} Do you continue the conversation, change the subject, or move on?"
         )
 
     if outcome == Outcome.SUCCESS:
@@ -352,12 +335,11 @@ def _fallback_narration_bundle(
     combat_round: Optional[int] = None,
     is_combat_ended: Optional[bool] = None,
     combat_outcome: Optional[str] = None,
-    npc_target: Optional[NPC] = None,
 ) -> NarrationBundle:
     return NarrationBundle(
-        action_result=_fallback_action_result(req, actor, scene, outcome, attack_result, is_combat_ended, combat_round, npc_target),
-        scene_progression=_fallback_scene_progression(req, actor, scene, outcome, attack_result, is_combat_ended, npc_target),
-        gm_prompt=_fallback_gm_prompt(req, actor, scene, outcome, attack_result, narrative_history, is_combat_ended, npc_target),
+        action_result=_fallback_action_result(req, actor, scene, outcome, attack_result, is_combat_ended, combat_round),
+        scene_progression=_fallback_scene_progression(req, actor, scene, outcome, attack_result, is_combat_ended),
+        gm_prompt=_fallback_gm_prompt(req, actor, scene, outcome, attack_result, narrative_history, is_combat_ended),
     )
 
 
@@ -418,20 +400,18 @@ def _narration_respects_constraints(
 
 
 async def _call_kimi_api(prompt: str) -> Optional[NarrationBundle]:
-    config = get_llm_config("kimi")
-    if config is None:
+    provider = get_provider("kimi")
+    if provider is None:
         return None
-    client = OpenAICompatibleClient(config)
-    generated = await client.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
+    generated = await provider.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
     return _parse_narration_bundle(generated) if generated else None
 
 
 async def _call_openai_api(prompt: str) -> Optional[NarrationBundle]:
-    config = get_llm_config("openai")
-    if config is None:
+    provider = get_provider("openai")
+    if provider is None:
         return None
-    client = OpenAICompatibleClient(config)
-    generated = await client.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
+    generated = await provider.generate(NARRATIVE_SYSTEM_PROMPT, prompt)
     return _parse_narration_bundle(generated) if generated else None
 
 
@@ -449,7 +429,7 @@ def generate_narration(
     combat_round: Optional[int] = None,
     is_combat_ended: Optional[bool] = None,
     combat_outcome: Optional[str] = None,
-    npc_target: Optional[NPC] = None,
+    session_id: Optional[str] = None,
 ) -> NarrationBundle:
     """Generate structured narrative text for an action resolution.
     
@@ -471,6 +451,7 @@ def generate_narration(
         combat_round: Optional combat round number
         is_combat_ended: Whether combat has ended
         combat_outcome: Combat outcome if ended ('victory', 'defeat')
+        session_id: Optional session ID for memory tracking
         
     Returns:
         Narration bundle for action result and scene progression
@@ -486,8 +467,13 @@ def generate_narration(
         combat_round=combat_round,
         is_combat_ended=is_combat_ended,
         combat_outcome=combat_outcome,
-        npc_target=npc_target,
     )
+    
+    # Get session memory context for enhanced narrative continuity
+    resolved_session_id = session_id or _resolve_session_id(None)
+    memory_context = get_memory_context(resolved_session_id)
+    
+    # Build prompt with narrative history and memory context
     prompt = _build_narrative_prompt(
         req=req,
         actor=actor,
@@ -502,8 +488,52 @@ def generate_narration(
         combat_round=combat_round,
         is_combat_ended=is_combat_ended,
         combat_outcome=combat_outcome,
-        npc_target=npc_target,
+        memory_context=memory_context if memory_context else None,
     )
+
+    # Log session memory context for observability
+    history_count = len(narrative_history) if narrative_history else 0
+    memory_count = len(memory_context) if memory_context else 0
+    
+    if memory_count > 0:
+        # Log memory context entries (new session memory system)
+        recent_memories = memory_context[-3:] if memory_count >= 3 else memory_context
+        memory_summaries = [
+            f"[{i+1}] {m.get('action', 'unknown')[:50]}..." if len(m.get('action', '')) > 50 
+            else f"[{i+1}] {m.get('action', 'unknown')}"
+            for i, m in enumerate(recent_memories)
+        ]
+        logger.info(
+            "Narrative prompt includes %d session memory entries",
+            memory_count,
+            extra={
+                "session_id": resolved_session_id,
+                "memory_count": memory_count,
+                "recent_memories": memory_summaries,
+                "actor": actor.name,
+                "action_intent": req.intent[:100],
+                "has_memory_context": True,
+            },
+        )
+    elif history_count > 0:
+        # Fallback: log legacy narrative history
+        recent_entries = narrative_history[-3:] if history_count >= 3 else narrative_history
+        recent_summaries = [
+            f"[{i+1}] {e.action_summary[:50]}..." if len(e.action_summary) > 50 else f"[{i+1}] {e.action_summary}"
+            for i, e in enumerate(recent_entries)
+        ]
+        logger.info(
+            "Narrative prompt includes %d history entries",
+            history_count,
+            extra={
+                "session_id": resolved_session_id,
+                "history_count": history_count,
+                "recent_history": recent_summaries,
+                "actor": actor.name,
+                "action_intent": req.intent[:100],
+                "has_memory_context": False,
+            },
+        )
 
     # Log combat narrative prompts for observability
     if attack_result:
@@ -519,6 +549,8 @@ def generate_narration(
                 "target_hp": target.hp if target else None,
                 "combat_round": combat_round,
                 "is_combat_ended": is_combat_ended,
+                "history_in_context": history_count,
+                "memory_in_context": memory_count,
                 "prompt_preview": prompt[:800],
             },
         )
@@ -531,7 +563,13 @@ def generate_narration(
                 return asyncio.run(_call_openai_api(current_prompt))
             if req.provider == "kimi" or KIMI_API_KEY:
                 return asyncio.run(_call_kimi_api(current_prompt))
-            return None
+
+            provider = get_provider(req.provider)
+            if provider is None:
+                return None
+
+            generated = asyncio.run(provider.generate(NARRATIVE_SYSTEM_PROMPT, current_prompt))
+            return _parse_narration_bundle(generated) if generated else None
         except Exception:
             return None
 
@@ -595,5 +633,4 @@ def generate_narration(
         combat_round=combat_round,
         is_combat_ended=is_combat_ended,
         combat_outcome=combat_outcome,
-        npc_target=npc_target,
     )

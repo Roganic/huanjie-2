@@ -10,8 +10,10 @@ from combat import (
     CombatOutcome,
     clear_combat_state,
     execute_attack_action,
+    execute_enemy_turn,
     load_combat_state,
     next_turn,
+    run_all_enemy_turns,
     save_combat_state,
     start_combat,
 )
@@ -100,7 +102,10 @@ def _generate_narrative(result, attacker_name: str, target_name: str) -> str:
 
 
 def _run_enemy_turn(combat_state) -> dict | None:
-    """Run a simple enemy AI turn. Returns action result dict or None."""
+    """Run a single enemy AI turn using the new enemy AI system.
+    
+    Returns action result dict with full D&D 5e attack details or None.
+    """
     if combat_state.outcome != CombatOutcome.ONGOING:
         return None
 
@@ -108,21 +113,20 @@ def _run_enemy_turn(combat_state) -> dict | None:
     if current is None or current.type != CombatantType.ENEMY:
         return None
 
-    player = combat_state.get_players()[0] if combat_state.get_players() else None
-    if player is None or not player.is_alive():
+    # Skip if enemy is dead/defeated
+    if not current.is_alive():
         return None
 
-    weapon = "dagger"
-    result = execute_attack_action(combat_state, current.id, player.id, weapon)
-    narrative = _generate_narrative(result, current.name, player.name)
+    # Execute enemy turn using new AI system
+    result = execute_enemy_turn(current, combat_state)
+    if result is None:
+        return None
+
+    # Advance to next turn
     next_turn(combat_state)
-    return {
-        "actor": current.name,
-        "hit": result.hit,
-        "damage": result.damage.total if result.hit and result.damage else 0,
-        "updated_hp": player.hp,
-        "narrative": narrative,
-    }
+    
+    # Return full action details including D&D 5e resolution fields
+    return result.to_dict()
 
 
 @router.post("/start")
@@ -283,12 +287,24 @@ async def combat_action(request: Request):
         if req.action_type == "attack":
             next_turn(combat_state)
 
-        # Run enemy turn(s) if needed
+        # Run all enemy turns until it's player's turn again or combat ends
         enemy_actions = []
-        if combat_state.outcome == CombatOutcome.ONGOING:
+        while combat_state.outcome == CombatOutcome.ONGOING:
+            current = combat_state.current_combatant()
+            if current is None or current.type != CombatantType.ENEMY:
+                break
+            
+            # Skip dead enemies
+            if not current.is_alive():
+                next_turn(combat_state)
+                continue
+            
             enemy_result = _run_enemy_turn(combat_state)
             if enemy_result:
                 enemy_actions.append(enemy_result)
+            else:
+                # Could not execute turn, skip to next
+                next_turn(combat_state)
 
         # Sync HP back to session
         _sync_hp_to_session(combat_state, session_id)

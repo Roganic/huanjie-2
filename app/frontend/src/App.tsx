@@ -174,6 +174,18 @@ interface CombatState {
   log: CombatLogEntry[];
 }
 
+interface LootItem {
+  item_id: string;
+  name: string;
+  quantity: number;
+}
+
+interface LootGained {
+  enemy_id: string;
+  enemy_name: string;
+  items: LootItem[];
+}
+
 interface CombatActionResult {
   action_type: CombatActionType;
   actor_id: string;
@@ -183,6 +195,7 @@ interface CombatActionResult {
   effects: Effect[];
   narrative: string;
   combat_state: CombatState;
+  loot_gained?: LootGained[];
 }
 
 interface ProviderOption {
@@ -1100,12 +1113,16 @@ function CombatScreen({
 
 interface CombatEndScreenProps {
   combat: CombatState;
+  lootGained?: LootGained[];
   onReturn: () => void;
 }
 
-function CombatEndScreen({ combat, onReturn }: CombatEndScreenProps) {
+function CombatEndScreen({ combat, lootGained, onReturn }: CombatEndScreenProps) {
   const isVictory = combat.status === "victory";
   const isEscape = combat.status === "escaped";
+
+  // Format loot for display
+  const hasLoot = lootGained && lootGained.length > 0 && lootGained.some(entry => entry.items.length > 0);
 
   return (
     <div className="combat-end-screen">
@@ -1121,6 +1138,29 @@ function CombatEndScreen({ combat, onReturn }: CombatEndScreenProps) {
               ? "你成功逃离了战斗。" 
               : "你在战斗中倒下了…"}
         </p>
+        
+        {/* Loot Display */}
+        {isVictory && hasLoot && (
+          <div className="combat-loot-section">
+            <h3>🎁 获得战利品</h3>
+            <div className="combat-loot-list">
+              {lootGained?.map((entry) => (
+                entry.items.length > 0 && (
+                  <div key={entry.enemy_id} className="combat-loot-entry">
+                    <div className="loot-enemy-name">从 {entry.enemy_name} 身上搜到：</div>
+                    <div className="loot-items">
+                      {entry.items.map((item, idx) => (
+                        <span key={idx} className="loot-item">
+                          {item.name} {item.quantity > 1 ? `x${item.quantity}` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )
+              ))}
+            </div>
+          </div>
+        )}
         <div className="combat-result-stats">
           <div className="result-stat">
             <span className="result-stat-label">战斗轮数</span>
@@ -1606,6 +1646,7 @@ function App() {
   const [selectedWeapon, setSelectedWeapon] = useState<string>("longsword");
   const [combatNarrative, setCombatNarrative] = useState<string>("");
   const [isCombatNarrativeStreaming, setIsCombatNarrativeStreaming] = useState(false);
+  const [combatLoot, setCombatLoot] = useState<LootGained[] | undefined>(undefined);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
@@ -2406,6 +2447,11 @@ function App() {
         });
         // Refresh bootstrap state to get updated game_phase
         await refreshState();
+        // Store loot gained from combat
+        if (finalResult.loot_gained && finalResult.loot_gained.length > 0) {
+          setCombatLoot(finalResult.loot_gained);
+        }
+        
         // If combat ended, show result and auto-return to exploration after delay
         if (finalResult.combat_state.status !== "active") {
           const isVictory = finalResult.combat_state.status === "victory";
@@ -2598,6 +2644,7 @@ function App() {
         ) : combatEnded && combat ? (
           <CombatEndScreen
             combat={combat}
+            lootGained={combatLoot}
             onReturn={returnToAdventure}
           />
         ) : inAdventure ? (

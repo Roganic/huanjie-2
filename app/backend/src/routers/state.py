@@ -46,6 +46,22 @@ async def state(request: Request):
     provided_session_id = _request_session_id(request)
     resolved_id = provided_session_id or session_id
     result["action_history"] = get_action_history(resolved_id)
+    
+    # Include interactive_elements for the current scene
+    from ..scenes.data import get_scene_by_id
+    scene_data = get_scene_by_id(bootstrap.scene.id)
+    if scene_data and scene_data.interactive_elements:
+        result["current_scene"] = result.get("scene", {})
+        result["current_scene"]["interactive_elements"] = [
+            {
+                "id": elem.id,
+                "name": elem.name,
+                "description": elem.description,
+                "hint": elem.hint,
+                "action_name": elem.action_name,
+            }
+            for elem in scene_data.interactive_elements
+        ]
     return result
 
 

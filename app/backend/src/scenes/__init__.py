@@ -5,6 +5,7 @@ Scenes are the primary locations where gameplay takes place.
 """
 
 from .data import (
+    InteractiveElement,
     SceneData,
     VILLAGE_SQUARE_SCENE,
     TAVERN_SCENE,
@@ -21,6 +22,7 @@ from .data import (
 )
 
 __all__ = [
+    "InteractiveElement",
     "SceneData",
     "VILLAGE_SQUARE_SCENE",
     "TAVERN_SCENE",

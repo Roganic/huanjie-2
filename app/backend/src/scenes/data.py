@@ -12,6 +12,32 @@ from pydantic import BaseModel, Field
 from ..models.state import NPC, NPCType, SceneExit
 
 
+# ---------------------------------------------------------------------------
+# Interactive Element Models
+# ---------------------------------------------------------------------------
+
+class InteractiveElement(BaseModel):
+    """An interactive element in a scene that can trigger skill checks.
+    
+    Interactive elements are environmental features that players can interact with,
+    potentially triggering skill checks with different outcomes based on success/failure.
+    """
+    id: str = Field(description="Unique identifier for this element")
+    name: str = Field(description="Display name of the element")
+    description: str = Field(description="Description shown to players")
+    hint: str = Field(description="Hint text suggesting possible interaction")
+    skill: str = Field(description="Skill required for the check (e.g., investigation, athletics)")
+    dc: int = Field(default=15, description="Difficulty class for the skill check")
+    action_name: str = Field(description="Name of the action to trigger this interaction")
+    action_description: str = Field(description="Description of what happens when triggered")
+    success_narrative: str = Field(description="Narrative text on successful check")
+    failure_narrative: str = Field(description="Narrative text on failed check")
+    reward_item: Optional[str] = Field(default=None, description="Optional item ID rewarded on success")
+    reward_info: Optional[str] = Field(default=None, description="Optional information revealed on success")
+    
+    model_config = {"populate_by_name": True}
+
+
 class SceneData(BaseModel):
     """Complete scene data including NPCs and available actions.
     
@@ -36,6 +62,10 @@ class SceneData(BaseModel):
     exits: list[SceneExit] = Field(
         default_factory=list,
         description="Available exits from this scene with direction names"
+    )
+    interactive_elements: list[InteractiveElement] = Field(
+        default_factory=list,
+        description="Interactive environmental elements that can trigger skill checks"
     )
     
     model_config = {"populate_by_name": True}
@@ -76,7 +106,7 @@ VILLAGE_SQUARE_SCENE = SceneData(
         "村庄的中心广场，几座破旧但整洁的房屋环绕着一口古老的水井。"
         "清晨的阳光洒在鹅卵石铺就的地面上，几个村民正在忙碌地准备着新的一天。"
         "铁匠铺传来叮叮当当的敲打声，杂货店老板正在门前整理货物。"
-        "北方是酒馆，东方是通往森林的小路。"
+        "一条小路通向村外的森林，另一条则通往村中心的酒馆。"
     ),
     actors=[],
     npcs=[
@@ -94,18 +124,18 @@ VILLAGE_SQUARE_SCENE = SceneData(
         "与村长托马斯交谈，打听消息",
         "去铁匠铺找格鲁姆修理装备",
         "在杂货店购买补给",
-        "向北前往酒馆",
-        "向东去地下城入口探险",
+        "前往酒馆休息",
+        "去地下城入口探险",
         "与村民交谈收集情报",
     ],
     connected_scenes=["tavern-01", "dungeon-entrance-01"],
     exits=[
-        SceneExit(direction="north", target_scene_id="tavern-01"),
-        SceneExit(direction="east", target_scene_id="dungeon-entrance-01"),
+        SceneExit(direction="酒馆", target_scene_id="tavern-01"),
+        SceneExit(direction="森林入口", target_scene_id="dungeon-entrance-01"),
     ],
 )
 
-# Scene 2: The Tavern
+# Scene 2: The Tavern (starting exploration scene)
 TAVERN_SCENE = SceneData(
     id="tavern-01",
     name="锈迹斑斑的灯笼酒馆",
@@ -113,7 +143,7 @@ TAVERN_SCENE = SceneData(
         "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。"
         "几个当地人默默地喝着酒，角落里传来轻柔的竖琴声。"
         "酒保老马库斯在吧台后面擦拭着酒杯，不时用独眼打量着客人。"
-        "向南可以返回村庄广场，向东则是通往森林的小路。"
+        "在酒馆后方，一堵古老的石壁上似乎有微弱的空气流通。"
     ),
     actors=[],
     npcs=[
@@ -131,15 +161,31 @@ TAVERN_SCENE = SceneData(
         "与老马库斯交谈，打听消息",
         "聆听银弦艾拉的演奏或询问传说",
         "接近神秘的商人",
-        "向东去地下城入口",
+        "离开酒馆，前往地下城入口",
         "在酒馆休息",
         "观察其他客人",
-        "向南返回村庄广场",
+        "返回村庄广场",
     ],
     connected_scenes=["village-square-01", "dungeon-entrance-01"],
     exits=[
-        SceneExit(direction="south", target_scene_id="village-square-01"),
-        SceneExit(direction="east", target_scene_id="dungeon-entrance-01"),
+        SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
+        SceneExit(direction="森林入口", target_scene_id="dungeon-entrance-01"),
+    ],
+    interactive_elements=[
+        InteractiveElement(
+            id="secret-climb-wall",
+            name="古老石壁",
+            description="酒馆后方的一堵古老石壁，表面有可以用来攀爬的裂缝。",
+            hint="这堵石壁看起来可以攀爬，裂缝似乎通向某个隐藏的地方。",
+            skill="athletics",
+            dc=14,
+            action_name="攀爬石壁",
+            action_description="利用石壁上的裂缝和突起，尝试攀爬到上方",
+            success_narrative="你成功攀上了石壁，发现一个小隐藏的壁龛，里面有一把精致的匕首！",
+            failure_narrative="石壁太滑了，你爬到一半就滑了下来，手臂有些擦伤。",
+            reward_item="hidden_dagger",
+            reward_info="石壁上方的壁龛似乎是以前的冒险者留下的",
+        ),
     ],
 )
 
@@ -152,7 +198,6 @@ DUNGEON_ENTRANCE_SCENE = SceneData(
         "入口旁躺着一具石像守卫的残骸，似乎经历过激烈的战斗。"
         "不远处，一个受伤的矮人靠在树干上，神情惊恐地看着地下城的方向。"
         "阴冷的风从黑暗中吹出，带来腐朽和某种更危险的气息。"
-        "向西可以返回村庄，向下则进入危险的地下宝库。"
     ),
     actors=[],
     npcs=[
@@ -167,14 +212,32 @@ DUNGEON_ENTRANCE_SCENE = SceneData(
         "与受伤的托尔金交谈，了解情况",
         "检查死去的守卫尸体",
         "检查石门上的符文",
-        "向下进入宝库",
-        "向西返回村庄",
+        "进入地下城",
+        "返回酒馆",
+        "返回村庄广场",
         "在入口处搜索线索",
     ],
-    connected_scenes=["village-square-01", "tavern-01", "vault-01"],
+    connected_scenes=["village-square-01", "tavern-01", "combat-encounter-01"],
     exits=[
-        SceneExit(direction="west", target_scene_id="village-square-01"),
-        SceneExit(direction="down", target_scene_id="vault-01"),
+        SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
+        SceneExit(direction="酒馆", target_scene_id="tavern-01"),
+        SceneExit(direction="地下城", target_scene_id="combat-entrance-01"),
+    ],
+    interactive_elements=[
+        InteractiveElement(
+            id="mysterious-chest",
+            name="神秘箱子",
+            description="一个被遗弃在角落的古老箱子，表面覆盖着奇怪的符文。",
+            hint="这个箱子看起来被锁住了，但似乎可以检查它的构造。",
+            skill="investigation",
+            dc=12,
+            action_name="调查神秘箱子",
+            action_description="仔细检查箱子的锁和符文，尝试找到打开它的方法",
+            success_narrative="你发现符文是一个简单的魔法陷阱。小心地解除后，箱子打开了，里面有一瓶治疗药水！",
+            failure_narrative="你不小心触发了符文的保护机制，箱子释放出一股寒气，但你未能打开它。",
+            reward_item="healing_potion",
+            reward_info="箱子里的符文是矮人制造的简单防护魔法",
+        ),
     ],
 )
 
@@ -212,41 +275,12 @@ COMBAT_ENCOUNTER_SCENE = SceneData(
     ],
 )
 
-# Scene 5: The Vault (treasure room)
-VAULT_SCENE = SceneData(
-    id="vault-01",
-    name="古老宝库",
-    description=(
-        "地下深处的一间石室，墙壁上镶嵌着发出微光的水晶。"
-        "中央的石台上放着一个古老的宝箱，周围散落着一些金币和珠宝。"
-        "空气中弥漫着古老魔法的气息，让人既兴奋又警惕。"
-        "向上可以返回地下城入口。"
-    ),
-    actors=[],
-    npcs=[
-        NPC(id="treasure-guardian-01", name="宝箱守护者", type=NPCType.HOSTILE,
-            description="守护着宝箱的魔法构造体，虽然已经残破但仍然危险。",
-            race="构造体", occupation="守护者"),
-    ],
-    available_actions=[
-        "打开宝箱",
-        "搜索周围的金币",
-        "检查墙壁上的水晶",
-        "向上返回地下城入口",
-    ],
-    connected_scenes=["dungeon-entrance-01"],
-    exits=[
-        SceneExit(direction="up", target_scene_id="dungeon-entrance-01"),
-    ],
-)
-
 # Scene registry for lookups
 SCENE_REGISTRY: dict[str, SceneData] = {
     VILLAGE_SQUARE_SCENE.id: VILLAGE_SQUARE_SCENE,
     TAVERN_SCENE.id: TAVERN_SCENE,
     DUNGEON_ENTRANCE_SCENE.id: DUNGEON_ENTRANCE_SCENE,
     COMBAT_ENCOUNTER_SCENE.id: COMBAT_ENCOUNTER_SCENE,
-    VAULT_SCENE.id: VAULT_SCENE,
 }
 
 # Scene transition keywords
@@ -289,18 +323,10 @@ SCENE_TRANSITION_KEYWORDS: dict[str, str] = {
     # To combat encounter
     "combat": "combat-encounter-01",
     "战斗": "combat-encounter-01",
+    "进入地下城": "combat-encounter-01",
     "进入通道": "combat-encounter-01",
     "深入": "combat-encounter-01",
     "前进": "combat-encounter-01",
-    
-    # To vault
-    "vault": "vault-01",
-    "宝库": "vault-01",
-    "古老宝库": "vault-01",
-    "去宝库": "vault-01",
-    "前往宝库": "vault-01",
-    "进入宝库": "vault-01",
-    "treasure": "vault-01",
 }
 
 
@@ -327,7 +353,7 @@ def get_scene_transition(intent: str) -> Optional[str]:
 
 def get_default_exploration_scene() -> SceneData:
     """Get the default starting exploration scene."""
-    return VILLAGE_SQUARE_SCENE
+    return TAVERN_SCENE
 
 
 def get_all_scene_names() -> dict[str, str]:

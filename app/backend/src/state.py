@@ -964,6 +964,46 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
                 session.actor = actor.model_copy(
                     update={"inventory": new_inventory}
                 )
+        elif eff.field == "inventory_add" and isinstance(eff.delta, str):
+            # Add item to inventory
+            if session.actor is not None:
+                item_name = eff.delta
+                # Try to find item definition in scene loot_items
+                new_item = None
+                from .scene import get_scene_by_id
+                scene_data = get_scene_by_id(session.scene.id)
+                if scene_data and scene_data.loot_items:
+                    for loot_item in scene_data.loot_items:
+                        if loot_item.name == item_name:
+                            new_item = loot_item
+                            break
+                # Fallback: try default items by name
+                if new_item is None:
+                    for weapon in DEFAULT_WEAPONS.values():
+                        if weapon.name == item_name:
+                            new_item = InventoryItem.from_weapon(weapon)
+                            break
+                if new_item is None:
+                    for armor in DEFAULT_ARMORS.values():
+                        if armor.name == item_name:
+                            new_item = InventoryItem.from_armor(armor)
+                            break
+                if new_item is None:
+                    for consumable in DEFAULT_CONSUMABLES.values():
+                        if consumable.name == item_name:
+                            new_item = InventoryItem.from_consumable(consumable)
+                            break
+                if new_item is None:
+                    # Generic fallback item
+                    new_item = InventoryItem(
+                        id=item_name.lower().replace(" ", "_").replace("　", "_"),
+                        name=item_name,
+                        type=ItemType.MISC,
+                        description="一个物品。",
+                    )
+                session.actor = actor.model_copy(
+                    update={"inventory": [*actor.inventory, new_item]}
+                )
         elif eff.field == "spell_slots_restored":
             # Spell slots already restored by rest resolver, this is just for tracking
             pass
@@ -1428,3 +1468,24 @@ def reset_explored_nodes(session_id: str | None = None) -> None:
         session = _get_session(resolved_session_id, create_if_missing=True)
         session.explored_nodes = []
         _save_session(session)
+
+
+def get_map_state(session_id: str | None = None) -> dict:
+    """Get the full map state including current node and explored nodes.
+    
+    Args:
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        Dict with map nodes, current_node, and explored_nodes
+    """
+    from .map import build_map_response
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        current_scene_id = session.scene.id
+        explored_nodes = list(session.explored_nodes)
+        if current_scene_id not in explored_nodes:
+            explored_nodes = explored_nodes + [current_scene_id]
+        return build_map_response(current_scene_id, explored_nodes)

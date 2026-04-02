@@ -41,7 +41,6 @@ from ..state import (
     get_combat_state,
     get_narrative_context,
     get_scene,
-    get_session_memory_for_session,
     start_combat_session,
     update_combatant_hp,
     _resolve_session_id,

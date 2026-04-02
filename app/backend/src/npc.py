@@ -174,3 +174,26 @@ def get_npcs_by_ids(npc_ids: list[str]) -> list[NPC]:
 def get_npc_names_for_scene(npc_ids: list[str]) -> list[str]:
     """Get NPC names for display in a scene."""
     return [npc.name for npc_id in npc_ids if (npc := get_npc_by_id(npc_id)) is not None]
+
+
+def find_target_npc(intent: str, npc_ids: list[str]) -> Optional[NPC]:
+    """Find a target NPC based on player intent.
+    
+    Stub implementation for backward compatibility.
+    """
+    intent_lower = intent.lower()
+    for npc_id in npc_ids:
+        npc = get_npc_by_id(npc_id)
+        if npc is None:
+            continue
+        if npc.name.lower() in intent_lower or npc_id.lower() in intent_lower:
+            return npc
+    return None
+
+
+def is_npc_interaction(intent: str, npc_ids: list[str]) -> bool:
+    """Check if the intent is an interaction with an NPC.
+    
+    Stub implementation for backward compatibility.
+    """
+    return find_target_npc(intent, npc_ids) is not None

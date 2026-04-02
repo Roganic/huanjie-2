@@ -73,11 +73,11 @@ def _is_item_use_action(intent: str, approach: str) -> bool:
     text = f"{intent} {approach}".lower().strip()
     for prefix in _ITEM_USE_PREFIXES:
         if prefix.isascii():
-            # English prefixes: require word boundary or space
-            if text.startswith(prefix.lower()) or f" {prefix.lower()}" in text:
+            # English prefixes: only match at start of text
+            if text.startswith(prefix.lower() + " ") or text == prefix.lower():
                 return True
         else:
-            # Chinese prefixes
+            # Chinese prefixes: only match at start of text
             if text.startswith(prefix) or text.startswith(f"{prefix}"):
                 return True
     return False

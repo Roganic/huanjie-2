@@ -12,6 +12,19 @@ from pydantic import BaseModel, Field
 from ..models.state import NPC, NPCType, SceneExit, InventoryItem
 
 
+class InteractiveElement(BaseModel):
+    """An interactive element in a scene that can trigger skill checks."""
+    id: str
+    name: str
+    action_name: str
+    skill: str
+    dc: int = 10
+    success_narrative: str = "你成功了。"
+    failure_narrative: str = "你失败了。"
+    reward_item: Optional[str] = None
+    reward_info: Optional[str] = None
+
+
 class SceneData(BaseModel):
     """Complete scene data including NPCs and available actions.
     
@@ -40,6 +53,10 @@ class SceneData(BaseModel):
     loot_items: list[InventoryItem] = Field(
         default_factory=list,
         description="Items available to pick up in this scene"
+    )
+    interactive_elements: list[InteractiveElement] = Field(
+        default_factory=list,
+        description="Interactive elements in this scene"
     )
     
     model_config = {"populate_by_name": True}

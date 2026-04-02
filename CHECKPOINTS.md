@@ -104,6 +104,42 @@
 
 **里程碑一最终状态**：✅ 可玩性验收通过，游戏端到端可玩
 
+## 2026-04-02 — 里程碑 2 功能完整性集成验收完成
+
+**验收状态：通过**
+
+完成里程碑二"功能完整性"端到端集成验收，所有已实现系统（叙事记忆、装备物品、战斗AI、掉落、升级、职业特性、回合顺序、地图）能够协同工作，构成完整可玩的游戏循环。
+
+**验收标准达成：**
+
+| 标准 | 状态 | 备注 |
+|-----|------|------|
+| 完整游戏循环集成测试 | ✅ 通过 | `test_full_game_loop_integration.py` 已创建，9个测试全部通过 |
+| 地图状态同步 | ✅ 通过 | GET /map 的 current_node 与 GET /state 的 scene.id 始终一致 |
+| 探索节点累积 | ✅ 通过 | explored_nodes 随场景切换正确累积 |
+| 战士职业特性 | ✅ 通过 | second_wind 使用后 hp 恢复且 class_features.second_wind_used 为 true |
+| 盗贼职业特性 | ✅ 通过 | sneak_attack_available 字段正确存在 |
+| 掉落系统 | ✅ 通过 | 战斗胜利后 inventory 包含掉落物品 |
+| 经验/升级系统 | ✅ 通过 | 战斗胜利后 xp 增加，达到阈值时 level 递增 |
+| 状态一致性 | ✅ 通过 | HP、XP、level、inventory、equipped、scene 等字段全程一致 |
+| 无回归失败 | ✅ 通过 | 原有失败测试从62个减少到54个（修复了movement.py问题）|
+
+**新增测试文件：**
+- `app/backend/tests/test_full_game_loop_integration.py`：9个集成测试
+  - `test_warrior_full_game_loop_integration`：战士完整循环
+  - `test_rogue_full_game_loop_with_sneak_attack`：盗贼完整循环（含偷袭）
+  - `test_mage_full_game_loop_integration`：法师完整循环
+  - `test_map_state_consistency_throughout_game_loop`：地图状态同步
+  - `test_combat_loot_and_xp_integration`：掉落和经验系统
+  - `test_item_usage_in_game_loop`：物品使用系统
+  - `test_state_consistency_all_fields`：所有字段一致性
+  - `test_class_features_throughout_game_loop`：职业特性验证
+  - `test_turn_order_and_enemy_ai_in_combat`：回合顺序和AI
+
+**Bug修复：**
+- 修复 `app/backend/src/scenes/movement.py` 第132行：`switch_scene` 返回布尔值而非元组，导致解包错误
+- 修复 `app/backend/routes/combat.py` 第293行：当攻击未命中时 `damage` 字段被设为 `None`，导致 `exclude_none=True` 时字段缺失，测试随机失败
+
 ---
 
 ## 当前共识

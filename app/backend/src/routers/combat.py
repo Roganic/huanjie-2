@@ -276,9 +276,11 @@ async def combat_state_endpoint(request: Request):
     }
 
 
-def _award_xp_on_victory(session_id: str, combat_state) -> dict | None:
-    """Award XP when enemy is defeated. Returns level_up info if applicable."""
+def _award_xp_and_loot_on_victory(session_id: str, combat_state) -> dict | None:
+    """Award XP and loot when enemy is defeated. Returns level_up and loot info if applicable."""
     from src.rules.experience import get_enemy_xp_reward, calculate_level_up
+    from src.loot import generate_combat_loot
+    from src.models.state import InventoryItem, ItemType
     
     with _SESSION_LOCK:
         session = _get_session(session_id, create_if_missing=False)
@@ -289,23 +291,55 @@ def _award_xp_on_victory(session_id: str, combat_state) -> dict | None:
         
         # Check if enemy was defeated (HP <= 0 or has 'defeated' condition)
         enemy_defeated = False
-        enemy_name = ""
+        defeated_enemies: list[tuple[str, str]] = []
         for combatant in combat_state.combatants:
             if combatant.type == CombatantType.ENEMY:
                 if combatant.hp <= 0 or combatant.status.value == "defeated":
                     enemy_defeated = True
-                    enemy_name = combatant.name
-                    break
+                    defeated_enemies.append((combatant.id, combatant.name))
         
         # Also check session enemy
-        if not enemy_defeated and session.enemy.hp <= 0:
+        if session.enemy.hp <= 0:
             enemy_defeated = True
-            enemy_name = session.enemy.name
+            if not any(eid == session.enemy.id for eid, _ in defeated_enemies):
+                defeated_enemies.append((session.enemy.id, session.enemy.name))
         
         if not enemy_defeated:
             return None
         
-        # Get XP reward
+        # Generate loot
+        loot = generate_combat_loot(defeated_enemies)
+        loot_items_for_response: list[dict] = []
+        inventory_items_to_add: list[InventoryItem] = []
+        
+        for entry in loot.loot_entries:
+            entry_items: list[dict] = []
+            for item in entry.items:
+                entry_items.append({
+                    "name": item.name,
+                    "quantity": item.quantity,
+                    "description": item.description,
+                })
+                # Convert LootItem to InventoryItem (generic misc type)
+                inventory_items_to_add.append(InventoryItem(
+                    id=item.item_id,
+                    name=item.name,
+                    type=ItemType.MISC,
+                    description=item.description or "战利品",
+                ))
+            if entry_items:
+                loot_items_for_response.append({
+                    "enemy_name": entry.enemy_name,
+                    "items": entry_items,
+                })
+        
+        # Add items to inventory
+        if inventory_items_to_add:
+            new_inventory = [*session.actor.inventory, *inventory_items_to_add]
+            session.actor = session.actor.model_copy(update={"inventory": new_inventory})
+        
+        # Get XP reward (use first defeated enemy)
+        enemy_name = defeated_enemies[0][1]
         xp_gained = get_enemy_xp_reward(enemy_name)
         
         # Calculate level-up
@@ -338,12 +372,13 @@ def _award_xp_on_victory(session_id: str, combat_state) -> dict | None:
             # Also heal to full on level up
             updates["hp"] = new_hp_max
         
-        session.actor = actor.model_copy(update=updates)
+        session.actor = session.actor.model_copy(update=updates)
         _save_session(session)
         
-        result = {
+        result: dict = {
             "xp_gained": xp_gained,
             "total_xp": new_xp,
+            "loot_gained": loot_items_for_response,
         }
         
         if level_up_result and level_up_result.leveled_up:
@@ -423,12 +458,18 @@ async def combat_action(request: Request):
             weapon_info = get_weapon_for_combat(actor, req.weapon)
             weapon_display_name = weapon_info.name if weapon_info else weapon
             player_narrative = _generate_narrative(result, current.name, target.name)
+            # Calculate damage value safely
+            if result.hit and result.damage is not None:
+                damage_value = result.damage.total
+            else:
+                damage_value = 0
+            
             response = {
                 "action_type": "attack",
                 "actor_id": current.id,
                 "target_id": target.id,
                 "hit": result.hit,
-                "damage": result.damage.total if result.hit and result.damage else 0,
+                "damage": damage_value,
                 "updated_hp": target.hp,
                 "narrative": player_narrative,
                 "outcome": combat_state.outcome.value,
@@ -481,10 +522,10 @@ async def combat_action(request: Request):
                 # Could not execute turn, skip to next
                 next_turn(combat_state)
 
-        # Award XP if victory
-        xp_result = None
+        # Award XP and loot if victory
+        victory_result = None
         if combat_state.outcome == CombatOutcome.VICTORY:
-            xp_result = _award_xp_on_victory(session_id, combat_state)
+            victory_result = _award_xp_and_loot_on_victory(session_id, combat_state)
 
         # Sync HP back to session
         _sync_hp_to_session(combat_state, session_id)
@@ -496,6 +537,7 @@ async def combat_action(request: Request):
         response["enemy_actions"] = enemy_actions
         response["combat_ended"] = combat_state.outcome != CombatOutcome.ONGOING
         response["victory"] = combat_state.outcome == CombatOutcome.VICTORY
+        response["loot_gained"] = victory_result.get("loot_gained", []) if victory_result else []
         
         # Add combat_state for test compatibility
         response["combat_state"] = {
@@ -520,10 +562,10 @@ async def combat_action(request: Request):
         }
         
         # Add XP and level-up info to response
-        if xp_result:
-            response["xp_gained"] = xp_result.get("xp_gained", 0)
-            if "level_up" in xp_result:
-                response["level_up"] = xp_result["level_up"]
+        if victory_result:
+            response["xp_gained"] = victory_result.get("xp_gained", 0)
+            if "level_up" in victory_result:
+                response["level_up"] = victory_result["level_up"]
 
         return response
     finally:

@@ -17,6 +17,7 @@ class ItemType(str, Enum):
     WEAPON = "weapon"
     ARMOR = "armor"
     CONSUMABLE = "consumable"
+    MISC = "misc"
 
 
 class Weapon(BaseModel):

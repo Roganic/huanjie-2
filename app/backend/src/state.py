@@ -245,6 +245,10 @@ class SessionData(BaseModel):
         default_factory=dict,
         description="NPC dialogue states by NPC ID"
     )
+    explored_nodes: list[str] = Field(
+        default_factory=list,
+        description="List of scene IDs that have been explored by the player"
+    )
     updated_at: float = Field(default_factory=time.time)
 
 
@@ -483,6 +487,11 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
             time=session.scene.time,  # Preserve time from previous scene
             exits=exits,  # Include exits for navigation
         )
+        
+        # Add new scene to explored nodes
+        if scene_id not in session.explored_nodes:
+            session.explored_nodes = [*session.explored_nodes, scene_id]
+        
         _save_session(session)
     return True
 
@@ -664,6 +673,8 @@ def create_character(
         session.enemy = Actor(**_ENEMY_INIT)
         session.narrative_history = []
         session.scene_history = []
+        # Initialize explored nodes with current scene
+        session.explored_nodes = [scene_data.id]
         _save_session(session)
         
         # Persist to save file for session restoration after restart
@@ -1053,6 +1064,8 @@ def _create_fresh_session(session_id: str) -> SessionData:
             npcs=scene_data.npcs,
             exits=scene_data.exits,
         )
+        # Initialize explored nodes for default session
+        session.explored_nodes = [scene_data.id]
 
     return session
 
@@ -1349,3 +1362,50 @@ def is_first_npc_contact(
         True if this is the first contact, False otherwise
     """
     return get_npc_dialogue_count(npc_id, session_id) == 0
+    """
+    return get_npc_dialogue_count(npc_id, session_id) == 0
+
+
+# -----------------------------------------------------------------------------
+# Map Exploration Functions
+# -----------------------------------------------------------------------------
+
+def get_explored_nodes(session_id: str | None = None) -> list[str]:
+    """Get list of explored scene IDs for a session.
+    
+    Args:
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        List of scene IDs that have been explored
+    """
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return list(session.explored_nodes)
+
+
+def add_explored_node(scene_id: str, session_id: str | None = None) -> None:
+    """Add a scene to the explored nodes list.
+    
+    Args:
+        scene_id: The scene ID to add
+        session_id: The session ID (uses current session if None)
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if scene_id not in session.explored_nodes:
+            session.explored_nodes = [*session.explored_nodes, scene_id]
+            _save_session(session)
+
+
+def reset_explored_nodes(session_id: str | None = None) -> None:
+    """Clear all explored nodes for a session.
+    
+    Args:
+        session_id: The session ID (uses current session if None)
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        session.explored_nodes = []
+        _save_session(session)

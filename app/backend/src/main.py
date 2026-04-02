@@ -243,17 +243,30 @@ async def state(request: Request):
     except Exception:
         pass
 
+    # Include active module information
+    from .modules.manager import get_module_manager
+    manager = get_module_manager()
+    active_module = manager.get_active_module(session_id)
+    if active_module:
+        result["active_module"] = {
+            "id": active_module.module_id,
+            "name": active_module.module_name,
+            "current_node_id": active_module.current_node_id,
+            "current_scene_id": active_module.current_scene_id,
+        }
+
     return result
 
 
 # Include routers AFTER defining persistence endpoints
-from .routers import action, character, combat as combat_router, health, map as map_router, state
+from .routers import action, character, combat as combat_router, health, map as map_router, modules as modules_router, state
 
 app.include_router(health.router)
 app.include_router(action.router)
 app.include_router(character.router)
 app.include_router(state.router)
 app.include_router(map_router.router)
+app.include_router(modules_router.router)
 
 # Include routes modules (these take precedence for combat endpoints)
 from routes import combat as combat_routes

@@ -1,0 +1,529 @@
+{
+  "id": "starter_village",
+  "name": "新手村的呼唤",
+  "description": "一个适合新手的入门冒险模组。玩家来到一个宁静的村庄，帮助村长解决地精骚扰的问题，学习基础的战斗和探索机制。",
+  "metadata": {
+    "author": "幻界 2.0",
+    "version": "1.0.0",
+    "created_at": "2026-04-02",
+    "tags": ["入门", "新手", "地精", "村庄"],
+    "difficulty": "easy",
+    "estimated_duration": "30-45分钟"
+  },
+  "scenes": [
+    {
+      "id": "village_square",
+      "name": "村庄广场",
+      "description": "村庄的中心广场，石砌的喷泉在阳光下闪闪发光。周围是几座木制房屋，村民们正在各自忙碌。广场北边是村长的屋子，南边通向村庄大门。",
+      "npc_ids": ["village_elder", "village_guard"],
+      "exits": [
+        {
+          "direction": "north",
+          "target_scene_id": "elder_house",
+          "description": "通往村长的小屋"
+        },
+        {
+          "direction": "south",
+          "target_scene_id": "village_gate",
+          "description": "通往村庄大门"
+        }
+      ],
+      "items": [],
+      "flags": [],
+      "lighting": "normal",
+      "atmosphere": "宁静祥和的村庄日常"
+    },
+    {
+      "id": "elder_house",
+      "name": "村长小屋",
+      "description": "村长的居所，比周围的房子稍大一些。屋内摆设简单但整洁，墙上挂着村庄的历史画卷。村长正在桌边沉思。",
+      "npc_ids": ["village_elder"],
+      "exits": [
+        {
+          "direction": "south",
+          "target_scene_id": "village_square",
+          "description": "返回村庄广场"
+        }
+      ],
+      "items": [
+        {
+          "id": "healing_potion",
+          "name": "治疗药水",
+          "description": "一瓶红色的药水，可以恢复生命值"
+        }
+      ],
+      "flags": [],
+      "lighting": "normal",
+      "atmosphere": "严肃而温馨"
+    },
+    {
+      "id": "village_gate",
+      "name": "村庄大门",
+      "description": "村庄的木质大门，两名守卫正在执勤。门外是一片郁郁葱葱的森林，隐约能听到鸟鸣声。最近地精就是从这条路骚扰村庄的。",
+      "npc_ids": ["village_guard"],
+      "exits": [
+        {
+          "direction": "north",
+          "target_scene_id": "village_square",
+          "description": "返回村庄广场"
+        },
+        {
+          "direction": "west",
+          "target_scene_id": "forest_edge",
+          "description": "前往森林边缘（危险）",
+          "locked": true,
+          "key_item_id": "elder_blessing"
+        }
+      ],
+      "items": [],
+      "flags": [],
+      "lighting": "normal",
+      "atmosphere": "守卫森严"
+    },
+    {
+      "id": "forest_edge",
+      "name": "森林边缘",
+      "description": "森林的边缘地带，树木开始变得茂密。地上有明显的脚印和一些被丢弃的地精装备。远处传来窸窸窣窣的声音。",
+      "npc_ids": [],
+      "exits": [
+        {
+          "direction": "east",
+          "target_scene_id": "village_gate",
+          "description": "返回村庄大门"
+        }
+      ],
+      "items": [
+        {
+          "id": "goblin_dagger",
+          "name": "地精匕首",
+          "description": "一把粗糙的匕首，地精使用的武器"
+        }
+      ],
+      "flags": ["combat_zone"],
+      "lighting": "dim",
+      "atmosphere": "紧张而危险"
+    }
+  ],
+  "npcs": [
+    {
+      "id": "village_elder",
+      "name": "村长玛格丽特",
+      "description": "一位慈祥但忧心忡忡的老妇人，白发苍苍，穿着朴素的村长服饰。她是村庄的领导者，深受村民爱戴。",
+      "race": "人类",
+      "role": "quest_giver",
+      "stats": {
+        "hp": 8,
+        "ac": 10,
+        "str": 8,
+        "dex": 10,
+        "con": 10
+      },
+      "dialogue_tree_id": "elder_dialogue",
+      "inventory": [
+        {
+          "id": "elder_blessing",
+          "name": "村长的祝福",
+          "description": "村长的口头祝福，允许你前往森林调查"
+        }
+      ],
+      "is_hostile": false
+    },
+    {
+      "id": "village_guard",
+      "name": "守卫汤姆",
+      "description": "一名年轻的村庄守卫，穿着简单的皮甲，手持长矛。他看起来很警惕，但眼神中透露出一丝紧张。",
+      "race": "人类",
+      "role": "ally",
+      "stats": {
+        "hp": 15,
+        "ac": 14,
+        "str": 14,
+        "dex": 12,
+        "con": 13
+      },
+      "dialogue_tree_id": "guard_dialogue",
+      "inventory": [],
+      "is_hostile": false
+    },
+    {
+      "id": "goblin_raider",
+      "name": "地精劫掠者",
+      "description": "一只绿皮肤的小个地精，穿着破烂的皮甲，手持生锈的短剑。它发出尖锐的叫声，看起来十分凶恶。",
+      "race": "地精",
+      "role": "enemy",
+      "stats": {
+        "hp": 10,
+        "ac": 12,
+        "str": 10,
+        "dex": 14,
+        "con": 10
+      },
+      "dialogue_tree_id": null,
+      "inventory": [
+        {
+          "id": "rusty_dagger",
+          "name": "生锈短剑",
+          "description": "一把生锈的短剑，勉强能用"
+        }
+      ],
+      "is_hostile": true
+    }
+  ],
+  "quests": [
+    {
+      "id": "goblin_menace",
+      "name": "地精的威胁",
+      "description": "村庄最近遭到地精的骚扰，村民们的安全受到威胁。村长请求你帮助解决这个问题。",
+      "status": "not_started",
+      "objectives": [
+        {
+          "id": "talk_to_elder",
+          "description": "与村长玛格丽特对话，了解情况",
+          "completed": false,
+          "optional": false
+        },
+        {
+          "id": "investigate_forest",
+          "description": "前往森林边缘调查地精的踪迹",
+          "completed": false,
+          "optional": false
+        },
+        {
+          "id": "defeat_goblin",
+          "description": "击败地精劫掠者",
+          "completed": false,
+          "optional": false
+        },
+        {
+          "id": "report_back",
+          "description": "向村长报告情况",
+          "completed": false,
+          "optional": false
+        }
+      ],
+      "rewards": {
+        "xp": 150,
+        "items": [
+          {
+            "id": "healing_potion",
+            "name": "治疗药水",
+            "quantity": 2
+          }
+        ],
+        "gold": 50
+      },
+      "prerequisites": [],
+      "starting_node_id": "village_arrival"
+    }
+  ],
+  "story_nodes": [
+    {
+      "id": "village_arrival",
+      "name": "抵达村庄",
+      "type": "start",
+      "description": "你来到了一个宁静的村庄，村民们的脸上带着忧虑。你决定了解一下情况。",
+      "scene_id": "village_square",
+      "npc_ids": ["village_guard"],
+      "dialogue_text": "欢迎来到我们的村庄，旅行者。虽然我很想热情地招待你，但最近地精的骚扰让我们都很紧张。",
+      "transitions": [
+        {
+          "target_node_id": "meet_elder",
+          "description": "前往村长小屋了解更多情况"
+        }
+      ],
+      "triggers": [],
+      "required_flags": [],
+      "sets_flags": ["arrived_at_village"]
+    },
+    {
+      "id": "meet_elder",
+      "name": "会见村长",
+      "type": "dialogue",
+      "description": "你进入村长的小屋，玛格丽特村长向你讲述了地精骚扰的问题。",
+      "scene_id": "elder_house",
+      "npc_ids": ["village_elder"],
+      "dialogue_text": "谢谢你愿意听我说话，旅行者。这些地精每天晚上都从西边森林出来偷我们的食物和牲畜。我们已经报警了，但卫兵们太忙了。你愿意帮助我们吗？",
+      "transitions": [
+        {
+          "target_node_id": "accept_quest",
+          "description": "接受村长的请求"
+        },
+        {
+          "target_node_id": "decline_quest",
+          "description": "暂时拒绝"
+        }
+      ],
+      "triggers": ["start_goblin_quest"],
+      "required_flags": ["arrived_at_village"],
+      "sets_flags": ["met_elder"]
+    },
+    {
+      "id": "accept_quest",
+      "name": "接受任务",
+      "type": "event",
+      "description": "你接受了村长的请求，决定帮助村庄解决地精的问题。村长给了你可以前往森林的许可。",
+      "scene_id": "elder_house",
+      "npc_ids": ["village_elder"],
+      "dialogue_text": "太感谢你了！这是通往森林的路，请小心。地精虽然弱小，但数量众多也很危险。愿幸运与你同在！",
+      "transitions": [
+        {
+          "target_node_id": "forest_investigation",
+          "description": "前往森林调查"
+        }
+      ],
+      "triggers": ["unlock_forest", "activate_quest"],
+      "required_flags": ["met_elder"],
+      "sets_flags": ["quest_accepted", "has_elder_blessing"]
+    },
+    {
+      "id": "decline_quest",
+      "name": "暂时拒绝",
+      "type": "dialogue",
+      "description": "你告诉村长你现在有其他事情要处理。村长看起来有些失望，但仍然欢迎你。",
+      "scene_id": "elder_house",
+      "npc_ids": ["village_elder"],
+      "dialogue_text": "我理解，每个人都有自己的路要走。如果你改变主意了，随时可以来找我。",
+      "transitions": [
+        {
+          "target_node_id": "meet_elder",
+          "description": "重新考虑接受任务"
+        }
+      ],
+      "triggers": [],
+      "required_flags": ["met_elder"],
+      "sets_flags": []
+    },
+    {
+      "id": "forest_investigation",
+      "name": "森林调查",
+      "type": "exploration",
+      "description": "你来到森林边缘，发现了地精的踪迹。突然，一只地精从灌木丛中跳了出来！",
+      "scene_id": "forest_edge",
+      "npc_ids": ["goblin_raider"],
+      "dialogue_text": "嘎啊！是人类！杀了你，抢走你的东西！",
+      "transitions": [
+        {
+          "target_node_id": "goblin_combat",
+          "description": "进入战斗"
+        }
+      ],
+      "triggers": ["spawn_goblin"],
+      "required_flags": ["quest_accepted", "has_elder_blessing"],
+      "sets_flags": ["found_goblin"]
+    },
+    {
+      "id": "goblin_combat",
+      "name": "地精战斗",
+      "type": "combat",
+      "description": "你与地精劫掠者展开了战斗！",
+      "scene_id": "forest_edge",
+      "npc_ids": ["goblin_raider"],
+      "dialogue_text": null,
+      "transitions": [
+        {
+          "target_node_id": "victory",
+          "description": "战斗胜利"
+        }
+      ],
+      "triggers": ["start_combat"],
+      "required_flags": ["found_goblin"],
+      "sets_flags": []
+    },
+    {
+      "id": "victory",
+      "name": "战斗胜利",
+      "type": "event",
+      "description": "你成功击败了地精劫掠者！地精倒在地上，它的武器掉落在旁边。你可以回去向村长报告了。",
+      "scene_id": "forest_edge",
+      "npc_ids": [],
+      "dialogue_text": null,
+      "transitions": [
+        {
+          "target_node_id": "quest_complete",
+          "description": "返回村庄报告"
+        }
+      ],
+      "triggers": ["complete_objective_defeat", "give_loot"],
+      "required_flags": ["found_goblin"],
+      "sets_flags": ["goblin_defeated"]
+    },
+    {
+      "id": "quest_complete",
+      "name": "任务完成",
+      "type": "end",
+      "description": "村长非常感谢你的帮助，给了你丰厚的奖励。村庄又恢复了平静。",
+      "scene_id": "elder_house",
+      "npc_ids": ["village_elder"],
+      "dialogue_text": "太棒了！你真是我们的英雄！这是给你的奖励，请你收下。以后这里随时欢迎你！",
+      "transitions": [],
+      "triggers": ["complete_quest", "give_rewards"],
+      "required_flags": ["goblin_defeated"],
+      "sets_flags": ["quest_completed", "village_hero"]
+    }
+  ],
+  "triggers": [
+    {
+      "id": "start_goblin_quest",
+      "name": "开始地精任务",
+      "description": "与村长对话后激活地精任务",
+      "conditions": [
+        {
+          "type": "flag",
+          "target_id": "met_elder",
+          "value": true,
+          "operator": "equals"
+        }
+      ],
+      "actions": [
+        {
+          "type": "set_quest_status",
+          "target_id": "goblin_menace",
+          "parameters": {"status": "active"}
+        }
+      ],
+      "once_only": true,
+      "enabled": true
+    },
+    {
+      "id": "unlock_forest",
+      "name": "解锁森林路径",
+      "description": "村长给予祝福后解锁通往森林的路",
+      "conditions": [
+        {
+          "type": "flag",
+          "target_id": "quest_accepted",
+          "value": true,
+          "operator": "equals"
+        }
+      ],
+      "actions": [
+        {
+          "type": "unlock_exit",
+          "target_id": "village_gate_west",
+          "parameters": {}
+        }
+      ],
+      "once_only": true,
+      "enabled": true
+    },
+    {
+      "id": "activate_quest",
+      "name": "激活任务目标",
+      "description": "设置初始任务目标为与村长对话完成",
+      "conditions": [],
+      "actions": [
+        {
+          "type": "complete_objective",
+          "target_id": "talk_to_elder",
+          "parameters": {}
+        }
+      ],
+      "once_only": true,
+      "enabled": true
+    },
+    {
+      "id": "spawn_goblin",
+      "name": "生成地精",
+      "description": "在森林边缘生成地精敌人",
+      "conditions": [
+        {
+          "type": "location",
+          "target_id": "forest_edge",
+          "value": null,
+          "operator": "equals"
+        }
+      ],
+      "actions": [
+        {
+          "type": "spawn_npc",
+          "target_id": "goblin_raider",
+          "parameters": {"location": "forest_edge"}
+        }
+      ],
+      "once_only": true,
+      "enabled": true
+    },
+    {
+      "id": "start_combat",
+      "name": "开始战斗",
+      "description": "进入与地精的战斗模式",
+      "conditions": [],
+      "actions": [
+        {
+          "type": "enter_combat",
+          "target_id": "goblin_raider",
+          "parameters": {}
+        }
+      ],
+      "once_only": true,
+      "enabled": true
+    },
+    {
+      "id": "complete_objective_defeat",
+      "name": "完成击败目标",
+      "description": "标记击败地精目标为完成",
+      "conditions": [],
+      "actions": [
+        {
+          "type": "complete_objective",
+          "target_id": "defeat_goblin",
+          "parameters": {}
+        }
+      ],
+      "once_only": true,
+      "enabled": true
+    },
+    {
+      "id": "give_loot",
+      "name": "给予战利品",
+      "description": "给予玩家击败地精的战利品",
+      "conditions": [],
+      "actions": [
+        {
+          "type": "add_item",
+          "target_id": "rusty_dagger",
+          "parameters": {"quantity": 1}
+        }
+      ],
+      "once_only": true,
+      "enabled": true
+    },
+    {
+      "id": "complete_quest",
+      "name": "完成任务",
+      "description": "标记地精任务为完成状态",
+      "conditions": [],
+      "actions": [
+        {
+          "type": "set_quest_status",
+          "target_id": "goblin_menace",
+          "parameters": {"status": "completed"}
+        }
+      ],
+      "once_only": true,
+      "enabled": true
+    },
+    {
+      "id": "give_rewards",
+      "name": "给予奖励",
+      "description": "给予任务完成奖励",
+      "conditions": [],
+      "actions": [
+        {
+          "type": "add_xp",
+          "target_id": "player",
+          "parameters": {"amount": 150}
+        },
+        {
+          "type": "add_gold",
+          "target_id": "player",
+          "parameters": {"amount": 50}
+        }
+      ],
+      "once_only": true,
+      "enabled": true
+    }
+  ],
+  "starting_scene_id": "village_square",
+  "starting_node_id": "village_arrival"
+}

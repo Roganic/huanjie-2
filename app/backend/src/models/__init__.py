@@ -21,11 +21,21 @@ from .character import (
     SkillDefinition,
 )
 from .module import (
-    ActiveModuleState,
-    ModuleDefinition,
+    ActiveModule,
+    Module,
+    ModuleMetadata,
+    ModuleNPC,
+    ModuleScene,
+    ModuleSummary,
     Quest,
+    QuestObjective,
+    QuestStatus,
     StoryNode,
-    StoryTrigger,
+    StoryNodeTransition,
+    Trigger,
+    TriggerAction,
+    TriggerCondition,
+    TriggerType,
 )
 from .state import (
     Actor,
@@ -41,12 +51,6 @@ from .state import (
 )
 
 __all__ = [
-    # Module models
-    "ActiveModuleState",
-    "ModuleDefinition",
-    "Quest",
-    "StoryNode",
-    "StoryTrigger",
     # Action models
     "ActionRequest",
     "ActionResponse",
@@ -65,6 +69,22 @@ __all__ = [
     "Equipment",
     "Skill",
     "SkillDefinition",
+    # Module models
+    "ActiveModule",
+    "Module",
+    "ModuleMetadata",
+    "ModuleNPC",
+    "ModuleScene",
+    "ModuleSummary",
+    "Quest",
+    "QuestObjective",
+    "QuestStatus",
+    "StoryNode",
+    "StoryNodeTransition",
+    "Trigger",
+    "TriggerAction",
+    "TriggerCondition",
+    "TriggerType",
     # State models
     "Actor",
     "BootstrapState",

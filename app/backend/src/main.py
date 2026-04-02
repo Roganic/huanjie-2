@@ -240,8 +240,13 @@ app.include_router(map_router.router)
 
 # Include routes modules (these take precedence for combat endpoints)
 from routes import combat as combat_routes
+from routes import save as save_routes
 
 app.include_router(combat_routes.router)
+# Register /load/{save_id} and the save-load routes from routes/save.py
+# Note: /save and /saves in main.py above take precedence over the router versions;
+# only /load/{save_id} (with path param) is new and not conflicting.
+app.include_router(save_routes.router)
 
 
 # Auto-load saved game on startup (if exists)

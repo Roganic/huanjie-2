@@ -40,12 +40,33 @@ from .models.state import (
     Skill,
     SpellSlot,
 )
-from .npc.dialogue_state import (
-    NPCDialogueState,
-    get_all_npc_dialogue_counts,
-    get_all_npc_dialogue_states,
-    reset_session_npc_states,
-)
+def _load_npc_dialogue_state_module():
+    """Load npc/dialogue_state.py directly, bypassing npc/__init__.py.
+
+    npc/__init__.py references find_target_npc and is_npc_interaction from
+    npc.py, but those functions were removed. Loading dialogue_state.py
+    directly avoids triggering the broken __init__.py.
+    """
+    import importlib.util as _ilu
+    import sys as _sys
+
+    mod_name = "src.npc._dialogue_state_direct"
+    if mod_name in _sys.modules:
+        return _sys.modules[mod_name]
+
+    _ds_path = Path(__file__).parent / "npc" / "dialogue_state.py"
+    _spec = _ilu.spec_from_file_location(mod_name, _ds_path)
+    _mod = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
+    _sys.modules[mod_name] = _mod
+    _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+    return _mod
+
+
+_npc_ds = _load_npc_dialogue_state_module()
+NPCDialogueState = _npc_ds.NPCDialogueState
+get_all_npc_dialogue_counts = _npc_ds.get_all_npc_dialogue_counts
+get_all_npc_dialogue_states = _npc_ds.get_all_npc_dialogue_states
+reset_session_npc_states = _npc_ds.reset_session_npc_states
 
 _CHARACTER_CREATION_SCENE_INIT = dict(
     id="character-creation-01",
@@ -1360,8 +1381,6 @@ def is_first_npc_contact(
         
     Returns:
         True if this is the first contact, False otherwise
-    """
-    return get_npc_dialogue_count(npc_id, session_id) == 0
     """
     return get_npc_dialogue_count(npc_id, session_id) == 0
 

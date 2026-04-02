@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -430,6 +430,7 @@ def generate_narration(
     is_combat_ended: Optional[bool] = None,
     combat_outcome: Optional[str] = None,
     session_id: Optional[str] = None,
+    npc_target: Optional[Any] = None,
 ) -> NarrationBundle:
     """Generate structured narrative text for an action resolution.
     

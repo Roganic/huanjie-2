@@ -10,6 +10,11 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from ..actions.scene_interaction import (
+    find_interactive_element,
+    handle_scene_interaction,
+    is_scene_interaction_action,
+)
 from ..agent.orchestrator import resolve_action_with_agent
 from ..models.action import ActionRequest, ActionResponse
 from ..models.state import AdventurePhase
@@ -132,7 +137,16 @@ async def submit_action(req: ActionRequest, request: Request):
             )
 
         try:
-            result = await asyncio.to_thread(resolve_action_with_agent, req)
+            # Check if this is a scene interaction action
+            session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+            element = find_interactive_element(req.intent, session.scene.id)
+            
+            if element is not None:
+                # Handle scene interaction with skill check
+                result, _ = handle_scene_interaction(req, element)
+            else:
+                # Use agent orchestrator for non-scene interactions
+                result = await asyncio.to_thread(resolve_action_with_agent, req)
         except Exception as exc:  # pragma: no cover - surfaced to client as SSE error
             error_message = str(exc)
 

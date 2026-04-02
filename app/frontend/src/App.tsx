@@ -84,6 +84,11 @@ interface NPC {
   occupation?: string;
 }
 
+interface SceneExit {
+  direction: string;
+  target_scene_id: string;
+}
+
 interface Scene {
   id: string;
   name: string;
@@ -91,6 +96,7 @@ interface Scene {
   actors: string[];
   npcs: NPC[];
   time?: number;
+  exits?: SceneExit[];
 }
 
 interface NarrativeHistoryEntry {
@@ -558,7 +564,7 @@ function CharacterCard({
   );
 }
 
-function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerName?: string; previousScene?: Scene | null }) {
+function SceneCard({ scene, playerName, previousScene, onExitClick }: { scene: Scene; playerName?: string; previousScene?: Scene | null; onExitClick?: (direction: string) => void }) {
   const timeChanged = previousScene !== undefined && previousScene !== null && previousScene.time !== scene.time;
 
   const npcTypeClass = (type: string) => {
@@ -582,6 +588,24 @@ function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerN
         <div className={`scene-time ${timeChanged ? "changed" : ""}`}>
           <span className="scene-time-label">⏱️ 场景时间</span>
           <span className="scene-time-value">{scene.time}</span>
+        </div>
+      )}
+
+      {scene.exits && scene.exits.length > 0 && (
+        <div className="scene-exits">
+          <div className="scene-exits-label">可用出口</div>
+          <div className="exit-buttons">
+            {scene.exits.map((exit, index) => (
+              <button
+                key={index}
+                className="exit-button"
+                onClick={() => onExitClick?.(exit.direction)}
+                title={`前往 ${exit.direction}`}
+              >
+                → {exit.direction}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1774,6 +1798,13 @@ function App() {
     }));
   };
 
+  const handleExitClick = (direction: string) => {
+    // Auto-fill movement command to input
+    const movementCommands = ["前往", "去", "走向", "进入"];
+    const command = movementCommands[Math.floor(Math.random() * movementCommands.length)];
+    setInput(`${command}${direction}`);
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
@@ -2241,6 +2272,7 @@ function App() {
               scene={bootstrap.scene}
               playerName={bootstrap.actor?.id}
               previousScene={previousBootstrap?.scene ?? null}
+              onExitClick={handleExitClick}
             />
           ) : (
             <div className="sidebar-loading">加载中…</div>

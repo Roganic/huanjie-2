@@ -57,6 +57,7 @@ def _get_adventure_scene_init() -> dict:
         "description": scene.description,
         "actors": [],
         "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
+        "exits": [exit.model_dump(mode="json") for exit in scene.exits],
     }
 
 
@@ -354,6 +355,7 @@ def set_combat_scene(session_id: str | None = None) -> None:
             actors=actors,
             npcs=COMBAT_ENCOUNTER_SCENE.npcs,
             time=session.scene.time,  # Preserve time from previous scene
+            exits=COMBAT_ENCOUNTER_SCENE.exits,
         )
         session.game_phase = AdventurePhase.COMBAT
         _save_session(session)
@@ -395,6 +397,7 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
             actors=actors,
             npcs=scene_data.npcs,
             time=session.scene.time,  # Preserve time from previous scene
+            exits=scene_data.exits,  # Include exits for navigation
         )
         _save_session(session)
     return True
@@ -553,6 +556,7 @@ def create_character(
             description=scene_data.description,
             actors=[session.actor.id],
             npcs=scene_data.npcs,
+            exits=scene_data.exits,
         )
         session.enemy = Actor(**_ENEMY_INIT)
         session.narrative_history = []
@@ -773,6 +777,7 @@ def _create_fresh_session(session_id: str) -> SessionData:
             description=scene_data.description,
             actors=[actor_id],
             npcs=scene_data.npcs,
+            exits=scene_data.exits,
         )
 
     return session

@@ -204,8 +204,13 @@ class TestInitializeRestResources:
         
         assert initialized.hit_dice_total == 1
         assert initialized.hit_dice_remaining == 1
-        assert initialized.spell_slots == {"1": 2}
-        assert initialized.spell_slots_max == {"1": 2}
+        assert len(initialized.spell_slots) == 1
+        assert initialized.spell_slots[0].level == 1
+        assert initialized.spell_slots[0].max == 2
+        assert initialized.spell_slots[0].current == 2
+        assert len(initialized.spell_slots_max) == 1
+        assert initialized.spell_slots_max[0].level == 1
+        assert initialized.spell_slots_max[0].max == 2
 
 
 class TestCanRestInPhase:

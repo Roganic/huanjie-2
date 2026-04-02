@@ -650,8 +650,12 @@ def create_character(
 
         # Initialize spell slots for mages (2 1st-level slots at level 1)
         spell_slots: list[SpellSlot] = []
+        spell_slots_max: list[SpellSlot] = []
         if req.character_class == CharacterClass.MAGE:
             spell_slots = [
+                SpellSlot(level=1, max=2, current=2),
+            ]
+            spell_slots_max = [
                 SpellSlot(level=1, max=2, current=2),
             ]
 
@@ -678,6 +682,9 @@ def create_character(
             inventory=inventory,
             equipped=equipped,
             spell_slots=spell_slots,
+            spell_slots_max=spell_slots_max,
+            hit_dice_total=1,
+            hit_dice_remaining=1,
             class_features=class_features,
         )
         session.phase = GamePhase.ADVENTURE

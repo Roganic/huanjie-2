@@ -9,7 +9,45 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from dataclasses import dataclass
+
 from .models.action import ActionRequest, ActionResponse, Outcome, ResolutionType
+
+
+@dataclass
+class MovementResult:
+    success: bool
+    message: str
+    new_scene_id: str | None = None
+
+
+def is_movement_action(intent: str, approach: str) -> bool:
+    """Check if the action is a movement action."""
+    text = f"{intent} {approach}".lower()
+    movement_keywords = [
+        "go", "move", "walk", "run", "head", "travel", "leave",
+        "去", "走", "前往", "离开", "移动", "进入",
+    ]
+    return any(kw in text for kw in movement_keywords)
+
+
+def handle_movement(intent: str, approach: str, session_id: str | None = None) -> MovementResult:
+    """Handle a movement action."""
+    # Minimal stub: movement is not implemented in scene system yet
+    return MovementResult(
+        success=False,
+        message="移动功能正在开发中。",
+    )
+
+
+def get_available_exits(session_id: str | None = None) -> list[dict]:
+    """Get available exits for the current scene."""
+    from .state import get_scene
+    scene = get_scene(session_id)
+    return [
+        {"direction": exit_info.direction, "target_scene_id": exit_info.target_scene_id}
+        for exit_info in scene.exits
+    ] if scene else []
 
 
 def is_equipment_action(intent: str, approach: str) -> bool:

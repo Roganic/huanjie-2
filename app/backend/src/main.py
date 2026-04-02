@@ -193,6 +193,42 @@ async def get_save_info():
     return info
 
 
+@app.get("/state")
+async def state(request: Request):
+    """Return the current game state with XP progress."""
+    from .state import (
+        get_action_history,
+        get_bootstrap_state,
+        require_bootstrap_state,
+        DEFAULT_SESSION_ID,
+    )
+    from .rules.experience import get_xp_progress
+
+    session_id = request.headers.get("X-Session-Id") or request.query_params.get("session_id")
+    provided_session_id = session_id
+    if session_id is None:
+        session_id = DEFAULT_SESSION_ID
+
+    try:
+        require_bootstrap_state(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
+
+    bootstrap = get_bootstrap_state(session_id)
+    result = bootstrap.model_dump(mode="json")
+    result["action_history"] = get_action_history(session_id)
+
+    if result.get("actor"):
+        actor = result["actor"]
+        xp = actor.get("experience_points", 0)
+        level = actor.get("level", 1)
+        progress = get_xp_progress(xp, level)
+        actor["xp"] = xp
+        actor["xp_to_next_level"] = progress.get("xp_for_next_level", 0)
+
+    return result
+
+
 # Include routers AFTER defining persistence endpoints
 from .routers import action, character, combat, health, state
 

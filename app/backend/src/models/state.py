@@ -250,6 +250,7 @@ class Actor(BaseModel):
     abilities: AbilityScores
     proficiency_bonus: int = 2
     level: int = 1
+    experience_points: int = 0
     hp: int
     hp_max: int
     ac: int = 10  # Armor Class, default 10 + DEX modifier
@@ -357,6 +358,7 @@ class CharacterCard(BaseModel):
     name: str
     class_: str = Field(..., alias="class")
     level: int
+    experience_points: int = 0
     proficiency_bonus: int
     attributes: dict[str, AttributeWithModifier]
     hp: HP

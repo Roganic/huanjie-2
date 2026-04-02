@@ -20,6 +20,11 @@ from .data import (
     get_all_scene_names,
     build_scene_context_for_prompt,
 )
+from ..action_handler import (
+    is_movement_action,
+    handle_movement,
+    get_available_exits,
+)
 
 __all__ = [
     "InteractiveElement",
@@ -36,4 +41,7 @@ __all__ = [
     "get_default_exploration_scene",
     "get_all_scene_names",
     "build_scene_context_for_prompt",
+    "is_movement_action",
+    "handle_movement",
+    "get_available_exits",
 ]

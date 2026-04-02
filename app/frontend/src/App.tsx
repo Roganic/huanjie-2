@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import { NarrativeHistory } from "./components/NarrativeHistory";
 
 interface Message {
   id: number;
@@ -74,11 +75,21 @@ interface Actor {
   skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
 }
 
+interface NPC {
+  id: string;
+  name: string;
+  type: "friendly" | "neutral" | "hostile";
+  description: string;
+  race?: string;
+  occupation?: string;
+}
+
 interface Scene {
   id: string;
   name: string;
   description: string;
   actors: string[];
+  npcs: NPC[];
   time?: number;
 }
 
@@ -350,131 +361,6 @@ function formatTime(timestamp: number): string {
   });
 }
 
-function NarrationBlock({
-  text,
-  variant = "result",
-}: {
-  text: string;
-  variant?: "result" | "progression" | "gm_prompt";
-}) {
-  const paragraphs = text.split("\n").filter((paragraph) => paragraph.trim() !== "");
-  const icon = variant === "progression" ? "🕯️" : variant === "gm_prompt" ? "🎯" : "📖";
-  const label = variant === "progression" ? "场景波动" : variant === "gm_prompt" ? "GM 提示" : "行动结果";
-
-  return (
-    <div className={`narration-block ${variant}`}>
-      <div className="narration-header">
-        <span className="narration-icon">{icon}</span>
-        <span className="narration-label">{label}</span>
-      </div>
-      <div className="narration-content">
-        {paragraphs.map((paragraph, index) => (
-          <p key={index} className="narration-paragraph">
-            {paragraph}
-          </p>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function LoadingNarration() {
-  return (
-    <div className="narration-block loading">
-      <div className="narration-header">
-        <span className="narration-icon">🎲</span>
-        <span className="narration-label">GM 正在叙述</span>
-      </div>
-      <div className="narration-skeleton">
-        <div className="skeleton-line" />
-        <div className="skeleton-line short" />
-        <div className="skeleton-line medium" />
-      </div>
-    </div>
-  );
-}
-
-function StreamingNarrationCard({
-  preview,
-}: {
-  preview: StreamingPreview;
-}) {
-  const hasNarration = preview.narration.trim().length > 0;
-  const hasProgression = preview.scene_progression.trim().length > 0;
-  const hasPrompt = preview.gm_prompt.trim().length > 0;
-
-  return (
-    <div className="resolution-card">
-      {!hasNarration && !hasProgression && !hasPrompt && <LoadingNarration />}
-      {hasNarration && <NarrationBlock text={preview.narration} variant="result" />}
-      {hasProgression && <NarrationBlock text={preview.scene_progression} variant="progression" />}
-      {hasPrompt && <NarrationBlock text={preview.gm_prompt} variant="gm_prompt" />}
-      {preview.interrupted && (
-        <div className="effects-list">
-          <div className="effect-item negative">叙事流已中断，已保留收到的片段。可以重试本次行动。</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ResolutionCard({ res }: { res: ActionResponse }) {
-  const isCheck = res.resolution_type === "check";
-  const outcomeClass = res.outcome === "success" ? "outcome-success" : "outcome-failure";
-  const outcomeLabel = res.outcome === "success" ? "成功" : "失败";
-
-  return (
-    <div className="resolution-card">
-      <div className="system-info-section">
-        <div className={`outcome-badge ${outcomeClass}`}>
-          {isCheck ? "检定" : "自动成功"} - {outcomeLabel}
-        </div>
-
-        {isCheck && res.check && (
-          <div className="check-details">
-            <span className="check-ability">{ABILITY_LABELS[res.check.ability] ?? res.check.ability}</span>
-            <span className="check-roll">
-              d20={res.check.roll}
-              {res.check.modifier >= 0 ? "+" : ""}
-              {res.check.modifier}
-              {res.check.proficiency_bonus > 0 && `+${res.check.proficiency_bonus}`}
-              {" = "}
-              <strong>{res.check.total}</strong>
-            </span>
-            <span className="check-dc">DC {res.check.dc}</span>
-            {res.check.advantage !== null && (
-              <span className="check-adv">{res.check.advantage ? "优势" : "劣势"}</span>
-            )}
-          </div>
-        )}
-
-        {res.effects.length > 0 && (
-          <div className="effects-list">
-            {res.effects.map((effect, index) => (
-              <div
-                key={index}
-                className={`effect-item ${
-                  typeof effect.delta === "number" && effect.delta > 0
-                    ? "positive"
-                    : typeof effect.delta === "number" && effect.delta < 0
-                      ? "negative"
-                      : ""
-                }`}
-              >
-                {effect.description}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <NarrationBlock text={res.narration} variant="result" />
-      <NarrationBlock text={res.scene_progression} variant="progression" />
-      <NarrationBlock text={res.gm_prompt} variant="gm_prompt" />
-    </div>
-  );
-}
-
 function HealthDot({ status }: { status: HealthStatus }) {
   const label =
     status === "loading" ? "连接中…" : status === "ok" ? "后端已连接" : "后端离线";
@@ -675,6 +561,18 @@ function CharacterCard({
 function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerName?: string; previousScene?: Scene | null }) {
   const timeChanged = previousScene !== undefined && previousScene !== null && previousScene.time !== scene.time;
 
+  const npcTypeClass = (type: string) => {
+    if (type === "friendly") return "npc-friendly";
+    if (type === "hostile") return "npc-hostile";
+    return "npc-neutral";
+  };
+
+  const npcTypeLabel = (type: string) => {
+    if (type === "friendly") return "友好";
+    if (type === "hostile") return "敌对";
+    return "中立";
+  };
+
   return (
     <div className="scene-card">
       <div className="scene-name">{scene.name}</div>
@@ -695,6 +593,21 @@ function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerN
               <span key={index} className={`actor-tag ${playerName && actor === playerName ? "player" : ""}`}>
                 {actor}
               </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {scene.npcs && scene.npcs.length > 0 && (
+        <div className="scene-npcs">
+          <div className="scene-npcs-label">场景 NPC</div>
+          <div className="npc-list">
+            {scene.npcs.map((npc) => (
+              <div key={npc.id} className={`npc-item ${npcTypeClass(npc.type)}`}>
+                <span className="npc-name">{npc.name}</span>
+                <span className="npc-type">{npcTypeLabel(npc.type)}</span>
+                <p className="npc-desc">{npc.description}</p>
+              </div>
             ))}
           </div>
         </div>
@@ -1411,8 +1324,6 @@ function App() {
     abilityGeneration: "standard_array",
   });
   const [creationError, setCreationError] = useState<string | null>(null);
-  const messagesEnd = useRef<HTMLDivElement>(null);
-
   // Combat state
   const [combat, setCombat] = useState<CombatState | null>(null);
   const [combatLoading, setCombatLoading] = useState(false);
@@ -1429,9 +1340,7 @@ function App() {
   const inCombat = gamePhase === "combat";
   const combatEnded = gamePhase === "ended";
 
-  useEffect(() => {
-    messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending, streamingPreview]);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -2278,30 +2187,11 @@ function App() {
           />
         ) : inAdventure ? (
           <>
-            <div className="messages">
-              {messages.length === 0 && <div className="empty-hint">输入一个行动开始冒险…</div>}
-              {messages.map((message) => (
-                <div key={message.id} className={`message ${message.role}`}>
-                  <div className="role">
-                    {message.role === "gm" ? "GM" : message.role === "player" ? "玩家" : "系统"}
-                  </div>
-                  {message.resolution ? (
-                    <ResolutionCard res={message.resolution} />
-                  ) : message.streamingPreview ? (
-                    <StreamingNarrationCard preview={message.streamingPreview} />
-                  ) : (
-                    message.text
-                  )}
-                </div>
-              ))}
-              {sending && streamingPreview && (
-                <div className="message gm loading">
-                  <div className="role">GM</div>
-                  <StreamingNarrationCard preview={streamingPreview} />
-                </div>
-              )}
-              <div ref={messagesEnd} />
-            </div>
+            <NarrativeHistory
+              messages={messages}
+              streamingPreview={streamingPreview}
+              sending={sending}
+            />
             <div className="input-bar">
               <input
                 value={input}

@@ -380,11 +380,28 @@ def _resolve_attack(req: ActionRequest) -> ActionResponse:
         )
 
     # Determine weapon and damage dice
-    weapon = req.weapon or "longsword"
-    damage_dice = req.damage_dice or get_weapon_damage(weapon)
+    # Priority: 1. Request override, 2. Equipped weapon, 3. Default fallback
+    if req.weapon:
+        weapon = req.weapon
+        damage_dice = req.damage_dice or get_weapon_damage(weapon)
+    elif actor.equipped and actor.equipped.weapon:
+        # Use equipped weapon
+        equipped_weapon = actor.equipped.weapon
+        weapon = equipped_weapon.name
+        damage_dice = req.damage_dice or equipped_weapon.damage_dice or get_weapon_damage(equipped_weapon.id)
+    else:
+        # Fallback default
+        weapon = "longsword"
+        damage_dice = req.damage_dice or get_weapon_damage(weapon)
 
     # Determine attack ability (STR for melee, DEX for finesse/ranged)
-    ability = req.ability or _infer_attack_ability(weapon)
+    # Priority: 1. Request override, 2. Equipped weapon's attack_ability, 3. Inferred from weapon name
+    if req.ability:
+        ability = req.ability
+    elif actor.equipped and actor.equipped.weapon and actor.equipped.weapon.attack_ability:
+        ability = actor.equipped.weapon.attack_ability
+    else:
+        ability = _infer_attack_ability(weapon)
     modifier = actor.abilities.modifier(ability)
     prof = actor.proficiency_bonus
     advantage = req.advantage

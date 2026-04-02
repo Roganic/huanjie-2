@@ -407,7 +407,7 @@ class GMAgent:
         check = CheckDetail(
             ability=ability,
             modifier=modifier,
-            proficiency_bonus=0,
+            proficiency_bonus=actor.proficiency_bonus,
             advantage=advantage,
             roll=roll_result.roll,
             total=total,
@@ -462,9 +462,24 @@ class GMAgent:
         action_summary = f"{actor.name} attacks {target.name} with {req.weapon or 'weapon'}"
         
         # Determine attack parameters
-        weapon = req.weapon or "longsword"
-        damage_dice = req.damage_dice or self._get_weapon_damage(weapon)
-        ability = req.ability or self._infer_attack_ability(weapon)
+        # Priority: 1. Request override, 2. Equipped weapon, 3. Default fallback
+        if req.weapon:
+            weapon = req.weapon
+            damage_dice = req.damage_dice or self._get_weapon_damage(weapon)
+        elif actor.equipped and actor.equipped.weapon:
+            equipped_weapon = actor.equipped.weapon
+            weapon = equipped_weapon.name
+            damage_dice = req.damage_dice or equipped_weapon.damage_dice or self._get_weapon_damage(equipped_weapon.id)
+        else:
+            weapon = "longsword"
+            damage_dice = req.damage_dice or self._get_weapon_damage(weapon)
+
+        if req.ability:
+            ability = req.ability
+        elif not req.weapon and actor.equipped and actor.equipped.weapon and actor.equipped.weapon.attack_ability:
+            ability = actor.equipped.weapon.attack_ability
+        else:
+            ability = self._infer_attack_ability(weapon)
         modifier = actor.abilities.modifier(ability)
         prof = actor.proficiency_bonus
         advantage = req.advantage

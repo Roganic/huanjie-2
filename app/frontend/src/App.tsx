@@ -58,6 +58,21 @@ interface AbilityScores {
   cha: number;
 }
 
+interface InventoryItem {
+  id: string;
+  name: string;
+  type: "weapon" | "armor";
+  damage_dice?: string;
+  attack_ability?: string;
+  base_ac?: number;
+  description?: string;
+}
+
+interface EquippedItems {
+  weapon: InventoryItem | null;
+  armor: InventoryItem | null;
+}
+
 interface Actor {
   id: string;
   name: string;
@@ -71,6 +86,8 @@ interface Actor {
   description: string;
   conditions?: string[];
   skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
+  inventory?: InventoryItem[];
+  equipped?: EquippedItems;
 }
 
 interface Scene {
@@ -565,6 +582,41 @@ function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolea
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function EquipmentDisplay({ equipped }: { equipped?: EquippedItems }) {
+  if (!equipped || (!equipped.weapon && !equipped.armor)) {
+    return <div className="equipment-empty">未装备任何物品</div>;
+  }
+
+  return (
+    <div className="equipment-display">
+      {equipped.weapon && (
+        <div className="equipment-item">
+          <span className="equipment-icon">⚔️</span>
+          <div className="equipment-info">
+            <span className="equipment-label">武器</span>
+            <span className="equipment-name">{equipped.weapon.name}</span>
+            {equipped.weapon.damage_dice && (
+              <span className="equipment-stat">{equipped.weapon.damage_dice}</span>
+            )}
+          </div>
+        </div>
+      )}
+      {equipped.armor && (
+        <div className="equipment-item">
+          <span className="equipment-icon">🛡️</span>
+          <div className="equipment-info">
+            <span className="equipment-label">防具</span>
+            <span className="equipment-name">{equipped.armor.name}</span>
+            {equipped.armor.base_ac !== undefined && (
+              <span className="equipment-stat">AC {equipped.armor.base_ac}</span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1851,6 +1903,11 @@ function App() {
                   />
                 ))}
               </div>
+            </section>
+
+            <section>
+              <h2>装备</h2>
+              <EquipmentDisplay equipped={bootstrap.actor.equipped} />
             </section>
 
             <section>

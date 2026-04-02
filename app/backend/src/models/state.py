@@ -8,6 +8,142 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator, validator
 
 
+# ---------------------------------------------------------------------------
+# Equipment and Inventory Models
+# ---------------------------------------------------------------------------
+
+class ItemType(str, Enum):
+    """Types of items."""
+    WEAPON = "weapon"
+    ARMOR = "armor"
+
+
+class Weapon(BaseModel):
+    """Weapon item definition."""
+    id: str
+    name: str
+    damage_dice: str  # e.g., "1d8", "1d6"
+    attack_ability: str = "str"  # "str" or "dex"
+    description: str = ""
+    
+    model_config = {"populate_by_name": True}
+
+
+class Armor(BaseModel):
+    """Armor item definition."""
+    id: str
+    name: str
+    base_ac: int  # Base AC value (e.g., 16 for chain mail)
+    add_dex_modifier: bool = True  # Whether to add DEX modifier
+    max_dex_bonus: int | None = None  # Max DEX bonus (None = no limit)
+    description: str = ""
+    
+    model_config = {"populate_by_name": True}
+
+
+class InventoryItem(BaseModel):
+    """An item in the character's inventory."""
+    id: str
+    name: str
+    type: ItemType
+    # For weapons
+    damage_dice: str | None = None
+    attack_ability: str | None = None
+    # For armor
+    base_ac: int | None = None
+    add_dex_modifier: bool = True
+    max_dex_bonus: int | None = None
+    description: str = ""
+    
+    model_config = {"populate_by_name": True}
+    
+    @classmethod
+    def from_weapon(cls, weapon: Weapon) -> "InventoryItem":
+        return cls(
+            id=weapon.id,
+            name=weapon.name,
+            type=ItemType.WEAPON,
+            damage_dice=weapon.damage_dice,
+            attack_ability=weapon.attack_ability,
+            description=weapon.description,
+        )
+    
+    @classmethod
+    def from_armor(cls, armor: Armor) -> "InventoryItem":
+        return cls(
+            id=armor.id,
+            name=armor.name,
+            type=ItemType.ARMOR,
+            base_ac=armor.base_ac,
+            add_dex_modifier=armor.add_dex_modifier,
+            max_dex_bonus=armor.max_dex_bonus,
+            description=armor.description,
+        )
+
+
+class EquippedItems(BaseModel):
+    """Currently equipped items."""
+    weapon: InventoryItem | None = None
+    armor: InventoryItem | None = None
+    
+    model_config = {"populate_by_name": True}
+
+
+# ---------------------------------------------------------------------------
+# Default Equipment Definitions
+# ---------------------------------------------------------------------------
+
+DEFAULT_WEAPONS: dict[str, Weapon] = {
+    "longsword": Weapon(
+        id="longsword",
+        name="长剑",
+        damage_dice="1d8",
+        attack_ability="str",
+        description="一把标准的长剑，平衡性良好。",
+    ),
+    "shortsword": Weapon(
+        id="shortsword",
+        name="短剑",
+        damage_dice="1d6",
+        attack_ability="dex",
+        description="一把轻便的短剑，适合快速攻击。",
+    ),
+    "quarterstaff": Weapon(
+        id="quarterstaff",
+        name="法杖",
+        damage_dice="1d6",
+        attack_ability="str",
+        description="一根结实的木质法杖，可用于施法和自卫。",
+    ),
+}
+
+DEFAULT_ARMORS: dict[str, Armor] = {
+    "chain_mail": Armor(
+        id="chain_mail",
+        name="锁甲",
+        base_ac=16,
+        add_dex_modifier=False,
+        description="由金属环编织而成的重甲。",
+    ),
+    "leather": Armor(
+        id="leather",
+        name="皮甲",
+        base_ac=11,
+        add_dex_modifier=True,
+        max_dex_bonus=None,
+        description="轻便的皮革护甲，不影响灵活性。",
+    ),
+    "robe": Armor(
+        id="robe",
+        name="布袍",
+        base_ac=10,
+        add_dex_modifier=True,
+        max_dex_bonus=None,
+        description="普通的布制长袍，几乎没有防护能力。",
+    ),
+}
+
+
 class AbilityScores(BaseModel):
     str_: int = Field(..., alias="str")
     dex: int
@@ -73,6 +209,9 @@ class Actor(BaseModel):
     conditions: list[str] = Field(default_factory=list)
     description: str = ""
     skills: list[Skill] = Field(default_factory=list)
+    # Inventory and equipment
+    inventory: list[InventoryItem] = Field(default_factory=list)
+    equipped: EquippedItems = Field(default_factory=EquippedItems)
 
 
 class Scene(BaseModel):
@@ -118,6 +257,12 @@ class CharacterSkill(BaseModel):
     modifier: int
 
 
+class CharacterEquipped(BaseModel):
+    """Equipped items for CharacterCard response."""
+    weapon: dict[str, Any] | None = None
+    armor: dict[str, Any] | None = None
+
+
 class CharacterCard(BaseModel):
     name: str
     class_: str = Field(..., alias="class")
@@ -127,6 +272,8 @@ class CharacterCard(BaseModel):
     hp: HP
     ac: int
     skills: list[CharacterSkill]
+    inventory: list[dict[str, Any]] = Field(default_factory=list)
+    equipped: CharacterEquipped = Field(default_factory=CharacterEquipped)
 
     model_config = {"populate_by_name": True}
 

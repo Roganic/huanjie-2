@@ -1,11 +1,10 @@
 """Scene content system for exploration phase.
 
-This module re-exports from scenes package for backward compatibility.
-New code should import directly from scenes module.
+This module manages scene data, scene switching, and scene-related utilities.
+Scenes are the primary locations where gameplay takes place.
 """
 
-# Re-export everything from scenes package for backward compatibility
-from .scenes import (
+from .data import (
     SceneData,
     TAVERN_SCENE,
     VILLAGE_SQUARE_SCENE,

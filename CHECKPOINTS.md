@@ -64,6 +64,46 @@
 - 战斗系统完整实现：攻击检定、伤害计算、AC对比、defeated状态、硬约束叙事
 - 多步骤Agent编排：支持法术攻击（攻击+豁免+伤害）等复杂动作链
 
+## 2026-04-02 — 可玩演示整合验收完成
+
+**验收状态：通过**
+
+完成可玩演示整合验收，narrative-memory-context、ai-narrator-llm-integration、game-ui-experience-polish、scene-exploration-system 全部整合完毕，游戏端到端可玩。
+
+所有验收标准满足：
+
+| 标准 | 状态 | 备注 |
+|-----|------|------|
+| 端到端测试文件 | ✅ 通过 | `tests/test_playable_demo.py` 已创建 |
+| 完整流程覆盖 | ✅ 通过 | 角色创建→探索→场景切换→战斗→结束 |
+| AI叙事prompt验证 | ✅ 通过 | 包含角色名、场景名、历史行动摘要 |
+| 记忆系统验证 | ✅ 通过 | 多次行动后上下文累积，叙事体现历史连贯性 |
+| HP变化一致性 | ✅ 通过 | 战斗全程HP变化可追溯，与裁定结果一致 |
+| 状态一致性 | ✅ 通过 | 角色HP、场景、战斗状态全程一致 |
+| 测试通过数 | ✅ 通过 | 343个测试通过（新增11个），无新增失败 |
+
+**新增测试文件**：
+- `app/backend/tests/test_playable_demo.py`：11个端到端测试
+  - `test_playable_demo_complete_flow_warrior`：战士完整流程
+  - `test_playable_demo_memory_context_accumulation`：记忆系统验证
+  - `test_playable_demo_narrative_includes_scene_context`：场景上下文验证
+  - `test_playable_demo_hp_tracking_throughout_combat`：HP变化追踪
+  - `test_playable_demo_mage_complete_flow`：法师完整流程
+  - `test_playable_demo_rogue_stealth_flow`：盗贼潜行流程
+  - `test_playable_demo_state_consistency_after_multiple_actions`：状态一致性
+  - `test_playable_demo_warrior_class_flow`：战士职业流程
+  - `test_playable_demo_mage_class_flow`：法师职业流程
+  - `test_playable_demo_rogue_class_flow`：盗贼职业流程
+  - `test_playable_demo_narrative_no_numeric_overreach`：AI叙事约束验证
+
+**系统验证结果**：
+- AI叙事正确引用角色名、场景名、历史记忆
+- 记忆系统在多次行动后积累上下文，叙事内容体现历史连贯性
+- 游戏状态（角色HP、场景、战斗状态）在整个流程中一致且正确
+- AI叙事在整个流程中无数值越权修改
+
+**里程碑一最终状态**：✅ 可玩性验收通过，游戏端到端可玩
+
 ---
 
 ## 当前共识

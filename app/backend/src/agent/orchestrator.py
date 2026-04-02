@@ -29,6 +29,7 @@ from ..models.action import (
     Outcome,
     ResolutionType,
     SavingThrowDetail,
+    SkillCheckDetail,
 )
 from ..models.state import Actor, NarrativeHistoryEntry
 from ..npc import find_target_npc, is_npc_interaction
@@ -341,10 +342,21 @@ class GMAgent:
             check_result=check_result,
         )
         
+        # Build skill_check detail for frontend display
+        skill_check = SkillCheckDetail(
+            skill=skill_name,
+            roll=roll_result.roll,
+            modifier=ability_modifier + prof_bonus,
+            total=total,
+            dc=dc,
+            success=outcome == Outcome.SUCCESS,
+        )
+        
         return ActionResponse(
             action_summary=action_summary,
             resolution_type=ResolutionType.CHECK,
             check=check,
+            skill_check=skill_check,
             attack=None,
             outcome=outcome,
             effects=self.effects,

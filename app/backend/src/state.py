@@ -352,6 +352,55 @@ def append_narrative_history(
             pass
 
 
+def append_action_history(
+    action_entry: dict,
+    session_id: str | None = None,
+) -> None:
+    """Append an action entry to the session's action history.
+    
+    Args:
+        action_entry: Dictionary containing action data
+        session_id: The session ID (uses current session if None)
+    """
+    # Currently stores in scene_history for simplicity
+    # This maintains compatibility with existing session structure
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        # Convert to SceneHistoryEntry format for storage
+        history_entry = SceneHistoryEntry(
+            action_type=action_entry.get("action", "unknown"),
+            check_result={"result": action_entry.get("result", "unknown")},
+            narrative_keywords=[action_entry.get("narrative_summary", "")],
+        )
+        session.scene_history = [
+            *session.scene_history,
+            history_entry,
+        ][-MAX_SCENE_HISTORY:]
+        _save_session(session)
+
+
+def get_action_history(session_id: str | None = None) -> list[dict]:
+    """Get the action history for a session.
+    
+    Args:
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        List of action history entries as dictionaries
+    """
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    # Convert SceneHistoryEntry objects to dicts
+    return [
+        {
+            "action": entry.action_type,
+            "result": entry.check_result,
+            "narrative_keywords": entry.narrative_keywords,
+        }
+        for entry in session.scene_history
+    ]
+
+
 def get_narrative_context(
     max_entries: int = DEFAULT_PROMPT_HISTORY_ENTRIES,
     max_chars: int = DEFAULT_PROMPT_HISTORY_CHARS,

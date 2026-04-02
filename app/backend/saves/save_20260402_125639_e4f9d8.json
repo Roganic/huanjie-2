@@ -1,0 +1,586 @@
+{
+  "version": 1,
+  "saved_at": "2026-04-02T12:56:39.107828",
+  "save_id": "save_20260402_125639_e4f9d8",
+  "save_name": "存档 2026-04-02 12:56:39",
+  "session_id": "405804f94b234953a258a3c04c22b827",
+  "phase": "adventure",
+  "game_phase": "exploration",
+  "character": {
+    "id": "mage-gandalf",
+    "name": "Gandalf",
+    "character_class": "mage",
+    "abilities": {
+      "str": 8,
+      "dex": 13,
+      "con": 12,
+      "int": 15,
+      "wis": 14,
+      "cha": 10
+    },
+    "proficiency_bonus": 2,
+    "level": 1,
+    "hp": 6,
+    "hp_max": 7,
+    "ac": 11,
+    "conditions": [],
+    "description": "博学的施法者，以知识和意志驾驭危险。",
+    "skills": [
+      {
+        "name": "athletics",
+        "ability": "str",
+        "proficient": false,
+        "modifier": -1
+      },
+      {
+        "name": "acrobatics",
+        "ability": "dex",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "sleight_of_hand",
+        "ability": "dex",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "stealth",
+        "ability": "dex",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "arcana",
+        "ability": "int",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "history",
+        "ability": "int",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "investigation",
+        "ability": "int",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "nature",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "religion",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "animal_handling",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "insight",
+        "ability": "wis",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "medicine",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "perception",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "survival",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "deception",
+        "ability": "cha",
+        "proficient": false,
+        "modifier": 0
+      },
+      {
+        "name": "intimidation",
+        "ability": "cha",
+        "proficient": false,
+        "modifier": 0
+      },
+      {
+        "name": "performance",
+        "ability": "cha",
+        "proficient": false,
+        "modifier": 0
+      },
+      {
+        "name": "persuasion",
+        "ability": "cha",
+        "proficient": false,
+        "modifier": 0
+      }
+    ],
+    "inventory": [
+      {
+        "id": "quarterstaff",
+        "name": "法杖",
+        "type": "weapon",
+        "damage_dice": "1d6",
+        "attack_ability": "str",
+        "base_ac": null,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "一根结实的木质法杖，可用于施法和自卫。"
+      },
+      {
+        "id": "robe",
+        "name": "布袍",
+        "type": "armor",
+        "damage_dice": null,
+        "attack_ability": null,
+        "base_ac": 10,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "普通的布制长袍，几乎没有防护能力。"
+      }
+    ],
+    "equipped": {
+      "weapon": {
+        "id": "quarterstaff",
+        "name": "法杖",
+        "type": "weapon",
+        "damage_dice": "1d6",
+        "attack_ability": "str",
+        "base_ac": null,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "一根结实的木质法杖，可用于施法和自卫。"
+      },
+      "armor": {
+        "id": "robe",
+        "name": "布袍",
+        "type": "armor",
+        "damage_dice": null,
+        "attack_ability": null,
+        "base_ac": 10,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "普通的布制长袍，几乎没有防护能力。"
+      }
+    },
+    "spell_slots": [
+      {
+        "level": 1,
+        "max": 2,
+        "current": 2
+      }
+    ]
+  },
+  "enemy": {
+    "id": "goblin-01",
+    "name": "哥布林斥候",
+    "character_class": null,
+    "abilities": {
+      "str": 8,
+      "dex": 14,
+      "con": 10,
+      "int": 10,
+      "wis": 8,
+      "cha": 8
+    },
+    "proficiency_bonus": 2,
+    "level": 1,
+    "hp": 0,
+    "hp_max": 7,
+    "ac": 12,
+    "conditions": [
+      "defeated"
+    ],
+    "description": "一只瘦小的哥布林，手持锈迹斑斑的匕首。",
+    "skills": [],
+    "inventory": [],
+    "equipped": {
+      "weapon": null,
+      "armor": null
+    },
+    "spell_slots": []
+  },
+  "scene": {
+    "id": "village-square-01",
+    "name": "十字路口村庄广场",
+    "description": "村庄的中心广场，几座破旧但整洁的房屋环绕着一口古老的水井。清晨的阳光洒在鹅卵石铺就的地面上，几个村民正在忙碌地准备着新的一天。铁匠铺传来叮叮当当的敲打声，杂货店老板正在门前整理货物。北方是酒馆，东方是通往森林的小路。",
+    "actors": [
+      "mage-gandalf"
+    ],
+    "npcs": [
+      {
+        "id": "village-elder-01",
+        "name": "村长托马斯",
+        "type": "friendly",
+        "description": "白发苍苍的村庄长老，对本地的历史和附近的危险了如指掌。",
+        "race": "人类",
+        "occupation": "村长",
+        "dialogue_count": 0
+      },
+      {
+        "id": "blacksmith-01",
+        "name": "铁匠格鲁姆",
+        "type": "friendly",
+        "description": "身材魁梧的矮人铁匠，正在铁匠铺里忙碌地打造农具。",
+        "race": "矮人",
+        "occupation": "铁匠",
+        "dialogue_count": 0
+      },
+      {
+        "id": "merchant-02",
+        "name": "杂货商莉莉",
+        "type": "neutral",
+        "description": "精明的半精灵商人，出售各种冒险必需品。",
+        "race": "半精灵",
+        "occupation": "商人",
+        "dialogue_count": 0
+      }
+    ],
+    "time": 5,
+    "flags": [],
+    "exits": [
+      {
+        "direction": "north",
+        "target_scene_id": "tavern-01"
+      },
+      {
+        "direction": "east",
+        "target_scene_id": "dungeon-entrance-01"
+      }
+    ]
+  },
+  "combat_state": null,
+  "action_history": [
+    {
+      "action_summary": "Gandalf uses arcana to study the magical runes",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "success",
+        "check": {
+          "ability": "int",
+          "skill": "arcana",
+          "proficient": true,
+          "modifier": 2,
+          "proficiency_bonus": 2,
+          "dc": 15,
+          "roll": 18,
+          "total": 22
+        },
+        "attack": null,
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "village-square-01",
+            "field": "time",
+            "delta": 1,
+            "description": "时间流逝。"
+          }
+        ]
+      },
+      "narration_summary": "Gandalf sets out to study the magical runes. Through skill and determination, the attempt succeeds, bringing the desired result. A ripple of response moves through 十字路口村庄广场 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed. A fresh opening has appeared in 十字路口村庄广场, but it will not stay open for long. ",
+      "narration": "Gandalf sets out to study the magical runes. Through skill and determination, the attempt succeeds, bringing the desired result.",
+      "scene_progression": "A ripple of response moves through 十字路口村庄广场 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed.",
+      "gm_prompt": "A fresh opening has appeared in 十字路口村庄广场, but it will not stay open for long. Time in 十字路口村庄广场 has advanced to beat 1. Do you exploit that opening immediately, question whoever reacts, or examine what just shifted?",
+      "created_at": 1775105799068
+    },
+    {
+      "action_summary": "Gandalf uses arcana to study the magical runes",
+      "resolution_summary": {
+        "result": "success",
+        "narrative_summary": "Gandalf sets out to study the magical runes. Through skill and determination, the attempt succeeds, bringing the desired result."
+      },
+      "narration_summary": "Gandalf sets out to study the magical runes. Through skill and determination, the attempt succeeds, bringing the desired result.",
+      "narration": "Gandalf sets out to study the magical runes. Through skill and determination, the attempt succeeds, bringing the desired result.",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105799070
+    },
+    {
+      "action_summary": "Gandalf attempts to enter the dungeon by proceed cautiously into the darkness",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "failure",
+        "check": {
+          "ability": "str",
+          "modifier": -1,
+          "dc": 15,
+          "roll": 12,
+          "total": 13
+        },
+        "attack": null,
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "village-square-01",
+            "field": "time",
+            "delta": 1,
+            "description": "时间流逝。"
+          },
+          {
+            "target": "mage-gandalf",
+            "field": "hp",
+            "delta": -1,
+            "description": "体力消耗造成轻微伤害。"
+          }
+        ]
+      },
+      "narration_summary": "Gandalf attempts to enter the dungeon, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Gandalf. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. The r",
+      "narration": "Gandalf attempts to enter the dungeon, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Gandalf. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
+      "gm_prompt": "The failed attempt gives the scene permission to push back. The room is still reacting to the last beat: Gandalf sets out to study the magical runes. Through skill and determination, the attempt succeeds, bringing the desi... Time in 十字路口村庄广场 has advanced to beat 2. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
+      "created_at": 1775105799075
+    },
+    {
+      "action_summary": "Gandalf attempts to enter the dungeon by proceed cautiously into the darkness",
+      "resolution_summary": {
+        "result": "failure",
+        "narrative_summary": "Gandalf attempts to enter the dungeon, but fortune does not favor them this time. The effort falls short of success."
+      },
+      "narration_summary": "Gandalf attempts to enter the dungeon, but fortune does not favor them this time. The effort falls short of success.",
+      "narration": "Gandalf attempts to enter the dungeon, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105799076
+    },
+    {
+      "action_summary": "Gandalf casts cast fire bolt at 哥布林斥候",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "success",
+        "check": null,
+        "attack": {
+          "weapon": "spell",
+          "target": "哥布林斥候",
+          "hit": true,
+          "damage": {
+            "dice_expression": "2d6",
+            "rolls": [
+              3,
+              1
+            ],
+            "modifier": 0,
+            "total": 4
+          },
+          "saving_throw": {
+            "target": "goblin-01",
+            "ability": "dex",
+            "dc": 13,
+            "roll": 5,
+            "modifier": 2,
+            "total": 7,
+            "outcome": "failure"
+          }
+        },
+        "saving_throw": {
+          "target": "goblin-01",
+          "ability": "dex",
+          "dc": 13,
+          "roll": 5,
+          "modifier": 2,
+          "total": 7,
+          "outcome": "failure"
+        },
+        "effects": [
+          {
+            "target": "goblin-01",
+            "field": "hp",
+            "delta": -4,
+            "description": "Gandalf's spell hits 哥布林斥候 for 4 damage (full damage)."
+          },
+          {
+            "target": "village-square-01",
+            "field": "time",
+            "delta": 1,
+            "description": "战斗时间流逝。"
+          }
+        ]
+      },
+      "narration_summary": "Gandalf lunges forward with spell in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene. The 哥布林斥候 recoils and the air in 十字路口村庄广场 tightens around the clash. You can press the advantage now or scan the room for whoever reacts next. 哥布林斥候 staggers but does not leave the scene; something in the melee is about to answer your advantage. The room is still reacting ",
+      "narration": "Gandalf lunges forward with spell in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene.",
+      "scene_progression": "The 哥布林斥候 recoils and the air in 十字路口村庄广场 tightens around the clash. You can press the advantage now or scan the room for whoever reacts next.",
+      "gm_prompt": "哥布林斥候 staggers but does not leave the scene; something in the melee is about to answer your advantage. The room is still reacting to the last beat: Gandalf attempts to enter the dungeon, but fortune does not favor them this time. The effort falls short of success. Time in 十字路口村庄广场 has advanced to beat 3. Do you press the wounded foe, break away to reposition, or react to whoever else moves?",
+      "created_at": 1775105799083
+    },
+    {
+      "action_summary": "Gandalf casts cast fire bolt at 哥布林斥候",
+      "resolution_summary": {
+        "result": "success",
+        "narrative_summary": "Gandalf lunges forward with spell in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene."
+      },
+      "narration_summary": "Gandalf lunges forward with spell in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene.",
+      "narration": "Gandalf lunges forward with spell in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene.",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105799085
+    },
+    {
+      "action_summary": "Gandalf casts cast another spell at 哥布林斥候",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "success",
+        "check": null,
+        "attack": {
+          "weapon": "spell",
+          "target": "哥布林斥候",
+          "hit": true,
+          "damage": {
+            "dice_expression": "2d6",
+            "rolls": [
+              4,
+              1
+            ],
+            "modifier": 0,
+            "total": 2
+          },
+          "saving_throw": {
+            "target": "goblin-01",
+            "ability": "dex",
+            "dc": 13,
+            "roll": 19,
+            "modifier": 2,
+            "total": 21,
+            "outcome": "success"
+          }
+        },
+        "saving_throw": {
+          "target": "goblin-01",
+          "ability": "dex",
+          "dc": 13,
+          "roll": 19,
+          "modifier": 2,
+          "total": 21,
+          "outcome": "success"
+        },
+        "effects": [
+          {
+            "target": "goblin-01",
+            "field": "hp",
+            "delta": -2,
+            "description": "Gandalf's spell hits 哥布林斥候 for 2 damage (half damage - save successful)."
+          },
+          {
+            "target": "village-square-01",
+            "field": "time",
+            "delta": 1,
+            "description": "战斗时间流逝。"
+          }
+        ]
+      },
+      "narration_summary": "Gandalf lunges forward with spell in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene. The 哥布林斥候 recoils and the air in 十字路口村庄广场 tightens around the clash. You can press the advantage now or scan the room for whoever reacts next. 哥布林斥候 staggers but does not leave the scene; something in the melee is about to answer your advantage. The room is still reacting ",
+      "narration": "Gandalf lunges forward with spell in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene.",
+      "scene_progression": "The 哥布林斥候 recoils and the air in 十字路口村庄广场 tightens around the clash. You can press the advantage now or scan the room for whoever reacts next.",
+      "gm_prompt": "哥布林斥候 staggers but does not leave the scene; something in the melee is about to answer your advantage. The room is still reacting to the last beat: Gandalf lunges forward with spell in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through t... Time in 十字路口村庄广场 has advanced to beat 4. Do you press the wounded foe, break away to reposition, or react to whoever else moves?",
+      "created_at": 1775105799093
+    },
+    {
+      "action_summary": "Gandalf casts cast another spell at 哥布林斥候",
+      "resolution_summary": {
+        "result": "success",
+        "narrative_summary": "Gandalf lunges forward with spell in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene."
+      },
+      "narration_summary": "Gandalf lunges forward with spell in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene.",
+      "narration": "Gandalf lunges forward with spell in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene.",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105799094
+    },
+    {
+      "action_summary": "Gandalf casts cast another spell at 哥布林斥候",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "success",
+        "check": null,
+        "attack": {
+          "weapon": "spell",
+          "target": "哥布林斥候",
+          "hit": true,
+          "damage": {
+            "dice_expression": "2d6",
+            "rolls": [
+              6,
+              1
+            ],
+            "modifier": 0,
+            "total": 3
+          },
+          "saving_throw": {
+            "target": "goblin-01",
+            "ability": "dex",
+            "dc": 13,
+            "roll": 18,
+            "modifier": 2,
+            "total": 20,
+            "outcome": "success"
+          }
+        },
+        "saving_throw": {
+          "target": "goblin-01",
+          "ability": "dex",
+          "dc": 13,
+          "roll": 18,
+          "modifier": 2,
+          "total": 20,
+          "outcome": "success"
+        },
+        "effects": [
+          {
+            "target": "goblin-01",
+            "field": "hp",
+            "delta": -3,
+            "description": "Gandalf's spell hits 哥布林斥候 for 3 damage (half damage - save successful)."
+          },
+          {
+            "target": "goblin-01",
+            "field": "conditions_add",
+            "delta": "defeated",
+            "description": "哥布林斥候 has been defeated!"
+          },
+          {
+            "target": "village-square-01",
+            "field": "time",
+            "delta": 1,
+            "description": "战斗时间流逝。"
+          }
+        ]
+      },
+      "narration_summary": "Gandalf hits the 哥布林斥候 with a decisive strike from the spell, and the 哥布林斥候 collapses to the ground, defeated. The combat concludes as the battlefield falls silent. The 哥布林斥候 recoils and the air in 十字路口村庄广场 tightens around the clash. You can press the advantage now or scan the room for whoever reacts next. 哥布林斥候 staggers but does not leave the scene; something in the melee is about to answer your ",
+      "narration": "Gandalf hits the 哥布林斥候 with a decisive strike from the spell, and the 哥布林斥候 collapses to the ground, defeated. The combat concludes as the battlefield falls silent.",
+      "scene_progression": "The 哥布林斥候 recoils and the air in 十字路口村庄广场 tightens around the clash. You can press the advantage now or scan the room for whoever reacts next.",
+      "gm_prompt": "哥布林斥候 staggers but does not leave the scene; something in the melee is about to answer your advantage. The room is still reacting to the last beat: Gandalf lunges forward with spell in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through t... Time in 十字路口村庄广场 has advanced to beat 5. Do you press the wounded foe, break away to reposition, or react to whoever else moves?",
+      "created_at": 1775105799105
+    },
+    {
+      "action_summary": "Gandalf casts cast another spell at 哥布林斥候",
+      "resolution_summary": {
+        "result": "success",
+        "narrative_summary": "Gandalf hits the 哥布林斥候 with a decisive strike from the spell, and the 哥布林斥候 collapses to the ground, defeated. The combat concludes as the battlefield falls silent."
+      },
+      "narration_summary": "Gandalf hits the 哥布林斥候 with a decisive strike from the spell, and the 哥布林斥候 collapses to the ground, defeated. The combat concludes as the battlefield falls silent.",
+      "narration": "Gandalf hits the 哥布林斥候 with a decisive strike from the spell, and the 哥布林斥候 collapses to the ground, defeated. The combat concludes as the battlefield falls silent.",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105799106
+    }
+  ],
+  "scene_history": []
+}

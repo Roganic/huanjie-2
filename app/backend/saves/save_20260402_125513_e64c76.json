@@ -1,0 +1,313 @@
+{
+  "version": 1,
+  "saved_at": "2026-04-02T12:55:13.761729",
+  "save_id": "save_20260402_125513_e64c76",
+  "save_name": "存档 2026-04-02 12:55:13",
+  "session_id": "a1ba838cc98449c7adaba03d1a782e59",
+  "phase": "adventure",
+  "game_phase": "combat",
+  "character": {
+    "id": "mage-gandalf",
+    "name": "Gandalf",
+    "character_class": "mage",
+    "abilities": {
+      "str": 8,
+      "dex": 13,
+      "con": 12,
+      "int": 15,
+      "wis": 14,
+      "cha": 10
+    },
+    "proficiency_bonus": 2,
+    "level": 1,
+    "hp": 7,
+    "hp_max": 7,
+    "ac": 11,
+    "conditions": [],
+    "description": "博学的施法者，以知识和意志驾驭危险。",
+    "skills": [
+      {
+        "name": "athletics",
+        "ability": "str",
+        "proficient": false,
+        "modifier": -1
+      },
+      {
+        "name": "acrobatics",
+        "ability": "dex",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "sleight_of_hand",
+        "ability": "dex",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "stealth",
+        "ability": "dex",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "arcana",
+        "ability": "int",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "history",
+        "ability": "int",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "investigation",
+        "ability": "int",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "nature",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "religion",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "animal_handling",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "insight",
+        "ability": "wis",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "medicine",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "perception",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "survival",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "deception",
+        "ability": "cha",
+        "proficient": false,
+        "modifier": 0
+      },
+      {
+        "name": "intimidation",
+        "ability": "cha",
+        "proficient": false,
+        "modifier": 0
+      },
+      {
+        "name": "performance",
+        "ability": "cha",
+        "proficient": false,
+        "modifier": 0
+      },
+      {
+        "name": "persuasion",
+        "ability": "cha",
+        "proficient": false,
+        "modifier": 0
+      }
+    ],
+    "inventory": [
+      {
+        "id": "quarterstaff",
+        "name": "法杖",
+        "type": "weapon",
+        "damage_dice": "1d6",
+        "attack_ability": "str",
+        "base_ac": null,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "一根结实的木质法杖，可用于施法和自卫。"
+      },
+      {
+        "id": "robe",
+        "name": "布袍",
+        "type": "armor",
+        "damage_dice": null,
+        "attack_ability": null,
+        "base_ac": 10,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "普通的布制长袍，几乎没有防护能力。"
+      }
+    ],
+    "equipped": {
+      "weapon": {
+        "id": "quarterstaff",
+        "name": "法杖",
+        "type": "weapon",
+        "damage_dice": "1d6",
+        "attack_ability": "str",
+        "base_ac": null,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "一根结实的木质法杖，可用于施法和自卫。"
+      },
+      "armor": {
+        "id": "robe",
+        "name": "布袍",
+        "type": "armor",
+        "damage_dice": null,
+        "attack_ability": null,
+        "base_ac": 10,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "普通的布制长袍，几乎没有防护能力。"
+      }
+    },
+    "spell_slots": [
+      {
+        "level": 1,
+        "max": 2,
+        "current": 0
+      }
+    ]
+  },
+  "enemy": {
+    "id": "goblin-01",
+    "name": "哥布林斥候",
+    "character_class": null,
+    "abilities": {
+      "str": 8,
+      "dex": 14,
+      "con": 10,
+      "int": 10,
+      "wis": 8,
+      "cha": 8
+    },
+    "proficiency_bonus": 2,
+    "level": 1,
+    "hp": 4,
+    "hp_max": 7,
+    "ac": 12,
+    "conditions": [],
+    "description": "一只瘦小的哥布林，手持锈迹斑斑的匕首。",
+    "skills": [],
+    "inventory": [],
+    "equipped": {
+      "weapon": null,
+      "armor": null
+    },
+    "spell_slots": []
+  },
+  "scene": {
+    "id": "combat-encounter-01",
+    "name": "地下城通道",
+    "description": "狭窄的地下通道，墙壁上长满了发光的苔藓，提供微弱的照明。前方传来沙沙声和低沉的念诵声。几只哥布林从阴影中窜出，挡住了去路，其中一只头戴骨饰，似乎是个施法者。一只体型巨大的座狼伴随在它们身边，獠牙外露。",
+    "actors": [
+      "mage-gandalf",
+      "goblin-01"
+    ],
+    "npcs": [
+      {
+        "id": "goblin-01",
+        "name": "哥布林斥候",
+        "type": "hostile",
+        "description": "一只瘦小的哥布林，手持锈迹斑斑的匕首，眼中闪烁着贪婪的光芒。",
+        "race": "哥布林",
+        "occupation": "斥候",
+        "dialogue_count": 0
+      },
+      {
+        "id": "goblin-shaman-01",
+        "name": "哥布林萨满",
+        "type": "hostile",
+        "description": "头戴骨饰的哥布林施法者，正在低声念诵某种咒语。",
+        "race": "哥布林",
+        "occupation": "萨满",
+        "dialogue_count": 0
+      },
+      {
+        "id": "wolf-01",
+        "name": "座狼",
+        "type": "hostile",
+        "description": "一只体型巨大的灰狼，獠牙外露，口水滴落在地上。",
+        "race": "野兽",
+        "occupation": "战斗伙伴",
+        "dialogue_count": 0
+      }
+    ],
+    "time": 0,
+    "flags": [],
+    "exits": [
+      {
+        "direction": "地下城入口",
+        "target_scene_id": "dungeon-entrance-01"
+      }
+    ]
+  },
+  "combat_state": {
+    "combat_id": "combat-01",
+    "round_number": 1,
+    "turn_index": 0,
+    "status": "active",
+    "log": []
+  },
+  "action_history": [
+    {
+      "action_summary": "Gandalf 施放 魔法飞弹",
+      "resolution_summary": {
+        "result": "success",
+        "narrative_summary": "Gandalf 施放 魔法飞弹，3 支魔法飞弹自动命中 哥布林斥候，造成 13 点 force伤害！"
+      },
+      "narration_summary": "Gandalf 施放 魔法飞弹，3 支魔法飞弹自动命中 哥布林斥候，造成 13 点 force伤害！",
+      "narration": "Gandalf 施放 魔法飞弹，3 支魔法飞弹自动命中 哥布林斥候，造成 13 点 force伤害！",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105713747
+    },
+    {
+      "action_summary": "Gandalf 施放 治疗之触",
+      "resolution_summary": {
+        "result": "success",
+        "narrative_summary": "Gandalf 施放 治疗之触，哥布林斥候 恢复 4 点生命值。"
+      },
+      "narration_summary": "Gandalf 施放 治疗之触，哥布林斥候 恢复 4 点生命值。",
+      "narration": "Gandalf 施放 治疗之触，哥布林斥候 恢复 4 点生命值。",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105713755
+    },
+    {
+      "action_summary": "Gandalf 尝试施放 魔法飞弹",
+      "resolution_summary": {
+        "result": "failure",
+        "narrative_summary": "你没有剩余的 1 环法术位。"
+      },
+      "narration_summary": "你没有剩余的 1 环法术位。",
+      "narration": "你没有剩余的 1 环法术位。",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105713760
+    }
+  ],
+  "scene_history": []
+}

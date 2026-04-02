@@ -38,6 +38,36 @@ BURNING_HANDS = Spell(
     available_to=["mage"],
 )
 
+FIREBALL = Spell(
+    id="fireball",
+    name="Fireball",
+    name_cn="火球术",
+    level=1,
+    school=SpellSchool.EVOCATION,
+    damage_dice="3d6",
+    damage_type=DamageType.FIRE,
+    saving_throw_ability="dex",
+    saving_throw_dc_base=8,
+    range_ft=60,
+    casting_time="1 action",
+    description="你向目标射出一颗爆裂的火球。目标必须通过敏捷豁免，失败则受到 3d6 火焰伤害。",
+    available_to=["mage"],
+)
+
+CURE_WOUNDS = Spell(
+    id="cure_wounds",
+    name="Cure Wounds",
+    name_cn="治疗之触",
+    level=1,
+    school=SpellSchool.EVOCATION,
+    healing_dice="1d8",
+    healing_bonus_ability="int",
+    range_ft=5,
+    casting_time="1 action",
+    description="你触碰一个生物，为其恢复 1d8+智力调整值 点生命值。",
+    available_to=["mage"],
+)
+
 RAY_OF_FROST = Spell(
     id="ray_of_frost",
     name="Ray of Frost",
@@ -60,10 +90,14 @@ RAY_OF_FROST = Spell(
 SPELLS: dict[str, Spell] = {
     "magic_missile": MAGIC_MISSILE,
     "burning_hands": BURNING_HANDS,
+    "fireball": FIREBALL,
+    "cure_wounds": CURE_WOUNDS,
     "ray_of_frost": RAY_OF_FROST,
     # Chinese name aliases
     "魔法飞弹": MAGIC_MISSILE,
     "燃烧之手": BURNING_HANDS,
+    "火球术": FIREBALL,
+    "治疗之触": CURE_WOUNDS,
     "寒冰射线": RAY_OF_FROST,
 }
 

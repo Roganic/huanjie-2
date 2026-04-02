@@ -1,0 +1,473 @@
+{
+  "version": 1,
+  "saved_at": "2026-04-02T12:56:39.147370",
+  "save_id": "save_20260402_125639_9359b9",
+  "save_name": "存档 2026-04-02 12:56:39",
+  "session_id": "c20ecfb0bfd1497dbae77ec89dd4c55c",
+  "phase": "adventure",
+  "game_phase": "combat",
+  "character": {
+    "id": "rogue-shadow",
+    "name": "Shadow",
+    "character_class": "rogue",
+    "abilities": {
+      "str": 10,
+      "dex": 15,
+      "con": 13,
+      "int": 12,
+      "wis": 14,
+      "cha": 8
+    },
+    "proficiency_bonus": 2,
+    "level": 1,
+    "hp": 8,
+    "hp_max": 9,
+    "ac": 13,
+    "conditions": [],
+    "description": "身手敏捷的机会主义者，靠时机与神经存活。",
+    "skills": [
+      {
+        "name": "athletics",
+        "ability": "str",
+        "proficient": false,
+        "modifier": 0
+      },
+      {
+        "name": "acrobatics",
+        "ability": "dex",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "sleight_of_hand",
+        "ability": "dex",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "stealth",
+        "ability": "dex",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "arcana",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "history",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "investigation",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "nature",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "religion",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "animal_handling",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "insight",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "medicine",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "perception",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "survival",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "deception",
+        "ability": "cha",
+        "proficient": true,
+        "modifier": 1
+      },
+      {
+        "name": "intimidation",
+        "ability": "cha",
+        "proficient": false,
+        "modifier": -1
+      },
+      {
+        "name": "performance",
+        "ability": "cha",
+        "proficient": false,
+        "modifier": -1
+      },
+      {
+        "name": "persuasion",
+        "ability": "cha",
+        "proficient": true,
+        "modifier": 1
+      }
+    ],
+    "inventory": [
+      {
+        "id": "shortsword",
+        "name": "短剑",
+        "type": "weapon",
+        "damage_dice": "1d6",
+        "attack_ability": "dex",
+        "base_ac": null,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "一把轻便的短剑，适合快速攻击。"
+      },
+      {
+        "id": "leather",
+        "name": "皮甲",
+        "type": "armor",
+        "damage_dice": null,
+        "attack_ability": null,
+        "base_ac": 11,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "轻便的皮革护甲，不影响灵活性。"
+      }
+    ],
+    "equipped": {
+      "weapon": {
+        "id": "shortsword",
+        "name": "短剑",
+        "type": "weapon",
+        "damage_dice": "1d6",
+        "attack_ability": "dex",
+        "base_ac": null,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "一把轻便的短剑，适合快速攻击。"
+      },
+      "armor": {
+        "id": "leather",
+        "name": "皮甲",
+        "type": "armor",
+        "damage_dice": null,
+        "attack_ability": null,
+        "base_ac": 11,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "轻便的皮革护甲，不影响灵活性。"
+      }
+    },
+    "spell_slots": []
+  },
+  "enemy": {
+    "id": "goblin-01",
+    "name": "哥布林斥候",
+    "character_class": null,
+    "abilities": {
+      "str": 8,
+      "dex": 14,
+      "con": 10,
+      "int": 10,
+      "wis": 8,
+      "cha": 8
+    },
+    "proficiency_bonus": 2,
+    "level": 1,
+    "hp": 0,
+    "hp_max": 7,
+    "ac": 12,
+    "conditions": [
+      "defeated"
+    ],
+    "description": "一只瘦小的哥布林，手持锈迹斑斑的匕首。",
+    "skills": [],
+    "inventory": [],
+    "equipped": {
+      "weapon": null,
+      "armor": null
+    },
+    "spell_slots": []
+  },
+  "scene": {
+    "id": "combat-encounter-01",
+    "name": "地下城通道",
+    "description": "狭窄的地下通道，墙壁上长满了发光的苔藓，提供微弱的照明。前方传来沙沙声和低沉的念诵声。几只哥布林从阴影中窜出，挡住了去路，其中一只头戴骨饰，似乎是个施法者。一只体型巨大的座狼伴随在它们身边，獠牙外露。",
+    "actors": [
+      "rogue-shadow",
+      "goblin-01"
+    ],
+    "npcs": [
+      {
+        "id": "goblin-01",
+        "name": "哥布林斥候",
+        "type": "hostile",
+        "description": "一只瘦小的哥布林，手持锈迹斑斑的匕首，眼中闪烁着贪婪的光芒。",
+        "race": "哥布林",
+        "occupation": "斥候",
+        "dialogue_count": 0
+      },
+      {
+        "id": "goblin-shaman-01",
+        "name": "哥布林萨满",
+        "type": "hostile",
+        "description": "头戴骨饰的哥布林施法者，正在低声念诵某种咒语。",
+        "race": "哥布林",
+        "occupation": "萨满",
+        "dialogue_count": 0
+      },
+      {
+        "id": "wolf-01",
+        "name": "座狼",
+        "type": "hostile",
+        "description": "一只体型巨大的灰狼，獠牙外露，口水滴落在地上。",
+        "race": "野兽",
+        "occupation": "战斗伙伴",
+        "dialogue_count": 0
+      }
+    ],
+    "time": 4,
+    "flags": [],
+    "exits": [
+      {
+        "direction": "地下城入口",
+        "target_scene_id": "dungeon-entrance-01"
+      }
+    ]
+  },
+  "combat_state": {
+    "combat_id": "combat-01",
+    "round_number": 1,
+    "turn_index": 0,
+    "status": "active",
+    "log": []
+  },
+  "action_history": [
+    {
+      "action_summary": "Shadow uses stealth to sneak past the guards",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "failure",
+        "check": {
+          "ability": "dex",
+          "skill": "stealth",
+          "proficient": true,
+          "modifier": 2,
+          "proficiency_bonus": 2,
+          "dc": 15,
+          "roll": 1,
+          "total": 5
+        },
+        "attack": null,
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "village-square-01",
+            "field": "time",
+            "delta": 1,
+            "description": "时间流逝。"
+          },
+          {
+            "target": "rogue-shadow",
+            "field": "hp",
+            "delta": -1,
+            "description": "体力消耗造成轻微伤害。"
+          }
+        ]
+      },
+      "narration_summary": "Shadow attempts to sneak past the guards, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Shadow. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. Tim",
+      "narration": "Shadow attempts to sneak past the guards, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Shadow. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
+      "gm_prompt": "The failed attempt gives the scene permission to push back. Time in 十字路口村庄广场 has advanced to beat 1. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
+      "created_at": 1775105799118
+    },
+    {
+      "action_summary": "Shadow uses stealth to sneak past the guards",
+      "resolution_summary": {
+        "result": "failure",
+        "narrative_summary": "Shadow attempts to sneak past the guards, but fortune does not favor them this time. The effort falls short of success."
+      },
+      "narration_summary": "Shadow attempts to sneak past the guards, but fortune does not favor them this time. The effort falls short of success.",
+      "narration": "Shadow attempts to sneak past the guards, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105799119
+    },
+    {
+      "action_summary": "Shadow attacks 哥布林斥候 with dagger",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "success",
+        "check": null,
+        "attack": {
+          "weapon": "dagger",
+          "target": "哥布林斥候",
+          "hit": true,
+          "damage": {
+            "dice_expression": "1d4",
+            "rolls": [
+              2
+            ],
+            "modifier": 2,
+            "total": 4
+          }
+        },
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "goblin-01",
+            "field": "hp",
+            "delta": -4,
+            "description": "Shadow hits 哥布林斥候 with dagger for 4 damage."
+          },
+          {
+            "target": "village-square-01",
+            "field": "time",
+            "delta": 1,
+            "description": "战斗时间流逝。"
+          }
+        ]
+      },
+      "narration_summary": "Shadow lunges forward with dagger in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene. The 哥布林斥候 recoils and the air in 十字路口村庄广场 tightens around the clash. You can press the advantage now or scan the room for whoever reacts next. 哥布林斥候 staggers but does not leave the scene; something in the melee is about to answer your advantage. The room is still reacting ",
+      "narration": "Shadow lunges forward with dagger in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene.",
+      "scene_progression": "The 哥布林斥候 recoils and the air in 十字路口村庄广场 tightens around the clash. You can press the advantage now or scan the room for whoever reacts next.",
+      "gm_prompt": "哥布林斥候 staggers but does not leave the scene; something in the melee is about to answer your advantage. The room is still reacting to the last beat: Shadow attempts to sneak past the guards, but fortune does not favor them this time. The effort falls short of success. Time in 十字路口村庄广场 has advanced to beat 2. Do you press the wounded foe, break away to reposition, or react to whoever else moves?",
+      "created_at": 1775105799125
+    },
+    {
+      "action_summary": "Shadow attacks 哥布林斥候 with dagger",
+      "resolution_summary": {
+        "result": "success",
+        "narrative_summary": "Shadow lunges forward with dagger in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene."
+      },
+      "narration_summary": "Shadow lunges forward with dagger in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene.",
+      "narration": "Shadow lunges forward with dagger in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through the scene.",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105799127
+    },
+    {
+      "action_summary": "Shadow attacks 哥布林斥候 with dagger",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "success",
+        "check": null,
+        "attack": {
+          "weapon": "dagger",
+          "target": "哥布林斥候",
+          "hit": true,
+          "damage": {
+            "dice_expression": "1d4",
+            "rolls": [
+              1
+            ],
+            "modifier": 2,
+            "total": 3
+          }
+        },
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "goblin-01",
+            "field": "hp",
+            "delta": -3,
+            "description": "Shadow hits 哥布林斥候 with dagger for 3 damage."
+          },
+          {
+            "target": "goblin-01",
+            "field": "conditions_add",
+            "delta": "defeated",
+            "description": "哥布林斥候 has been defeated!"
+          },
+          {
+            "target": "combat-encounter-01",
+            "field": "time",
+            "delta": 1,
+            "description": "战斗时间流逝。"
+          }
+        ]
+      },
+      "narration_summary": "Shadow hits the 哥布林斥候 with a decisive strike from the dagger, and the 哥布林斥候 collapses to the ground, defeated. The combat concludes as the battlefield falls silent. The 哥布林斥候 recoils and the air in 地下城通道 tightens around the clash. You can press the advantage now or scan the room for whoever reacts next. 哥布林斥候 staggers but does not leave the scene; something in the melee is about to answer your adv",
+      "narration": "Shadow hits the 哥布林斥候 with a decisive strike from the dagger, and the 哥布林斥候 collapses to the ground, defeated. The combat concludes as the battlefield falls silent.",
+      "scene_progression": "The 哥布林斥候 recoils and the air in 地下城通道 tightens around the clash. You can press the advantage now or scan the room for whoever reacts next.",
+      "gm_prompt": "哥布林斥候 staggers but does not leave the scene; something in the melee is about to answer your advantage. The room is still reacting to the last beat: Shadow lunges forward with dagger in hand and hits the 哥布林斥候. The blow lands cleanly, and the impact echoes through t... Time in 地下城通道 has advanced to beat 3. Do you press the wounded foe, break away to reposition, or react to whoever else moves?",
+      "created_at": 1775105799137
+    },
+    {
+      "action_summary": "Shadow attacks 哥布林斥候 with dagger",
+      "resolution_summary": {
+        "result": "success",
+        "narrative_summary": "Shadow hits the 哥布林斥候 with a decisive strike from the dagger, and the 哥布林斥候 collapses to the ground, defeated. The combat concludes as the battlefield falls silent."
+      },
+      "narration_summary": "Shadow hits the 哥布林斥候 with a decisive strike from the dagger, and the 哥布林斥候 collapses to the ground, defeated. The combat concludes as the battlefield falls silent.",
+      "narration": "Shadow hits the 哥布林斥候 with a decisive strike from the dagger, and the 哥布林斥候 collapses to the ground, defeated. The combat concludes as the battlefield falls silent.",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105799138
+    },
+    {
+      "action_summary": "Shadow uses investigation to search for hidden passages",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "failure",
+        "check": {
+          "ability": "int",
+          "skill": "investigation",
+          "proficient": false,
+          "modifier": 1,
+          "proficiency_bonus": 0,
+          "dc": 15,
+          "roll": 11,
+          "total": 12
+        },
+        "attack": null,
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "combat-encounter-01",
+            "field": "time",
+            "delta": 1,
+            "description": "时间流逝。"
+          },
+          {
+            "target": "rogue-shadow",
+            "field": "narrative_state",
+            "delta": "setback",
+            "description": "失败的尝试可能引起注意或浪费时间。"
+          }
+        ]
+      },
+      "narration_summary": "Shadow attempts to search for hidden passages, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Shadow. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back",
+      "narration": "Shadow attempts to search for hidden passages, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Shadow. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
+      "gm_prompt": "The failed attempt gives the scene permission to push back. The room is still reacting to the last beat: Shadow hits the 哥布林斥候 with a decisive strike from the dagger, and the 哥布林斥候 collapses to the ground, defeated. The co... Time in 地下城通道 has advanced to beat 4. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
+      "created_at": 1775105799146
+    }
+  ],
+  "scene_history": []
+}

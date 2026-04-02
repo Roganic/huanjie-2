@@ -98,19 +98,151 @@ def parse_equipment_action(intent: str, approach: str) -> tuple[str, str]:
     return operation, item_name
 
 
+def _handle_spell_action(req: ActionRequest, actor) -> Optional[ActionResponse]:
+    """Handle spell casting actions."""
+    from .spells.spell_resolver import is_cast_command, parse_cast_command, cast_spell
+    from .models.action import Effect
+    from .state import get_actor_by_id_or_name, consume_actor_spell_slot
+    
+    if not is_cast_command(req.intent):
+        return None
+    
+    spell_name, target_name = parse_cast_command(req.intent)
+    if spell_name is None:
+        return None
+    
+    target = None
+    if target_name:
+        target = get_actor_by_id_or_name(target_name)
+    if target is None:
+        from .spells.spell_registry import get_spell
+        spell = get_spell(spell_name)
+        if spell and spell.healing_dice:
+            # Healing spells default to caster
+            target = actor
+        else:
+            # Default target enemy if in combat context
+            from .state import get_enemy
+            target = get_enemy()
+    
+    result = cast_spell(actor, spell_name, target)
+    
+    if not result.success:
+        return ActionResponse(
+            action_summary=f"{actor.name} 尝试施放 {result.spell_name}",
+            resolution_type=ResolutionType.AUTO_SUCCESS,
+            outcome=Outcome.FAILURE,
+            effects=[],
+            narration=result.error_message or f"施放 {result.spell_name} 失败。",
+            scene_progression="法术施放失败。",
+            gm_prompt=result.error_message or "法术无法施放。",
+        )
+    
+    # cast_spell already consumed the spell slot in-place on the actor object.
+    # We just need to persist the session. apply_effects will do that.
+    
+    effects: list[Effect] = []
+    
+    # Track spell slot consumption
+    if result.slot_level > 0:
+        effects.append(Effect(
+            target=actor.id,
+            field="spell_slot_consumed",
+            delta=result.slot_level,
+            description=f"消耗 {result.slot_level} 环法术位",
+        ))
+    
+    # Apply HP effect to target
+    if result.damage is not None and target is not None:
+        # Negative damage = healing
+        if result.damage < 0:
+            hp_delta = -result.damage
+            effects.append(Effect(
+                target=target.id,
+                field="hp",
+                delta=hp_delta,
+                description=f"{target.name} 恢复 {hp_delta} 点生命值",
+            ))
+        else:
+            effects.append(Effect(
+                target=target.id,
+                field="hp",
+                delta=-result.damage,
+                description=f"{target.name} 受到 {result.damage} 点 {result.damage_type.value if result.damage_type else ''}伤害",
+            ))
+    
+    # Apply effects through state manager (this also persists the session)
+    from .state import apply_effects
+    apply_effects(effects)
+    
+    return ActionResponse(
+        action_summary=f"{actor.name} 施放 {result.spell_name}",
+        resolution_type=ResolutionType.AUTO_SUCCESS,
+        outcome=Outcome.SUCCESS,
+        effects=effects,
+        narration=result.narrative,
+        scene_progression=f"{result.spell_name} 施放成功。",
+        gm_prompt=f"{actor.name} 已施放 {result.spell_name}。",
+    )
+
+
+def _handle_rest_action(req: ActionRequest, actor) -> Optional[ActionResponse]:
+    """Handle short rest and long rest actions."""
+    from .spells.spell_resolver import is_rest_command
+    from .models.action import Effect
+    from .state import restore_actor_spell_slots, apply_effects
+    
+    is_rest, rest_type = is_rest_command(req.intent)
+    if not is_rest:
+        return None
+    
+    rest_name = "长休" if rest_type == "long" else "短休"
+    result = restore_actor_spell_slots(rest_type)
+    
+    effects: list[Effect] = []
+    if result.get("restored"):
+        effects.append(Effect(
+            target=actor.id,
+            field="spell_slots_restored",
+            delta=rest_type,
+            description=f"{rest_name}后法术位已恢复",
+        ))
+        apply_effects(effects)
+    
+    return ActionResponse(
+        action_summary=f"{actor.name} 进行{rest_name}",
+        resolution_type=ResolutionType.AUTO_SUCCESS,
+        outcome=Outcome.SUCCESS,
+        effects=effects,
+        narration=f"{actor.name} 完成了一次{rest_name}，感觉精神焕发。",
+        scene_progression=f"{rest_name}完成。" + ("法术位已恢复。" if result.get("restored") else ""),
+        gm_prompt=f"{actor.name} 已完成{rest_name}。",
+    )
+
+
 def handle_equipment_action(
     req: ActionRequest,
     actor,
 ) -> Optional[ActionResponse]:
-    """Handle an equipment action.
+    """Handle equipment, spell, and rest actions.
     
     Args:
         req: The action request
         actor: The actor performing the action
         
     Returns:
-        An ActionResponse if this was an equipment action, None otherwise
+        An ActionResponse if this was a special action, None otherwise
     """
+    # Check for spell actions first
+    spell_response = _handle_spell_action(req, actor)
+    if spell_response is not None:
+        return spell_response
+    
+    # Check for rest actions
+    rest_response = _handle_rest_action(req, actor)
+    if rest_response is not None:
+        return rest_response
+    
     from .state import equip_item_for_actor, unequip_item_from_actor
     
     if not is_equipment_action(req.intent, req.approach):

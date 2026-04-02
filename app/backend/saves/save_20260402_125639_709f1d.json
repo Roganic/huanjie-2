@@ -1,0 +1,343 @@
+{
+  "version": 1,
+  "saved_at": "2026-04-02T12:56:39.243079",
+  "save_id": "save_20260402_125639_709f1d",
+  "save_name": "存档 2026-04-02 12:56:39",
+  "session_id": "6a98abc554f34094b0fdce2e9ada277b",
+  "phase": "adventure",
+  "game_phase": "exploration",
+  "character": {
+    "id": "rogue-testrogue",
+    "name": "TestRogue",
+    "character_class": "rogue",
+    "abilities": {
+      "str": 10,
+      "dex": 15,
+      "con": 13,
+      "int": 12,
+      "wis": 14,
+      "cha": 8
+    },
+    "proficiency_bonus": 2,
+    "level": 1,
+    "hp": 8,
+    "hp_max": 9,
+    "ac": 13,
+    "conditions": [],
+    "description": "身手敏捷的机会主义者，靠时机与神经存活。",
+    "skills": [
+      {
+        "name": "athletics",
+        "ability": "str",
+        "proficient": false,
+        "modifier": 0
+      },
+      {
+        "name": "acrobatics",
+        "ability": "dex",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "sleight_of_hand",
+        "ability": "dex",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "stealth",
+        "ability": "dex",
+        "proficient": true,
+        "modifier": 4
+      },
+      {
+        "name": "arcana",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "history",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "investigation",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "nature",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "religion",
+        "ability": "int",
+        "proficient": false,
+        "modifier": 1
+      },
+      {
+        "name": "animal_handling",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "insight",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "medicine",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "perception",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "survival",
+        "ability": "wis",
+        "proficient": false,
+        "modifier": 2
+      },
+      {
+        "name": "deception",
+        "ability": "cha",
+        "proficient": true,
+        "modifier": 1
+      },
+      {
+        "name": "intimidation",
+        "ability": "cha",
+        "proficient": false,
+        "modifier": -1
+      },
+      {
+        "name": "performance",
+        "ability": "cha",
+        "proficient": false,
+        "modifier": -1
+      },
+      {
+        "name": "persuasion",
+        "ability": "cha",
+        "proficient": true,
+        "modifier": 1
+      }
+    ],
+    "inventory": [
+      {
+        "id": "shortsword",
+        "name": "短剑",
+        "type": "weapon",
+        "damage_dice": "1d6",
+        "attack_ability": "dex",
+        "base_ac": null,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "一把轻便的短剑，适合快速攻击。"
+      },
+      {
+        "id": "leather",
+        "name": "皮甲",
+        "type": "armor",
+        "damage_dice": null,
+        "attack_ability": null,
+        "base_ac": 11,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "轻便的皮革护甲，不影响灵活性。"
+      }
+    ],
+    "equipped": {
+      "weapon": {
+        "id": "shortsword",
+        "name": "短剑",
+        "type": "weapon",
+        "damage_dice": "1d6",
+        "attack_ability": "dex",
+        "base_ac": null,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "一把轻便的短剑，适合快速攻击。"
+      },
+      "armor": {
+        "id": "leather",
+        "name": "皮甲",
+        "type": "armor",
+        "damage_dice": null,
+        "attack_ability": null,
+        "base_ac": 11,
+        "add_dex_modifier": true,
+        "max_dex_bonus": null,
+        "description": "轻便的皮革护甲，不影响灵活性。"
+      }
+    },
+    "spell_slots": []
+  },
+  "enemy": {
+    "id": "goblin-01",
+    "name": "哥布林斥候",
+    "character_class": null,
+    "abilities": {
+      "str": 8,
+      "dex": 14,
+      "con": 10,
+      "int": 10,
+      "wis": 8,
+      "cha": 8
+    },
+    "proficiency_bonus": 2,
+    "level": 1,
+    "hp": 7,
+    "hp_max": 7,
+    "ac": 12,
+    "conditions": [],
+    "description": "一只瘦小的哥布林，手持锈迹斑斑的匕首。",
+    "skills": [],
+    "inventory": [],
+    "equipped": {
+      "weapon": null,
+      "armor": null
+    },
+    "spell_slots": []
+  },
+  "scene": {
+    "id": "village-square-01",
+    "name": "十字路口村庄广场",
+    "description": "村庄的中心广场，几座破旧但整洁的房屋环绕着一口古老的水井。清晨的阳光洒在鹅卵石铺就的地面上，几个村民正在忙碌地准备着新的一天。铁匠铺传来叮叮当当的敲打声，杂货店老板正在门前整理货物。北方是酒馆，东方是通往森林的小路。",
+    "actors": [
+      "rogue-testrogue"
+    ],
+    "npcs": [
+      {
+        "id": "village-elder-01",
+        "name": "村长托马斯",
+        "type": "friendly",
+        "description": "白发苍苍的村庄长老，对本地的历史和附近的危险了如指掌。",
+        "race": "人类",
+        "occupation": "村长",
+        "dialogue_count": 0
+      },
+      {
+        "id": "blacksmith-01",
+        "name": "铁匠格鲁姆",
+        "type": "friendly",
+        "description": "身材魁梧的矮人铁匠，正在铁匠铺里忙碌地打造农具。",
+        "race": "矮人",
+        "occupation": "铁匠",
+        "dialogue_count": 0
+      },
+      {
+        "id": "merchant-02",
+        "name": "杂货商莉莉",
+        "type": "neutral",
+        "description": "精明的半精灵商人，出售各种冒险必需品。",
+        "race": "半精灵",
+        "occupation": "商人",
+        "dialogue_count": 0
+      }
+    ],
+    "time": 1,
+    "flags": [],
+    "exits": [
+      {
+        "direction": "north",
+        "target_scene_id": "tavern-01"
+      },
+      {
+        "direction": "east",
+        "target_scene_id": "dungeon-entrance-01"
+      }
+    ]
+  },
+  "combat_state": null,
+  "action_history": [
+    {
+      "action_summary": "TestRogue attempts to look around by observe",
+      "resolution_summary": {
+        "resolution_type": "auto_success",
+        "outcome": "success",
+        "check": null,
+        "attack": null,
+        "saving_throw": null,
+        "effects": []
+      },
+      "narration_summary": "TestRogue sets out to look around. Through skill and determination, the attempt succeeds, bringing the desired result. A ripple of response moves through 十字路口村庄广场 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed. A fresh opening has appeared in 十字路口村庄广场, but it will not stay open for long. Do you exp",
+      "narration": "TestRogue sets out to look around. Through skill and determination, the attempt succeeds, bringing the desired result.",
+      "scene_progression": "A ripple of response moves through 十字路口村庄广场 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed.",
+      "gm_prompt": "A fresh opening has appeared in 十字路口村庄广场, but it will not stay open for long. Do you exploit that opening immediately, question whoever reacts, or examine what just shifted?",
+      "created_at": 1775105799234
+    },
+    {
+      "action_summary": "TestRogue attempts to look around by observe",
+      "resolution_summary": {
+        "result": "success",
+        "narrative_summary": "TestRogue sets out to look around. Through skill and determination, the attempt succeeds, bringing the desired result."
+      },
+      "narration_summary": "TestRogue sets out to look around. Through skill and determination, the attempt succeeds, bringing the desired result.",
+      "narration": "TestRogue sets out to look around. Through skill and determination, the attempt succeeds, bringing the desired result.",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105799235
+    },
+    {
+      "action_summary": "TestRogue attempts to enter the dungeon by proceed",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "failure",
+        "check": {
+          "ability": "str",
+          "modifier": 0,
+          "dc": 15,
+          "roll": 2,
+          "total": 4
+        },
+        "attack": null,
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "village-square-01",
+            "field": "time",
+            "delta": 1,
+            "description": "时间流逝。"
+          },
+          {
+            "target": "rogue-testrogue",
+            "field": "hp",
+            "delta": -1,
+            "description": "体力消耗造成轻微伤害。"
+          }
+        ]
+      },
+      "narration_summary": "TestRogue attempts to enter the dungeon, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around TestRogue. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. T",
+      "narration": "TestRogue attempts to enter the dungeon, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around TestRogue. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
+      "gm_prompt": "The failed attempt gives the scene permission to push back. The room is still reacting to the last beat: TestRogue sets out to look around. Through skill and determination, the attempt succeeds, bringing the desired result. Time in 十字路口村庄广场 has advanced to beat 1. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
+      "created_at": 1775105799241
+    },
+    {
+      "action_summary": "TestRogue attempts to enter the dungeon by proceed",
+      "resolution_summary": {
+        "result": "failure",
+        "narrative_summary": "TestRogue attempts to enter the dungeon, but fortune does not favor them this time. The effort falls short of success."
+      },
+      "narration_summary": "TestRogue attempts to enter the dungeon, but fortune does not favor them this time. The effort falls short of success.",
+      "narration": "TestRogue attempts to enter the dungeon, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "",
+      "gm_prompt": "",
+      "created_at": 1775105799242
+    }
+  ],
+  "scene_history": []
+}

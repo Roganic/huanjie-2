@@ -86,7 +86,6 @@ async def combat_action(req: ActionRequest, request: Request):
         result = await asyncio.to_thread(resolve_action_with_agent, req)
 
         # Attach current combat state to response
-        from ..state import get_combat_state
         current_combat = get_combat_state(session_id=session_id)
         response_data = result.model_dump(mode="json")
         response_data["combat_state"] = current_combat.model_dump(mode="json")

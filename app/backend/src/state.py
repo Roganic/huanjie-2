@@ -14,7 +14,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .models.action import Effect
+from .models.action import CombatState, Effect
 from .models.state import (
     AbilityScores,
     Actor,
@@ -162,6 +162,7 @@ class SessionData(BaseModel):
     enemy: Actor = Field(default_factory=lambda: Actor(**_ENEMY_INIT))
     scene: Scene = Field(default_factory=lambda: Scene(**_CHARACTER_CREATION_SCENE_INIT))
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
+    combat_state: CombatState = Field(default_factory=CombatState)
     updated_at: float = Field(default_factory=time.time)
 
 
@@ -276,6 +277,80 @@ def set_combat_scene(session_id: str | None = None) -> None:
         _save_session(session)
 
 
+def get_combat_state(session_id: str | None = None) -> CombatState:
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return session.combat_state
+
+
+def set_combat_state(combat_state: CombatState, session_id: str | None = None) -> None:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        session.combat_state = combat_state
+        _save_session(session)
+
+
+def start_combat_session(session_id: str | None = None) -> CombatState:
+    """Initialize combat state for the current session."""
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        set_combat_scene(resolved_session_id)
+        turn_order: list[str] = []
+        combatant_hp: dict[str, int] = {}
+        combatant_names: dict[str, str] = {}
+        if session.actor is not None:
+            turn_order.append(session.actor.id)
+            combatant_hp[session.actor.id] = session.actor.hp
+            combatant_names[session.actor.id] = session.actor.name
+        turn_order.append(session.enemy.id)
+        combatant_hp[session.enemy.id] = session.enemy.hp
+        combatant_names[session.enemy.id] = session.enemy.name
+        session.combat_state = CombatState(
+            is_active=True,
+            round_number=1,
+            current_turn_index=0,
+            turn_order=turn_order,
+            combatant_hp=combatant_hp,
+            combatant_names=combatant_names,
+            combat_ended=False,
+            outcome=None,
+        )
+        _save_session(session)
+        return session.combat_state
+
+
+def end_combat_session(outcome: str, session_id: str | None = None) -> CombatState:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        session.combat_state.combat_ended = True
+        session.combat_state.outcome = outcome
+        session.combat_state.is_active = False
+        _save_session(session)
+        return session.combat_state
+
+
+def advance_combat_round(session_id: str | None = None) -> CombatState:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        cs = session.combat_state
+        if cs.is_active and not cs.combat_ended:
+            cs.round_number += 1
+            _save_session(session)
+        return cs
+
+
+def update_combatant_hp(combatant_id: str, hp: int, session_id: str | None = None) -> None:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if combatant_id in session.combat_state.combatant_hp:
+            session.combat_state.combatant_hp[combatant_id] = max(0, hp)
+            _save_session(session)
+
+
 def has_character(session_id: str | None = None) -> bool:
     session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
     return session.actor is not None and session.phase == GamePhase.ADVENTURE
@@ -364,6 +439,7 @@ def create_character(
         session.scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [session.actor.id]})
         session.enemy = Actor(**_ENEMY_INIT)
         session.narrative_history = []
+        session.combat_state = CombatState()
         _save_session(session)
     return get_bootstrap_state(session_id=resolved_session_id)
 
@@ -442,9 +518,11 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
 
     if actor is not None and eff.target in (actor.id, actor.name):
         if eff.field == "hp" and isinstance(eff.delta, int):
+            new_hp = max(0, min(actor.hp_max, actor.hp + eff.delta))
             session.actor = actor.model_copy(
-                update={"hp": max(0, min(actor.hp_max, actor.hp + eff.delta))}
+                update={"hp": new_hp}
             )
+            update_combatant_hp(actor.id, new_hp, session_id=session.session_id)
         elif eff.field == "conditions_add" and isinstance(eff.delta, str):
             if eff.delta not in actor.conditions:
                 session.actor = actor.model_copy(
@@ -458,9 +536,11 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
 
     if eff.target in (enemy.id, enemy.name):
         if eff.field == "hp" and isinstance(eff.delta, int):
+            new_hp = max(0, min(enemy.hp_max, enemy.hp + eff.delta))
             session.enemy = enemy.model_copy(
-                update={"hp": max(0, min(enemy.hp_max, enemy.hp + eff.delta))}
+                update={"hp": new_hp}
             )
+            update_combatant_hp(enemy.id, new_hp, session_id=session.session_id)
         elif eff.field == "conditions_add" and isinstance(eff.delta, str):
             if eff.delta not in enemy.conditions:
                 session.enemy = enemy.model_copy(

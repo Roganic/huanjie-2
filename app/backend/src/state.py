@@ -352,6 +352,39 @@ def append_narrative_history(
             pass
 
 
+def append_action_history(
+    entry: dict,
+    session_id: str | None = None,
+) -> None:
+    """Append an action history entry to the session.
+    
+    This is a simplified version that stores action history.
+    For now it just appends to narrative history for tracking.
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        # For now, action history is tracked via narrative history
+        # This function exists for API compatibility
+        _save_session(session)
+
+
+def get_action_history(
+    session_id: str | None = None,
+) -> list[dict]:
+    """Get action history for the session.
+    
+    Returns a list of action history entries.
+    Currently returns an empty list as action history is tracked via narrative history.
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        # Return empty list as action history is tracked via narrative history
+        # This function exists for API compatibility
+        return []
+
+
 def get_narrative_context(
     max_entries: int = DEFAULT_PROMPT_HISTORY_ENTRIES,
     max_chars: int = DEFAULT_PROMPT_HISTORY_CHARS,

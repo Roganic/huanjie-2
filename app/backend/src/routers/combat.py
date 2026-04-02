@@ -164,6 +164,7 @@ async def combat_start(request: Request):
                 save_combat_state(combat_state)
 
         return {
+            "combat_id": f"combat-{session_id}",
             "session_id": session_id,
             "round_number": combat_state.round_number,
             "current_turn": combat_state.current_combatant().id if combat_state.current_combatant() else None,
@@ -178,6 +179,7 @@ async def combat_start(request: Request):
                     "ac": c.ac,
                     "initiative": c.initiative,
                     "status": c.status.value,
+                    "is_player": c.type == CombatantType.PLAYER,
                 }
                 for c in combat_state.combatants
             ],
@@ -198,10 +200,14 @@ async def combat_state_endpoint(request: Request):
         raise HTTPException(status_code=404, detail="No active combat found.")
 
     return {
+        "combat_id": f"combat-{session_id}",
         "session_id": session_id,
         "round_number": combat_state.round_number,
+        "turn_index": combat_state.turn_index,
+        "current_actor_id": combat_state.current_combatant().id if combat_state.current_combatant() else None,
         "current_turn": combat_state.current_combatant().id if combat_state.current_combatant() else None,
         "turn_order": combat_state.turn_order,
+        "initiative_order": combat_state.turn_order,
         "combatants": [
             {
                 "id": c.id,
@@ -212,9 +218,25 @@ async def combat_state_endpoint(request: Request):
                 "ac": c.ac,
                 "initiative": c.initiative,
                 "status": c.status.value,
+                "is_player": c.type == CombatantType.PLAYER,
             }
             for c in combat_state.combatants
         ],
+        "participants": [
+            {
+                "id": c.id,
+                "name": c.name,
+                "type": c.type.value,
+                "hp": c.hp,
+                "hp_max": c.hp_max,
+                "ac": c.ac,
+                "initiative": c.initiative,
+                "status": c.status.value,
+                "is_player": c.type == CombatantType.PLAYER,
+            }
+            for c in combat_state.combatants
+        ],
+        "status": combat_state.outcome.value,
         "outcome": combat_state.outcome.value,
         "log": combat_state.log,
     }

@@ -14,11 +14,11 @@ MAGIC_MISSILE = Spell(
     school=SpellSchool.EVOCATION,
     damage_dice="1d4+1",
     damage_type=DamageType.FORCE,
-    num_projectiles=3,
+    num_projectiles=1,
     auto_hit=True,
     range_ft=120,
     casting_time="1 action",
-    description="你创造三支由魔法能量构成的飞镖，自动命中目标。每支造成 1d4+1 力场伤害。",
+    description="你创造一支由魔法能量构成的飞镖，自动命中目标。造成 1d4+1 力场伤害。",
     available_to=["mage"],
 )
 
@@ -57,7 +57,7 @@ FIREBALL = Spell(
 CURE_WOUNDS = Spell(
     id="cure_wounds",
     name="Cure Wounds",
-    name_cn="治疗之触",
+    name_cn="治疗术",
     level=1,
     school=SpellSchool.EVOCATION,
     healing_dice="1d8",
@@ -65,7 +65,7 @@ CURE_WOUNDS = Spell(
     range_ft=5,
     casting_time="1 action",
     description="你触碰一个生物，为其恢复 1d8+智力调整值 点生命值。",
-    available_to=["mage"],
+    available_to=["mage", "cleric"],
 )
 
 RAY_OF_FROST = Spell(
@@ -97,7 +97,8 @@ SPELLS: dict[str, Spell] = {
     "魔法飞弹": MAGIC_MISSILE,
     "燃烧之手": BURNING_HANDS,
     "火球术": FIREBALL,
-    "治疗之触": CURE_WOUNDS,
+    "治疗术": CURE_WOUNDS,
+    "治疗之触": CURE_WOUNDS,  # legacy alias
     "寒冰射线": RAY_OF_FROST,
 }
 

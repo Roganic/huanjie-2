@@ -41,15 +41,16 @@ def _resolve_session(request: Request, create_if_missing: bool) -> tuple[str, ob
 @router.get("/state")
 async def state(request: Request):
     """Return the current game state for clients, including action_history."""
-    from ..state import get_character_rest_status
-    
+    from ..game.state import get_character_rest_status
+    from ..state import get_enemy
+
     session_id, bootstrap = _resolve_session(request, create_if_missing=True)
     result = bootstrap.model_dump(mode="json")
     # Include action_history from session storage
     provided_session_id = _request_session_id(request)
     resolved_id = provided_session_id or session_id
     result["action_history"] = get_action_history(resolved_id)
-    
+
     # Include character rest status (hit_dice_remaining, spell_slots)
     if bootstrap.actor is not None:
         rest_status = get_character_rest_status(resolved_id)
@@ -60,7 +61,11 @@ async def state(request: Request):
                 result["actor"]["hit_dice_total"] = rest_status["hit_dice_total"]
                 result["actor"]["spell_slots"] = rest_status["spell_slots"]
                 result["actor"]["spell_slots_max"] = rest_status["spell_slots_max"]
-    
+
+    # Include enemy state for combat tracking
+    enemy = get_enemy(session_id=resolved_id)
+    result["enemy"] = enemy.model_dump(mode="json")
+
     return result
 
 

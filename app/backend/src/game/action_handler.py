@@ -25,6 +25,9 @@ _SPELL_NAMES_EN = [
     "magic missile", "fireball", "burning hands", "cure wounds", "ray of frost",
 ]
 
+# 治疗性法术列表（目标为施法者自身）
+_HEALING_SPELL_IDS = {"cure_wounds"}
+
 _LONG_REST_KEYWORDS = ["长休", "long rest"]
 _SHORT_REST_KEYWORDS = ["短休", "short rest"]
 
@@ -106,8 +109,9 @@ def handle_spell_cast(
             "narration": "施法失败。",
         }
 
-    # 查找法术
-    spell = get_spell(spell_name)
+    # 查找法术（优先使用 spell ID 避免别名覆盖问题）
+    lookup_name = _SPELL_NAME_TO_ID.get(spell_name, spell_name)
+    spell = get_spell(lookup_name)
     if spell is None:
         return {
             "spell_name": spell_name,
@@ -118,6 +122,10 @@ def handle_spell_cast(
             "success": False,
             "error_message": f"未知法术: {spell_name}",
             "narration": f"未找到法术 {spell_name}。",
+            "effect_type": "none",
+            "roll_result": [],
+            "damage": 0,
+            "heal": 0,
         }
 
     # 检查是否可以施放
@@ -134,8 +142,12 @@ def handle_spell_cast(
             "narration": error,
         }
 
-    # 获取目标
-    target = get_enemy(session_id=session_id)
+    # 判断目标：治疗法术以施法者为目标，伤害法术以敌人为目标
+    is_healing_spell = spell.id in _HEALING_SPELL_IDS
+    if is_healing_spell:
+        target = actor
+    else:
+        target = get_enemy(session_id=session_id)
 
     # 施放法术（消耗法术槽）
     result = cast_spell(actor, spell_name, target)
@@ -150,6 +162,11 @@ def handle_spell_cast(
             "success": False,
             "error_message": result.error_message or "施法失败。",
             "narration": result.error_message or "施法失败。",
+            # 新验收标准字段
+            "effect_type": "none",
+            "roll_result": [],
+            "damage": 0,
+            "heal": 0,
         }
 
     # 构建效果列表
@@ -163,17 +180,30 @@ def handle_spell_cast(
         ))
 
     damage_total = result.damage or 0
-    if damage_total != 0 and target is not None:
+    heal_amount = 0
+
+    if is_healing_spell:
+        # 治疗法术：恢复施法者 HP（不超过 hp_max）
+        heal_amount = abs(damage_total)
+        if heal_amount > 0:
+            effects.append(Effect(
+                target=actor.id,
+                field="hp",
+                delta=heal_amount,
+                description=f"{actor.name} 恢复 {heal_amount} 点生命值",
+            ))
+        effect_type = "heal"
+    elif damage_total > 0 and target is not None:
+        # 伤害法术：对目标造成伤害
         effects.append(Effect(
             target=target.id,
             field="hp",
-            delta=-abs(damage_total) if damage_total > 0 else abs(damage_total),
-            description=(
-                f"{target.name} 受到 {damage_total} 点伤害"
-                if damage_total > 0
-                else f"{target.name} 恢复 {abs(damage_total)} 点生命值"
-            ),
+            delta=-damage_total,
+            description=f"{target.name} 受到 {damage_total} 点伤害",
         ))
+        effect_type = "damage"
+    else:
+        effect_type = "none"
 
     # 持久化效果
     try:
@@ -186,11 +216,16 @@ def handle_spell_cast(
         "spell_level": result.slot_level,
         "slot_used": result.slot_level,
         "damage_roll": result.damage_rolls,
-        "damage_total": damage_total,
+        "damage_total": damage_total if not is_healing_spell else 0,
         "success": True,
         "error_message": None,
         "narration": result.narrative,
         "effects": [e.model_dump() for e in effects],
+        # 新验收标准字段
+        "effect_type": effect_type,
+        "roll_result": result.damage_rolls,
+        "damage": damage_total if not is_healing_spell else 0,
+        "heal": heal_amount,
     }
 
 
@@ -217,6 +252,14 @@ def _parse_spell_name(intent: str) -> Optional[str]:
         return match.group(1).strip()
 
     return None
+
+
+# 法术名称到 spell ID 的映射（用于避免别名覆盖问题）
+_SPELL_NAME_TO_ID: dict[str, str] = {
+    "治疗术": "cure_wounds",
+    "治疗之触": "cure_wounds",
+    "cure wounds": "cure_wounds",
+}
 
 
 # ---------------------------------------------------------------------------

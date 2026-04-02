@@ -42,6 +42,13 @@ from ..state import (
     _resolve_session_id,
     _save_session,
 )
+from ..game.action_handler import (
+    is_spell_cast_intent,
+    handle_spell_cast,
+    is_rest_intent,
+    handle_long_rest,
+    handle_short_rest,
+)
 
 router = APIRouter(tags=["game"])
 
@@ -331,11 +338,122 @@ async def submit_action(req: ActionRequest, request: Request):
                 },
             )
 
+        # Check for rest actions before routing to agent
+        is_rest, rest_type = is_rest_intent(req.intent)
+        if is_rest:
+            actor = get_actor(session_id=session_id)
+            if actor is None:
+                raise HTTPException(status_code=400, detail="No character found.")
+
+            if rest_type == "long":
+                rest_result = handle_long_rest(actor, session_id=session_id)
+            else:
+                rest_result = handle_short_rest(actor, session_id=session_id)
+
+            # Refresh actor after rest
+            actor = get_actor(session_id=session_id) or actor
+            _rest_session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+            if _rest_session.game_phase == AdventurePhase.COMBAT:
+                update_combatant_hp(actor.id, actor.hp)
+
+            rest_effects = [Effect(**e) for e in rest_result.get("effects", [])]
+            result = ActionResponse(
+                action_summary=f"{'长休' if rest_type == 'long' else '短休'}",
+                resolution_type=ResolutionType.AUTO_SUCCESS,
+                outcome=Outcome.SUCCESS,
+                effects=rest_effects,
+                narration=rest_result.get("narration", ""),
+                scene_progression="",
+                gm_prompt="",
+            )
+            append_action_history(
+                {
+                    "action": result.action_summary,
+                    "result": result.outcome.value,
+                    "narrative_summary": (result.narration or "")[:400],
+                },
+                session_id=session_id,
+            )
+            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
+            if not accepts_stream:
+                return result
+            return StreamingResponse(
+                _stream_action_response(result),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+
+        # Check for spell cast actions before routing to agent
+        if is_spell_cast_intent(req.intent):
+            actor = get_actor(session_id=session_id)
+            if actor is None:
+                raise HTTPException(status_code=400, detail="No character found.")
+
+            spell_result = handle_spell_cast(req.intent, actor, session_id=session_id)
+
+            if spell_result is not None:
+                # Refresh actor after spell cast
+                actor = get_actor(session_id=session_id) or actor
+                _spell_session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+                if _spell_session.game_phase == AdventurePhase.COMBAT:
+                    update_combatant_hp(actor.id, actor.hp)
+
+                spell_effects = [Effect(**e) for e in spell_result.get("effects", [])]
+
+                if not spell_result["success"]:
+                    spell_response = ActionResponse(
+                        action_summary=f"施放 {spell_result['spell_name']}",
+                        resolution_type=ResolutionType.AUTO_SUCCESS,
+                        outcome=Outcome.FAILURE,
+                        effects=[],
+                        narration=spell_result.get("narration", spell_result.get("error_message", "")),
+                        scene_progression="",
+                        gm_prompt="",
+                    )
+                else:
+                    spell_response = ActionResponse(
+                        action_summary=f"施放 {spell_result['spell_name']}",
+                        resolution_type=ResolutionType.AUTO_SUCCESS,
+                        outcome=Outcome.SUCCESS,
+                        effects=spell_effects,
+                        narration=spell_result.get("narration", ""),
+                        scene_progression="",
+                        gm_prompt="",
+                    )
+
+                append_action_history(
+                    {
+                        "action": spell_response.action_summary,
+                        "result": spell_response.outcome.value,
+                        "narrative_summary": (spell_response.narration or "")[:400],
+                    },
+                    session_id=session_id,
+                )
+
+                accepts_stream = "text/event-stream" in request.headers.get("accept", "")
+                if not accepts_stream:
+                    raw = spell_response.model_dump(mode="json")
+                    raw["spell_cast"] = spell_result
+                    return raw
+                return StreamingResponse(
+                    _stream_action_response(spell_response),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "X-Accel-Buffering": "no",
+                    },
+                )
+
         try:
             # Check if this is a scene interaction action
             session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
             element = find_interactive_element(req.intent, session.scene.id)
-            
+
             if element is not None:
                 # Handle scene interaction with skill check
                 result, _ = handle_scene_interaction(req, element)

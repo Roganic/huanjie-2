@@ -158,6 +158,34 @@
 
 **详细审查报告**：`docs/sessions/2026-04-02-mage-spell-slots-integration-acceptance.md`
 
+## 2026-04-02 — 里程碑 2 功能完整性最终验收
+
+**验收状态：通过**
+
+完成里程碑二（功能完整性/完整游戏循环）最终端到端验收，确认所有已完成的 Objective 协同工作，形成完整的游戏循环体验。
+
+**验收标准达成：**
+
+| 标准 | 状态 | 备注 |
+|-----|------|------|
+| 端到端测试文件 | ✅ 通过 | `test_milestone_2_final_acceptance.py` 已创建，6个测试全部通过 |
+| 完整游戏循环覆盖 | ✅ 通过 | 角色创建 → 探索（地图同步）→ 战斗 → 物品使用 → 获得XP升级 |
+| 地图状态同步 | ✅ 通过 | GET /map 的 current_node 与 GET /state 的 scene.id 始终一致 |
+| 法师施法验证 | ✅ 通过 | spell_slots 消耗、目标HP减少、裁定记录完整 |
+| 升级系统验证 | ✅ 通过 | character.level 增加，proficiency_bonus 按 D&D 5e 规则更新 |
+| 职业特性验证 | ✅ 通过 | 战士 second_wind、盗贼 sneak_attack 正确工作 |
+| 回合顺序验证 | ✅ 通过 | initiative_order 正确排序，current_turn 正确推进 |
+| 无新增失败 | ✅ 通过 | 总测试数从 562 增加到 568，失败数保持 47 不变 |
+
+**新增测试文件：**
+- `app/backend/tests/test_milestone_2_final_acceptance.py`：6个端到端测试
+  - `test_complete_game_loop_warrior_path_with_level_up`：战士完整循环到升级
+  - `test_mage_spell_casting_in_combat`：法师施法验证（法术槽消耗、HP减少）
+  - `test_rogue_sneak_attack_in_combat`：盗贼偷袭特性验证
+  - `test_combat_initiative_and_turn_order`：先攻和回合顺序验证
+  - `test_level_up_proficiency_bonus_update`：升级后熟练加值验证
+  - `test_full_game_loop_all_classes`：三职业完整循环验证
+
 ---
 
 ## 当前共识

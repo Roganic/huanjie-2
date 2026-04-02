@@ -26,7 +26,9 @@ from .models.state import (
     CharacterEquipped,
     CharacterCreateRequest,
     CharacterSkill,
+    ClassFeatures,
     DEFAULT_ARMORS,
+    DEFAULT_CONSUMABLES,
     DEFAULT_WEAPONS,
     EquippedItems,
     GamePhase,
@@ -36,6 +38,7 @@ from .models.state import (
     Scene,
     SceneHistoryEntry,
     Skill,
+    SpellSlot,
 )
 from .npc.dialogue_state import (
     NPCDialogueState,
@@ -56,15 +59,30 @@ _CHARACTER_CREATION_SCENE_INIT = dict(
 
 def _get_adventure_scene_init() -> dict:
     """Get the initial adventure scene with NPCs."""
+    # Use new scene_map system for exits
+    from .scene_map import get_default_scene_node, VILLAGE_SQUARE_NODE
+    
     scene = get_default_exploration_scene()
-    return {
+    node = get_default_scene_node()
+    
+    result = {
         "id": scene.id,
         "name": scene.name,
         "description": scene.description,
         "actors": [],
         "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
-        "exits": [exit.model_dump(mode="json") for exit in scene.exits],
     }
+    
+    # Use new scene_map exits
+    if node and node.exits:
+        result["exits"] = [
+            {"direction": exit_info.direction, "target_scene_id": exit_info.target_scene_id}
+            for exit_info in node.exits
+        ]
+    else:
+        result["exits"] = []
+    
+    return result
 
 
 _ADVENTURE_SCENE_INIT = _get_adventure_scene_init()
@@ -337,6 +355,46 @@ def append_narrative_history(
             pass
 
 
+def append_action_history(
+    entry: dict,
+    session_id: str | None = None,
+) -> None:
+    """Append an action to the narrative history.
+    
+    This is a simplified wrapper that creates a NarrativeHistoryEntry
+    from a dictionary.
+    """
+    from datetime import datetime
+    
+    narrative_entry = NarrativeHistoryEntry(
+        action_summary=entry.get("action", ""),
+        resolution_summary={
+            "result": entry.get("result", ""),
+            "narrative_summary": entry.get("narrative_summary", ""),
+        },
+        narration_summary=entry.get("narrative_summary", ""),
+        narration=entry.get("narrative_summary", ""),
+        created_at=int(datetime.now().timestamp() * 1000),
+    )
+    append_narrative_history(narrative_entry, session_id)
+
+
+def get_action_history(session_id: str | None = None) -> list[dict]:
+    """Get action history for a session.
+    
+    Returns a list of action entries with action, result, and narrative_summary.
+    """
+    history = get_narrative_history(session_id=session_id)
+    return [
+        {
+            "action": entry.action_summary,
+            "result": entry.resolution_summary.get("result", ""),
+            "narrative_summary": entry.narration_summary,
+        }
+        for entry in history
+    ]
+
+
 def get_narrative_context(
     max_entries: int = DEFAULT_PROMPT_HISTORY_ENTRIES,
     max_chars: int = DEFAULT_PROMPT_HISTORY_CHARS,
@@ -398,16 +456,24 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
         True if scene was switched, False if scene_id not found
     """
     from .scene import get_scene_by_id
+    from .scene_map import get_scene_node
     
     scene_data = get_scene_by_id(scene_id)
     if scene_data is None:
         return False
+    
+    # Get scene node from new scene_map for exits
+    scene_node = get_scene_node(scene_id)
     
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:
         session = _get_session(resolved_session_id, create_if_missing=True)
         # Preserve the player actor in the actors list
         actors = [session.actor.id] if session.actor else []
+        
+        # Get exits from scene_map node if available
+        exits = scene_node.to_scene_exit_list() if scene_node else scene_data.exits
+        
         session.scene = Scene(
             id=scene_data.id,
             name=scene_data.name,
@@ -415,7 +481,7 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
             actors=actors,
             npcs=scene_data.npcs,
             time=session.scene.time,  # Preserve time from previous scene
-            exits=scene_data.exits,  # Include exits for navigation
+            exits=exits,  # Include exits for navigation
         )
         _save_session(session)
     return True
@@ -542,13 +608,29 @@ def create_character(
 
         # Get starting equipment for the class
         weapon, armor = _get_starting_equipment(req.character_class)
-        inventory = [weapon, armor]
+        # Give every character a healing potion to start with
+        potion = InventoryItem.from_consumable(DEFAULT_CONSUMABLES["healing_potion"])
+        inventory = [weapon, armor, potion]
         equipped = EquippedItems(weapon=weapon, armor=armor)
 
         # Calculate AC based on equipped armor
         ac = _calculate_ac_with_armor(abilities, armor)
 
         skills = _build_skills(abilities, req.character_class, proficiency_bonus=2)
+
+        # Initialize spell slots for mages (2 1st-level slots at level 1)
+        spell_slots: list[SpellSlot] = []
+        if req.character_class == CharacterClass.MAGE:
+            spell_slots = [
+                SpellSlot(level=1, max=2, current=2),
+            ]
+
+        # Initialize class features based on class
+        class_features = ClassFeatures()
+        if req.character_class == CharacterClass.WARRIOR:
+            class_features = ClassFeatures(second_wind_used=False, action_surge_used=False)
+        elif req.character_class == CharacterClass.ROGUE:
+            class_features = ClassFeatures(sneak_attack_available=True)
 
         session.actor = Actor(
             id=actor_id,
@@ -557,6 +639,7 @@ def create_character(
             abilities=abilities,
             proficiency_bonus=2,
             level=1,
+            experience_points=0,
             hp=hp,
             hp_max=hp,
             ac=ac,
@@ -564,6 +647,8 @@ def create_character(
             skills=skills,
             inventory=inventory,
             equipped=equipped,
+            spell_slots=spell_slots,
+            class_features=class_features,
         )
         session.phase = GamePhase.ADVENTURE
         # Initialize scene with NPCs from scene system
@@ -620,10 +705,17 @@ def get_character_card(session_id: str | None = None) -> CharacterCard | None:
     if actor.equipped.armor:
         equipped_dict.armor = _inventory_item_to_dict(actor.equipped.armor)
     
+    # Build spell slots info
+    spell_slots_info = [
+        {"level": slot.level, "max": slot.max, "current": slot.current}
+        for slot in actor.spell_slots
+    ]
+
     return CharacterCard(
         name=actor.name,
         class_=actor.character_class.value if actor.character_class else "",
         level=actor.level,
+        experience_points=actor.experience_points,
         proficiency_bonus=actor.proficiency_bonus,
         attributes={
             "str": {
@@ -664,6 +756,7 @@ def get_character_card(session_id: str | None = None) -> CharacterCard | None:
         ],
         inventory=[_inventory_item_to_dict(item) for item in actor.inventory],
         equipped=equipped_dict,
+        spell_slots=spell_slots_info,
     )
 
 
@@ -674,6 +767,126 @@ def apply_effects(effects: list[Effect], session_id: str | None = None) -> None:
         for effect in effects:
             _apply_one(session, effect)
         _save_session(session)
+
+
+def equip_item_for_actor(item_name: str, session_id: str | None = None) -> dict:
+    """Equip an item from the actor's inventory.
+    
+    Args:
+        item_name: The name of the item to equip
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        A dictionary with the result:
+        - success: True if equipped successfully
+        - item: The equipped item info (if success)
+        - previous_item: The previously equipped item (if any)
+        - ac: The new AC value
+        - error: Error message (if not success)
+    """
+    from .equipment import equip_item, ItemNotFoundError, InvalidItemTypeError
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.actor is None:
+            return {"success": False, "error": "No character found"}
+        
+        try:
+            updated_actor, equipped_item, previous_item = equip_item(session.actor, item_name)
+            session.actor = updated_actor
+            _save_session(session)
+            
+            # Persist to save file
+            try:
+                from . import game_state
+                game_state.save_current_game(session_id=resolved_session_id)
+            except Exception:
+                pass
+            
+            return {
+                "success": True,
+                "item": {
+                    "id": equipped_item.id,
+                    "name": equipped_item.name,
+                    "type": equipped_item.type.value,
+                },
+                "previous_item": {
+                    "id": previous_item.id,
+                    "name": previous_item.name,
+                    "type": previous_item.type.value,
+                } if previous_item else None,
+                "ac": updated_actor.ac,
+            }
+        except ItemNotFoundError as e:
+            return {"success": False, "error": str(e)}
+        except InvalidItemTypeError as e:
+            return {"success": False, "error": str(e)}
+
+
+def unequip_item_from_actor(slot: str, session_id: str | None = None) -> dict:
+    """Unequip an item from a specific slot.
+    
+    Args:
+        slot: The slot to unequip ("weapon" or "armor")
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        A dictionary with the result:
+        - success: True if unequipped successfully
+        - removed_item: The removed item info (if any)
+        - ac: The new AC value
+        - error: Error message (if not success)
+    """
+    from .equipment import unequip_item
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.actor is None:
+            return {"success": False, "error": "No character found"}
+        
+        try:
+            updated_actor, removed_item = unequip_item(session.actor, slot)
+            session.actor = updated_actor
+            _save_session(session)
+            
+            # Persist to save file
+            try:
+                from . import game_state
+                game_state.save_current_game(session_id=resolved_session_id)
+            except Exception:
+                pass
+            
+            return {
+                "success": True,
+                "removed_item": {
+                    "id": removed_item.id,
+                    "name": removed_item.name,
+                    "type": removed_item.type.value,
+                } if removed_item else None,
+                "ac": updated_actor.ac,
+            }
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+
+
+def get_actor_equipment(session_id: str | None = None) -> dict:
+    """Get the actor's current equipment information.
+    
+    Args:
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        A dictionary with weapon and armor information
+    """
+    from .equipment import format_equipment_for_response
+    
+    actor = get_actor(session_id=session_id)
+    if actor is None:
+        return {"weapon": None, "armor": None}
+    
+    return format_equipment_for_response(actor)
 
 
 def reset_state(session_id: str | None = None) -> BootstrapState:
@@ -706,6 +919,22 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
             session.actor = actor.model_copy(
                 update={"conditions": [c for c in actor.conditions if c != eff.delta]}
             )
+        elif eff.field == "spell_slot_consumed" and isinstance(eff.delta, int):
+            # Spell slot already consumed by spell resolver, this is just for tracking
+            pass
+        elif eff.field == "inventory_remove" and isinstance(eff.delta, str):
+            # Remove consumed item from inventory
+            if session.actor is not None:
+                new_inventory = [
+                    item for item in actor.inventory
+                    if item.name.lower() != eff.delta.lower()
+                ]
+                session.actor = actor.model_copy(
+                    update={"inventory": new_inventory}
+                )
+        elif eff.field == "spell_slots_restored":
+            # Spell slots already restored by rest resolver, this is just for tracking
+            pass
         return
 
     if eff.target in (enemy.id, enemy.name):
@@ -786,7 +1015,8 @@ def _create_fresh_session(session_id: str) -> SessionData:
 
         # Get starting equipment for warrior
         weapon, armor = _get_starting_equipment(CharacterClass.WARRIOR)
-        inventory = [weapon, armor]
+        potion = InventoryItem.from_consumable(DEFAULT_CONSUMABLES["healing_potion"])
+        inventory = [weapon, armor, potion]
         equipped = EquippedItems(weapon=weapon, armor=armor)
 
         # Calculate AC based on equipped armor
@@ -802,6 +1032,7 @@ def _create_fresh_session(session_id: str) -> SessionData:
             abilities=abilities,
             proficiency_bonus=2,
             level=1,
+            experience_points=0,
             hp=hp,
             hp_max=hp,
             ac=ac,
@@ -809,6 +1040,7 @@ def _create_fresh_session(session_id: str) -> SessionData:
             skills=warrior_skills,
             inventory=inventory,
             equipped=equipped,
+            class_features=ClassFeatures(second_wind_used=False, action_surge_used=False),
         )
         session.phase = GamePhase.ADVENTURE
         # Scene with actor in actors list for backward compatibility
@@ -887,6 +1119,129 @@ def _persist_session(session: SessionData) -> None:
 def _delete_session(session_id: str) -> None:
     _sessions.pop(session_id, None)
     _session_file(session_id).unlink(missing_ok=True)
+
+
+def add_items_to_inventory(items: list[InventoryItem], session_id: str | None = None) -> None:
+    """Add items to the actor's inventory."""
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.actor is not None:
+            new_inventory = [*session.actor.inventory, *items]
+            session.actor = session.actor.model_copy(update={"inventory": new_inventory})
+        _save_session(session)
+
+
+def remove_item_from_inventory(item_name: str, session_id: str | None = None) -> bool:
+    """Remove an item from the actor's inventory by name.
+    
+    Returns True if an item was removed, False otherwise.
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.actor is None:
+            _save_session(session)
+            return False
+        new_inventory = [
+            item for item in session.actor.inventory
+            if item.name.lower() != item_name.lower()
+        ]
+        removed = len(new_inventory) < len(session.actor.inventory)
+        session.actor = session.actor.model_copy(update={"inventory": new_inventory})
+        _save_session(session)
+        return removed
+
+
+def use_second_wind(session_id: str | None = None) -> dict:
+    """Use Second Wind class feature.
+    
+    Returns:
+        Dict with success, hp_healed, new_hp, error
+    """
+    import random
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        actor = session.actor
+        if actor is None:
+            return {"success": False, "error": "No character found"}
+        if actor.character_class != CharacterClass.WARRIOR:
+            return {"success": False, "error": "Second Wind is only available to warriors"}
+        if actor.class_features.second_wind_used:
+            return {"success": False, "error": "Second Wind already used this rest"}
+        
+        # Heal: 1d10 + warrior level
+        roll = random.randint(1, 10)
+        hp_healed = roll + (actor.level or 1)
+        new_hp = min(actor.hp_max, actor.hp + hp_healed)
+        
+        new_features = ClassFeatures(
+            second_wind_used=True,
+            action_surge_used=actor.class_features.action_surge_used,
+            sneak_attack_available=actor.class_features.sneak_attack_available,
+        )
+        session.actor = actor.model_copy(
+            update={"hp": new_hp, "class_features": new_features}
+        )
+        _save_session(session)
+        return {
+            "success": True,
+            "hp_healed": hp_healed,
+            "new_hp": new_hp,
+            "roll": roll,
+        }
+
+
+def use_action_surge(session_id: str | None = None) -> dict:
+    """Use Action Surge class feature.
+    
+    Returns:
+        Dict with success, extra_action_available, error
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        actor = session.actor
+        if actor is None:
+            return {"success": False, "error": "No character found"}
+        if actor.character_class != CharacterClass.WARRIOR:
+            return {"success": False, "error": "Action Surge is only available to warriors"}
+        if actor.class_features.action_surge_used:
+            return {"success": False, "error": "Action Surge already used this rest"}
+        
+        new_features = ClassFeatures(
+            second_wind_used=actor.class_features.second_wind_used,
+            action_surge_used=True,
+            sneak_attack_available=actor.class_features.sneak_attack_available,
+        )
+        session.actor = actor.model_copy(
+            update={"class_features": new_features}
+        )
+        _save_session(session)
+        return {
+            "success": True,
+            "extra_action_available": True,
+        }
+
+
+def reset_class_features(session_id: str | None = None) -> None:
+    """Reset all class feature uses (called on short/long rest)."""
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        actor = session.actor
+        if actor is None:
+            return
+        
+        new_features = ClassFeatures()
+        if actor.character_class == CharacterClass.WARRIOR:
+            new_features = ClassFeatures(second_wind_used=False, action_surge_used=False)
+        elif actor.character_class == CharacterClass.ROGUE:
+            new_features = ClassFeatures(sneak_attack_available=True)
+        
+        session.actor = actor.model_copy(update={"class_features": new_features})
+        _save_session(session)
 
 
 def _is_expired(session: SessionData) -> bool:
@@ -994,110 +1349,3 @@ def is_first_npc_contact(
         True if this is the first contact, False otherwise
     """
     return get_npc_dialogue_count(npc_id, session_id) == 0
-
-
-# ---------------------------------------------------------------------------
-# Inventory / Equipment Operations
-# ---------------------------------------------------------------------------
-
-def pick_up_item(item_id: str, session_id: str | None = None) -> dict[str, Any] | None:
-    """Pick up an item from the current scene.
-    
-    Args:
-        item_id: The item ID to pick up
-        session_id: The session ID (uses current session if None)
-        
-    Returns:
-        Dict with picked_up item info, or None if item not found in scene
-    """
-    from .scene import SCENE_REGISTRY
-    
-    resolved_session_id = _resolve_session_id(session_id)
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=True)
-        if session.actor is None:
-            return None
-        
-        scene_data = SCENE_REGISTRY.get(session.scene.id)
-        if scene_data is None:
-            return None
-        
-        # Find the item in scene loot
-        item = None
-        for loot in scene_data.loot_items:
-            if loot.id == item_id:
-                item = loot
-                break
-        
-        if item is None:
-            return None
-        
-        # Check if already in inventory
-        for inv_item in session.actor.inventory:
-            if inv_item.id == item_id:
-                return None
-        
-        # Add to inventory
-        new_inventory = [*session.actor.inventory, item]
-        session.actor = session.actor.model_copy(update={"inventory": new_inventory})
-        _save_session(session)
-        
-        return {
-            "picked_up": _inventory_item_to_dict(item),
-            "inventory": [_inventory_item_to_dict(i) for i in new_inventory],
-        }
-
-
-def equip_item(item_id: str, session_id: str | None = None) -> dict[str, Any] | None:
-    """Equip an item from the character's inventory.
-    
-    Args:
-        item_id: The item ID to equip
-        session_id: The session ID (uses current session if None)
-        
-    Returns:
-        Dict with equipped item info and updated inventory, or None if item not found
-    """
-    resolved_session_id = _resolve_session_id(session_id)
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=True)
-        if session.actor is None:
-            return None
-        
-        # Find item in inventory
-        item = None
-        for inv_item in session.actor.inventory:
-            if inv_item.id == item_id:
-                item = inv_item
-                break
-        
-        if item is None:
-            return None
-        
-        # Update equipped items
-        equipped = session.actor.equipped.model_copy(deep=True)
-        if item.type.value == "weapon":
-            equipped.weapon = item
-        elif item.type.value == "armor":
-            equipped.armor = item
-        else:
-            return None
-        
-        # Recalculate AC if armor changed
-        ac = session.actor.ac
-        if item.type.value == "armor":
-            ac = _calculate_ac_with_armor(session.actor.abilities, item)
-        
-        session.actor = session.actor.model_copy(update={
-            "equipped": equipped,
-            "ac": ac,
-        })
-        _save_session(session)
-        
-        return {
-            "equipped": {
-                "slot": item.type.value,
-                "item": _inventory_item_to_dict(item),
-            },
-            "inventory": [_inventory_item_to_dict(i) for i in session.actor.inventory],
-        }

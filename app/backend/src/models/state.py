@@ -16,6 +16,7 @@ class ItemType(str, Enum):
     """Types of items."""
     WEAPON = "weapon"
     ARMOR = "armor"
+    CONSUMABLE = "consumable"
 
 
 class Weapon(BaseModel):
@@ -36,6 +37,17 @@ class Armor(BaseModel):
     base_ac: int  # Base AC value (e.g., 16 for chain mail)
     add_dex_modifier: bool = True  # Whether to add DEX modifier
     max_dex_bonus: int | None = None  # Max DEX bonus (None = no limit)
+    description: str = ""
+    
+    model_config = {"populate_by_name": True}
+
+
+class Consumable(BaseModel):
+    """Consumable item definition."""
+    id: str
+    name: str
+    effect_type: str = "heal"  # e.g., "heal", "buff"
+    effect_dice: str | None = None  # e.g., "2d4+2"
     description: str = ""
     
     model_config = {"populate_by_name": True}
@@ -78,6 +90,15 @@ class InventoryItem(BaseModel):
             add_dex_modifier=armor.add_dex_modifier,
             max_dex_bonus=armor.max_dex_bonus,
             description=armor.description,
+        )
+    
+    @classmethod
+    def from_consumable(cls, consumable: Consumable) -> "InventoryItem":
+        return cls(
+            id=consumable.id,
+            name=consumable.name,
+            type=ItemType.CONSUMABLE,
+            description=consumable.description,
         )
 
 
@@ -143,6 +164,16 @@ DEFAULT_ARMORS: dict[str, Armor] = {
     ),
 }
 
+DEFAULT_CONSUMABLES: dict[str, Consumable] = {
+    "healing_potion": Consumable(
+        id="healing_potion",
+        name="治疗药水",
+        effect_type="heal",
+        effect_dice="2d4+2",
+        description="一瓶红色的治疗药水，饮用后可恢复生命值。",
+    ),
+}
+
 
 class AbilityScores(BaseModel):
     str_: int = Field(..., alias="str")
@@ -203,6 +234,22 @@ class Skill(BaseModel):
     modifier: int
 
 
+class SpellSlot(BaseModel):
+    """Spell slot for spellcasting classes."""
+    level: int           # Spell level (1-9)
+    max: int             # Maximum slots at this level
+    current: int         # Current available slots
+    
+    model_config = {"populate_by_name": True}
+
+
+class ClassFeatures(BaseModel):
+    """Class-specific feature usage tracking."""
+    second_wind_used: bool = False
+    action_surge_used: bool = False
+    sneak_attack_available: bool = True
+
+
 class Actor(BaseModel):
     id: str
     name: str
@@ -210,6 +257,7 @@ class Actor(BaseModel):
     abilities: AbilityScores
     proficiency_bonus: int = 2
     level: int = 1
+    experience_points: int = 0
     hp: int
     hp_max: int
     ac: int = 10  # Armor Class, default 10 + DEX modifier
@@ -219,6 +267,10 @@ class Actor(BaseModel):
     # Inventory and equipment
     inventory: list[InventoryItem] = Field(default_factory=list)
     equipped: EquippedItems = Field(default_factory=EquippedItems)
+    # Spell slots for spellcasting classes
+    spell_slots: list[SpellSlot] = Field(default_factory=list)
+    # Class feature tracking
+    class_features: ClassFeatures = Field(default_factory=ClassFeatures)
 
 
 class NPCType(str, Enum):
@@ -239,18 +291,15 @@ class NPC(BaseModel):
     description: str = Field(default="", description="Brief description of the NPC")
     race: Optional[str] = Field(default=None, description="NPC race/species")
     occupation: Optional[str] = Field(default=None, description="NPC occupation or role")
-    hp: int = Field(default=7, description="Current HP")
-    hp_max: int = Field(default=7, description="Maximum HP")
-    ac: int = Field(default=12, description="Armor Class")
-    attributes: dict[str, int] = Field(
-        default_factory=dict,
-        description="Combat attributes: str, dex, con, int, wis, cha",
-    )
+    dialogue_count: int = Field(default=0, description="Number of dialogue interactions with this NPC")
 
 
 class SceneExit(BaseModel):
-    direction: str
-    target_scene_id: str
+    """A scene exit direction and target."""
+    direction: str = Field(description="Display name for the exit direction")
+    target_scene_id: str = Field(description="ID of the target scene")
+    
+    model_config = {"populate_by_name": True}
 
 
 class Scene(BaseModel):
@@ -318,6 +367,7 @@ class CharacterCard(BaseModel):
     name: str
     class_: str = Field(..., alias="class")
     level: int
+    experience_points: int = 0
     proficiency_bonus: int
     attributes: dict[str, AttributeWithModifier]
     hp: HP
@@ -325,6 +375,8 @@ class CharacterCard(BaseModel):
     skills: list[CharacterSkill]
     inventory: list[dict[str, Any]] = Field(default_factory=list)
     equipped: CharacterEquipped = Field(default_factory=CharacterEquipped)
+    # Spell slots for spellcasting classes
+    spell_slots: list[dict[str, int]] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
 

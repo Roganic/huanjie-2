@@ -12,6 +12,7 @@ interface Message {
 
 type HealthStatus = "loading" | "ok" | "error";
 type GamePhase = "character_creation" | "adventure";
+type AdventurePhase = "exploration" | "combat" | "ended";
 type CharacterClass = "warrior" | "mage" | "rogue";
 
 interface CheckDetail {
@@ -22,6 +23,17 @@ interface CheckDetail {
   roll: number;
   total: number;
   dc: number;
+  skill_name?: string | null;
+}
+
+interface SkillCheckDetail {
+  skill: string | null;
+  ability?: string;
+  roll: number;
+  modifier: number;
+  total: number;
+  dc: number;
+  success: boolean;
 }
 
 interface Effect {
@@ -31,10 +43,19 @@ interface Effect {
   description: string;
 }
 
+interface ItemUseDetail {
+  item_name: string;
+  effect_type: string;
+  roll_result: number;
+  hp_change: number;
+}
+
 interface ActionResponse {
   action_summary: string;
   resolution_type: "auto_success" | "check";
   check: CheckDetail | null;
+  skill_check: SkillCheckDetail | null;
+  item_use: ItemUseDetail | null;
   outcome: "success" | "failure";
   effects: Effect[];
   narration: string;
@@ -62,15 +83,21 @@ interface InventoryItem {
   id: string;
   name: string;
   type: "weapon" | "armor";
+  description?: string;
   damage_dice?: string;
   attack_ability?: string;
   base_ac?: number;
-  description?: string;
 }
 
 interface EquippedItems {
-  weapon?: InventoryItem | null;
-  armor?: InventoryItem | null;
+  weapon: InventoryItem | null;
+  armor: InventoryItem | null;
+}
+
+interface SpellSlot {
+  level: number;
+  max: number;
+  current: number;
 }
 
 interface Actor {
@@ -86,8 +113,28 @@ interface Actor {
   description: string;
   conditions?: string[];
   skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
-  inventory?: InventoryItem[];
+  experience_points?: number;
   equipped?: EquippedItems;
+  spell_slots?: SpellSlot[];
+  class_features?: {
+    second_wind_used?: boolean;
+    action_surge_used?: boolean;
+    sneak_attack_available?: boolean;
+  };
+}
+
+interface NPC {
+  id: string;
+  name: string;
+  type: "friendly" | "neutral" | "hostile";
+  description: string;
+  race?: string;
+  occupation?: string;
+}
+
+interface SceneExit {
+  direction: string;
+  target_scene_id: string;
 }
 
 interface Scene {
@@ -95,7 +142,9 @@ interface Scene {
   name: string;
   description: string;
   actors: string[];
+  npcs: NPC[];
   time?: number;
+  exits?: SceneExit[];
 }
 
 interface NarrativeHistoryEntry {
@@ -115,9 +164,71 @@ interface NarrativeHistoryEntry {
 interface BootstrapState {
   session_id: string;
   phase: GamePhase;
+  game_phase: AdventurePhase;
   actor: Actor | null;
   scene: Scene;
   narrative_history: NarrativeHistoryEntry[];
+  action_history: { action: string; result: string; narrative_summary: string }[];
+}
+
+// ---------------------------------------------------------------------------
+// Combat Types
+// ---------------------------------------------------------------------------
+
+type CombatStatus = "active" | "victory" | "defeat" | "escaped";
+type CombatActionType = "attack" | "defend" | "skill" | "flee";
+
+interface CombatParticipant {
+  id: string;
+  name: string;
+  hp: number;
+  hp_max: number;
+  ac: number;
+  initiative: number;
+  is_player: boolean;
+  conditions: string[];
+}
+
+interface CombatLogEntry {
+  actor_id: string;
+  action_type: string;
+  target_id?: string;
+  hit?: boolean;
+  damage?: number;
+  narrative: string;
+  timestamp: number;
+}
+
+interface CombatState {
+  combat_id: string;
+  round_number: number;
+  turn_index: number;
+  participants: CombatParticipant[];
+  initiative_order: string[];
+  current_actor_id: string;
+  scene: Scene;
+  status: CombatStatus;
+  log: CombatLogEntry[];
+}
+
+interface LevelUpInfo {
+  old_level: number;
+  new_level: number;
+  hp_increase: number;
+  new_proficiency_bonus: number;
+}
+
+interface CombatActionResult {
+  action_type: CombatActionType;
+  actor_id: string;
+  target_id?: string;
+  hit?: boolean;
+  damage?: number;
+  effects: Effect[];
+  narrative: string;
+  combat_state: CombatState;
+  xp_gained?: number;
+  level_up?: LevelUpInfo;
 }
 
 interface ProviderOption {
@@ -142,27 +253,16 @@ interface CharacterDraft {
   abilityGeneration: "standard_array" | "random_4d6" | "manual";
 }
 
-interface AttributeWithModifier {
-  score: number;
-  modifier: number;
-}
-
-interface CharacterSkillFromAPI {
-  name: string;
-  ability: string;
-  proficient: boolean;
-  modifier: number;
-}
-
-interface CharacterCardFromAPI {
-  name: string;
-  class: CharacterClass;
-  level: number;
-  proficiency_bonus: number;
-  attributes: Record<string, AttributeWithModifier>;
-  hp: { current: number; max: number };
-  ac: number;
-  skills: CharacterSkillFromAPI[];
+interface SaveFile {
+  save_id: string;
+  save_name: string;
+  character_name: string | null;
+  class: string | null;
+  character_level: number | null;
+  hp: number | null;
+  hp_max: number | null;
+  scene_name: string | null;
+  saved_at: string;
 }
 
 type Skill = {
@@ -171,47 +271,7 @@ type Skill = {
   proficient: boolean;
 };
 
-const SKILLS: Skill[] = [
-  { name: "杂技", ability: "dex", proficient: false },
-  { name: "运动", ability: "str", proficient: false },
-  { name: "欺骗", ability: "cha", proficient: false },
-  { name: "历史", ability: "int", proficient: false },
-  { name: "威吓", ability: "cha", proficient: false },
-  { name: "洞察", ability: "wis", proficient: true },
-  { name: "调查", ability: "int", proficient: false },
-  { name: "医药", ability: "wis", proficient: false },
-  { name: "自然", ability: "int", proficient: false },
-  { name: "察觉", ability: "wis", proficient: true },
-  { name: "表演", ability: "cha", proficient: false },
-  { name: "说服", ability: "cha", proficient: false },
-  { name: "宗教", ability: "int", proficient: false },
-  { name: "巧手", ability: "dex", proficient: true },
-  { name: "隐匿", ability: "dex", proficient: true },
-  { name: "生存", ability: "wis", proficient: false },
-];
-
-const CLASS_SKILLS: Record<CharacterClass, string[]> = {
-  warrior: ["运动", "威吓", "察觉", "生存"],
-  mage: ["历史", "调查", "奥秘", "宗教"],
-  rogue: ["杂技", "欺骗", "洞察", "巧手", "隐匿"],
-};
-
-// Arcana skill for mage class proficiency
-const EXTRA_SKILLS: Skill[] = [
-  { name: "奥秘", ability: "int", proficient: false },
-];
-
-const ABILITY_LABELS: Record<string, string> = {
-  str: "力量",
-  dex: "敏捷",
-  con: "体质",
-  int: "智力",
-  wis: "感知",
-  cha: "魅力",
-};
-
-// Skill name mapping from backend (English) to display (Chinese)
-const SKILL_NAME_MAP: Record<string, string> = {
+const SKILL_LABELS: Record<string, string> = {
   athletics: "运动",
   acrobatics: "杂技",
   sleight_of_hand: "巧手",
@@ -230,6 +290,45 @@ const SKILL_NAME_MAP: Record<string, string> = {
   intimidation: "威吓",
   performance: "表演",
   persuasion: "说服",
+};
+
+const SKILLS: Skill[] = [
+  { name: "acrobatics", ability: "dex", proficient: false },
+  { name: "animal_handling", ability: "wis", proficient: false },
+  { name: "athletics", ability: "str", proficient: false },
+  { name: "deception", ability: "cha", proficient: false },
+  { name: "history", ability: "int", proficient: false },
+  { name: "insight", ability: "wis", proficient: false },
+  { name: "intimidation", ability: "cha", proficient: false },
+  { name: "investigation", ability: "int", proficient: false },
+  { name: "medicine", ability: "wis", proficient: false },
+  { name: "nature", ability: "int", proficient: false },
+  { name: "perception", ability: "wis", proficient: false },
+  { name: "performance", ability: "cha", proficient: false },
+  { name: "persuasion", ability: "cha", proficient: false },
+  { name: "religion", ability: "int", proficient: false },
+  { name: "sleight_of_hand", ability: "dex", proficient: false },
+  { name: "stealth", ability: "dex", proficient: false },
+  { name: "survival", ability: "wis", proficient: false },
+];
+
+const CLASS_SKILLS: Record<CharacterClass, string[]> = {
+  warrior: ["athletics", "intimidation", "perception", "survival"],
+  mage: ["arcana", "history", "investigation", "insight"],
+  rogue: ["acrobatics", "sleight_of_hand", "stealth", "deception", "persuasion"],
+};
+
+const EXTRA_SKILLS: Skill[] = [
+  { name: "arcana", ability: "int", proficient: false },
+];
+
+const ABILITY_LABELS: Record<string, string> = {
+  str: "力量",
+  dex: "敏捷",
+  con: "体质",
+  int: "智力",
+  wis: "感知",
+  cha: "魅力",
 };
 
 const ABILITY_KEYS: (keyof AbilityScores)[] = ["str", "dex", "con", "int", "wis", "cha"];
@@ -338,131 +437,6 @@ function formatTime(timestamp: number): string {
   });
 }
 
-function NarrationBlock({
-  text,
-  variant = "result",
-}: {
-  text: string;
-  variant?: "result" | "progression" | "gm_prompt";
-}) {
-  const paragraphs = text.split("\n").filter((paragraph) => paragraph.trim() !== "");
-  const icon = variant === "progression" ? "🕯️" : variant === "gm_prompt" ? "🎯" : "📖";
-  const label = variant === "progression" ? "场景波动" : variant === "gm_prompt" ? "GM 提示" : "行动结果";
-
-  return (
-    <div className={`narration-block ${variant}`}>
-      <div className="narration-header">
-        <span className="narration-icon">{icon}</span>
-        <span className="narration-label">{label}</span>
-      </div>
-      <div className="narration-content">
-        {paragraphs.map((paragraph, index) => (
-          <p key={index} className="narration-paragraph">
-            {paragraph}
-          </p>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function LoadingNarration() {
-  return (
-    <div className="narration-block loading">
-      <div className="narration-header">
-        <span className="narration-icon">🎲</span>
-        <span className="narration-label">GM 正在叙述</span>
-      </div>
-      <div className="narration-skeleton">
-        <div className="skeleton-line" />
-        <div className="skeleton-line short" />
-        <div className="skeleton-line medium" />
-      </div>
-    </div>
-  );
-}
-
-function StreamingNarrationCard({
-  preview,
-}: {
-  preview: StreamingPreview;
-}) {
-  const hasNarration = preview.narration.trim().length > 0;
-  const hasProgression = preview.scene_progression.trim().length > 0;
-  const hasPrompt = preview.gm_prompt.trim().length > 0;
-
-  return (
-    <div className="resolution-card">
-      {!hasNarration && !hasProgression && !hasPrompt && <LoadingNarration />}
-      {hasNarration && <NarrationBlock text={preview.narration} variant="result" />}
-      {hasProgression && <NarrationBlock text={preview.scene_progression} variant="progression" />}
-      {hasPrompt && <NarrationBlock text={preview.gm_prompt} variant="gm_prompt" />}
-      {preview.interrupted && (
-        <div className="effects-list">
-          <div className="effect-item negative">叙事流已中断，已保留收到的片段。可以重试本次行动。</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ResolutionCard({ res }: { res: ActionResponse }) {
-  const isCheck = res.resolution_type === "check";
-  const outcomeClass = res.outcome === "success" ? "outcome-success" : "outcome-failure";
-  const outcomeLabel = res.outcome === "success" ? "成功" : "失败";
-
-  return (
-    <div className="resolution-card">
-      <div className="system-info-section">
-        <div className={`outcome-badge ${outcomeClass}`}>
-          {isCheck ? "检定" : "自动成功"} - {outcomeLabel}
-        </div>
-
-        {isCheck && res.check && (
-          <div className="check-details">
-            <span className="check-ability">{ABILITY_LABELS[res.check.ability] ?? res.check.ability}</span>
-            <span className="check-roll">
-              d20={res.check.roll}
-              {res.check.modifier >= 0 ? "+" : ""}
-              {res.check.modifier}
-              {res.check.proficiency_bonus > 0 && `+${res.check.proficiency_bonus}`}
-              {" = "}
-              <strong>{res.check.total}</strong>
-            </span>
-            <span className="check-dc">DC {res.check.dc}</span>
-            {res.check.advantage !== null && (
-              <span className="check-adv">{res.check.advantage ? "优势" : "劣势"}</span>
-            )}
-          </div>
-        )}
-
-        {res.effects.length > 0 && (
-          <div className="effects-list">
-            {res.effects.map((effect, index) => (
-              <div
-                key={index}
-                className={`effect-item ${
-                  typeof effect.delta === "number" && effect.delta > 0
-                    ? "positive"
-                    : typeof effect.delta === "number" && effect.delta < 0
-                      ? "negative"
-                      : ""
-                }`}
-              >
-                {effect.description}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <NarrationBlock text={res.narration} variant="result" />
-      <NarrationBlock text={res.scene_progression} variant="progression" />
-      <NarrationBlock text={res.gm_prompt} variant="gm_prompt" />
-    </div>
-  );
-}
-
 function HealthDot({ status }: { status: HealthStatus }) {
   const label =
     status === "loading" ? "连接中…" : status === "ok" ? "后端已连接" : "后端离线";
@@ -537,18 +511,33 @@ function StatusEffect({ name, isNew }: { name: string; isNew?: boolean }) {
   );
 }
 
-function SkillsList({ actor, compact = false, characterCard }: { actor: Actor; compact?: boolean; characterCard?: CharacterCardFromAPI | null }) {
-  // Use skills from character card API if available, otherwise fall back to actor.skills
-  const skills = characterCard?.skills ?? actor.skills ?? [];
-  
+function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolean }) {
+  // Prefer backend-provided skills when available; fallback to frontend computation
+  const skills = actor.skills && actor.skills.length > 0
+    ? actor.skills
+    : (() => {
+        const profBonus = actor.proficiency_bonus;
+        const classProfSkills = CLASS_SKILLS[actor.character_class ?? "warrior"] ?? [];
+        const allSkills = [...SKILLS, ...EXTRA_SKILLS];
+        return allSkills.map((skill) => {
+          const abilityMod = getModifier(actor.abilities[skill.ability]);
+          const isProficient = classProfSkills.includes(skill.name);
+          return {
+            name: skill.name,
+            ability: skill.ability,
+            proficient: isProficient,
+            modifier: abilityMod + (isProficient ? profBonus : 0),
+          };
+        });
+      })();
+
   if (compact) {
-    // Show only proficient skills
     const proficientSkills = skills.filter((s) => s.proficient);
     return (
       <div className="skills-list-compact">
         {proficientSkills.map((skill) => (
           <div key={skill.name} className="skill-item-compact proficient">
-            <span className="skill-name">{SKILL_NAME_MAP[skill.name] ?? skill.name}</span>
+            <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
             <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
           </div>
         ))}
@@ -561,13 +550,36 @@ function SkillsList({ actor, compact = false, characterCard }: { actor: Actor; c
       {skills.map((skill) => (
         <div key={skill.name} className={`skill-item ${skill.proficient ? "proficient" : ""}`}>
           <span className="skill-dot">{skill.proficient ? "●" : "○"}</span>
-          <span className="skill-name">{SKILL_NAME_MAP[skill.name] ?? skill.name}</span>
-          <span className="skill-ability">({ABILITY_LABELS[skill.ability] ?? skill.ability})</span>
+          <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
+          <span className="skill-ability">({ABILITY_LABELS[skill.ability]})</span>
           <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
         </div>
       ))}
     </div>
   );
+}
+
+// XP thresholds matching the backend
+const XP_THRESHOLDS: Record<number, number> = {
+  1: 0,
+  2: 300,
+  3: 900,
+  4: 2700,
+  5: 6500,
+};
+
+function getXpProgress(currentXp: number, level: number): { current: number; needed: number } {
+  const currentThreshold = XP_THRESHOLDS[level] ?? 0;
+  const nextThreshold = XP_THRESHOLDS[level + 1];
+  
+  if (nextThreshold === undefined) {
+    return { current: currentXp - currentThreshold, needed: 0 };
+  }
+  
+  return {
+    current: currentXp - currentThreshold,
+    needed: nextThreshold - currentThreshold,
+  };
 }
 
 function MiniCharacterCard({ actor }: { actor: Actor }) {
@@ -576,13 +588,16 @@ function MiniCharacterCard({ actor }: { actor: Actor }) {
   if (hpPercent <= 30) hpStatus = "low";
   else if (hpPercent <= 60) hpStatus = "medium";
 
+  const xp = actor.experience_points ?? 0;
+  const level = actor.level ?? 1;
+
   return (
     <div className="mini-character-card">
       <div className="mini-char-main">
         <div className="mini-char-avatar">{actor.character_class === "warrior" ? "⚔️" : actor.character_class === "mage" ? "🔮" : "🗡️"}</div>
         <div className="mini-char-info">
           <div className="mini-char-name">{actor.name}</div>
-          <div className="mini-char-class">{actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"}</div>
+          <div className="mini-char-class">{actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"} · Lv.{level}</div>
         </div>
       </div>
       <div className="mini-char-stats">
@@ -598,6 +613,82 @@ function MiniCharacterCard({ actor }: { actor: Actor }) {
           <span className="mini-stat-icon">⭐</span>
           <span className="mini-stat-value">+{actor.proficiency_bonus}</span>
         </div>
+        <div className="mini-stat" title="经验值">
+          <span className="mini-xp-icon">✨</span>
+          <span className="mini-xp-stat">{xp}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function XpBar({ current, needed }: { current: number; needed: number }) {
+  if (needed === 0) {
+    return (
+      <div className="xp-section">
+        <div className="xp-header">
+          <span className="xp-label">经验值 (Max Level)</span>
+          <span className="xp-values">
+            <span className="xp-current">{current}</span>
+          </span>
+        </div>
+        <div className="xp-bar-container">
+          <div className="xp-bar" style={{ width: "100%" }} />
+        </div>
+      </div>
+    );
+  }
+
+  const percentage = Math.min(100, Math.max(0, (current / needed) * 100));
+
+  return (
+    <div className="xp-section">
+      <div className="xp-header">
+        <span className="xp-label">经验值</span>
+        <span className="xp-values">
+          <span className="xp-current">{current}</span>
+          <span className="xp-separator">/</span>
+          <span className="xp-needed">{needed}</span>
+          <span style={{ color: "var(--text-muted)", marginLeft: 4 }}>XP</span>
+        </span>
+      </div>
+      <div className="xp-bar-container">
+        <div className="xp-bar" style={{ width: `${percentage}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function SpellSlotsPanel({ slots, previousSlots }: { slots: SpellSlot[]; previousSlots?: SpellSlot[] }) {
+  if (!slots || slots.length === 0) return null;
+  
+  return (
+    <div className="spell-slots-section">
+      <div className="spell-slots-header">
+        <span className="spell-slots-label">法术槽位</span>
+      </div>
+      <div className="spell-slots-list">
+        {slots.map((slot) => {
+          const previousSlot = previousSlots?.find((s) => s.level === slot.level);
+          const hasChanged = previousSlot && previousSlot.current !== slot.current;
+          const isDepleted = slot.current === 0;
+          
+          return (
+            <div 
+              key={slot.level} 
+              className={`spell-slot-item ${isDepleted ? 'depleted' : ''} ${hasChanged ? 'changed' : ''}`}
+            >
+              <span className="spell-slot-level">{slot.level}环</span>
+              <span className="spell-slot-values">
+                <span className={`spell-slot-current ${hasChanged ? 'changed' : ''}`}>
+                  {slot.current}
+                </span>
+                <span className="spell-slot-separator">/</span>
+                <span className="spell-slot-max">{slot.max}</span>
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -612,6 +703,11 @@ function CharacterCard({
   previousActor?: Actor | null;
   newConditions?: string[];
 }) {
+  const xp = actor.experience_points ?? 0;
+  const level = actor.level ?? 1;
+  const xpProgress = getXpProgress(xp, level);
+  const isMage = actor.character_class === "mage";
+
   return (
     <div className="character-card">
       <div className="character-header">
@@ -621,7 +717,7 @@ function CharacterCard({
         <div className="character-info">
           <div className="character-name">{actor.name}</div>
           <div className="character-level">
-            {actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"} Lv.{actor.level ?? 1} · 熟练加值 +{actor.proficiency_bonus}
+            {actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"} Lv.{level} · 熟练加值 +{actor.proficiency_bonus}
           </div>
         </div>
         {actor.ac !== undefined && (
@@ -633,6 +729,16 @@ function CharacterCard({
       </div>
 
       <HpBar hp={actor.hp} max={actor.hp_max} previousHp={previousActor?.hp} />
+      
+      <XpBar current={xpProgress.current} needed={xpProgress.needed} />
+
+      {/* Spell Slots - Only for mages */}
+      {isMage && actor.spell_slots && actor.spell_slots.length > 0 && (
+        <SpellSlotsPanel 
+          slots={actor.spell_slots} 
+          previousSlots={previousActor?.spell_slots} 
+        />
+      )}
 
       {actor.conditions && actor.conditions.length > 0 && (
         <div className="status-effects">
@@ -641,12 +747,45 @@ function CharacterCard({
           ))}
         </div>
       )}
+      
+      {/* Equipped Items */}
+      {(actor.equipped?.weapon || actor.equipped?.armor) && (
+        <div className="equipped-items">
+          <div className="equipped-label">已装备</div>
+          <div className="equipped-list">
+            {actor.equipped.weapon && (
+              <div className="equipped-item" title={`武器: ${actor.equipped.weapon.name}`}>
+                <span className="equipped-icon">⚔️</span>
+                <span className="equipped-name">{actor.equipped.weapon.name}</span>
+              </div>
+            )}
+            {actor.equipped.armor && (
+              <div className="equipped-item" title={`护甲: ${actor.equipped.armor.name}`}>
+                <span className="equipped-icon">🛡️</span>
+                <span className="equipped-name">{actor.equipped.armor.name}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerName?: string; previousScene?: Scene | null }) {
+function SceneCard({ scene, playerName, previousScene, onExitClick }: { scene: Scene; playerName?: string; previousScene?: Scene | null; onExitClick?: (direction: string) => void }) {
   const timeChanged = previousScene !== undefined && previousScene !== null && previousScene.time !== scene.time;
+
+  const npcTypeClass = (type: string) => {
+    if (type === "friendly") return "npc-friendly";
+    if (type === "hostile") return "npc-hostile";
+    return "npc-neutral";
+  };
+
+  const npcTypeLabel = (type: string) => {
+    if (type === "friendly") return "友好";
+    if (type === "hostile") return "敌对";
+    return "中立";
+  };
 
   return (
     <div className="scene-card">
@@ -660,6 +799,24 @@ function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerN
         </div>
       )}
 
+      {scene.exits && scene.exits.length > 0 && (
+        <div className="scene-exits">
+          <div className="scene-exits-label">可用出口</div>
+          <div className="exit-buttons">
+            {scene.exits.map((exit, index) => (
+              <button
+                key={index}
+                className="exit-button"
+                onClick={() => onExitClick?.(exit.direction)}
+                title={`前往 ${exit.direction}`}
+              >
+                → {exit.direction}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {scene.actors.length > 0 && (
         <div className="scene-actors">
           <div className="scene-actors-label">在场角色</div>
@@ -668,6 +825,21 @@ function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerN
               <span key={index} className={`actor-tag ${playerName && actor === playerName ? "player" : ""}`}>
                 {actor}
               </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {scene.npcs && scene.npcs.length > 0 && (
+        <div className="scene-npcs">
+          <div className="scene-npcs-label">场景 NPC</div>
+          <div className="npc-list">
+            {scene.npcs.map((npc) => (
+              <div key={npc.id} className={`npc-item ${npcTypeClass(npc.type)}`}>
+                <span className="npc-name">{npc.name}</span>
+                <span className="npc-type">{npcTypeLabel(npc.type)}</span>
+                <p className="npc-desc">{npc.description}</p>
+              </div>
             ))}
           </div>
         </div>
@@ -787,6 +959,498 @@ function Timeline({
       {entries.map((entry) => (
         <TimelineItem key={entry.id} entry={entry} onToggle={onToggle} />
       ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scrollable Narrative History (shows all records, auto-scrolls)
+// ---------------------------------------------------------------------------
+
+interface ScrollableNarrativeHistoryProps {
+  messages: Message[];
+  streamingPreview: StreamingPreview | null;
+  sending: boolean;
+  gamePhase?: "exploration" | "combat" | "ended";
+  xpGained?: number;
+  levelUp?: LevelUpInfo | null;
+}
+
+function ScrollableNarrativeHistory({
+  messages,
+  streamingPreview,
+  sending,
+  gamePhase,
+  xpGained,
+  levelUp,
+}: ScrollableNarrativeHistoryProps) {
+  const gmMessages = messages.filter((m) => m.role === "gm");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, sending, streamingPreview, xpGained, levelUp]);
+
+  const isCombat = gamePhase === "combat";
+
+  return (
+    <div className={`narrative-history ${isCombat ? "narrative-combat" : "narrative-exploration"}`}>
+      <div className="narrative-history-header">
+        <span className="narrative-history-icon">{isCombat ? "⚔️" : "📜"}</span>
+        <span className="narrative-history-title">{isCombat ? "战斗叙事" : "探索叙事"}</span>
+        {gmMessages.length > 0 && (
+          <span className="narrative-history-count">共 {gmMessages.length} 条记录</span>
+        )}
+      </div>
+      <div className="narrative-list">
+        {gmMessages.length === 0 && !sending && (
+          <div className="narrative-empty">{isCombat ? "战斗进行中…" : "输入一个行动开始冒险…"}</div>
+        )}
+        {gmMessages.map((message) => (
+          <div key={message.id} className={`narrative-item ${isCombat ? "narrative-combat-item" : ""}`}>
+            <div className="narrative-text">
+              {(message.resolution?.narration || message.text)
+                .split("\n")
+                .map((line, i) =>
+                  line.trim() ? <p key={i}>{line}</p> : null
+                )}
+            </div>
+            {message.resolution && (
+              <div className="compact-resolution">
+                <div className="compact-resolution-header">
+                  <span className={`outcome-badge-sm ${message.resolution.outcome === "success" ? "outcome-success" : "outcome-failure"}`}>
+                    {message.resolution.resolution_type === "check" ? "检定" : "自动"} · {message.resolution.outcome === "success" ? "成功" : "失败"}
+                  </span>
+                  {message.resolution.resolution_type === "check" && message.resolution.check && (
+                    <span className="check-summary-sm">
+                      {ABILITY_LABELS[message.resolution.check.ability] ?? message.resolution.check.ability} d20={message.resolution.check.roll}
+                      {message.resolution.check.modifier >= 0 ? "+" : ""}
+                      {message.resolution.check.modifier}
+                      {message.resolution.check.proficiency_bonus > 0 ? `+${message.resolution.check.proficiency_bonus}` : ""}
+                      {" = "}
+                      {message.resolution.check.total} / DC{message.resolution.check.dc}
+                    </span>
+                  )}
+                </div>
+                {message.resolution.item_use && (
+                  <div className="item-use-sm">
+                    <span className="item-use-icon">🧪</span>
+                    <span className="item-use-name">{message.resolution.item_use.item_name}</span>
+                    <span className={`item-use-effect ${message.resolution.item_use.hp_change > 0 ? "positive" : message.resolution.item_use.hp_change < 0 ? "negative" : ""}`}>
+                      {message.resolution.item_use.effect_type === "heal" ? "恢复" : ""} {message.resolution.item_use.hp_change} HP
+                    </span>
+                    <span className="item-use-roll">(roll: {message.resolution.item_use.roll_result})</span>
+                  </div>
+                )}
+                {message.resolution.effects.length > 0 && (
+                  <div className="effects-sm">
+                    {message.resolution.effects.map((eff, index) => (
+                      <span
+                        key={index}
+                        className={`effect-tag-sm ${
+                          typeof eff.delta === "number" && eff.delta > 0
+                            ? "positive"
+                            : typeof eff.delta === "number" && eff.delta < 0
+                              ? "negative"
+                              : ""
+                        }`}
+                      >
+                        {eff.description}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+        
+        {/* XP Gained Notification */}
+        {!sending && xpGained !== undefined && xpGained > 0 && (
+          <div className="narrative-item xp-gained-item">
+            <div className="xp-gained-notification">
+              <span className="xp-gained-icon">✨</span>
+              <span className="xp-gained-text">+{xpGained} XP</span>
+            </div>
+          </div>
+        )}
+        
+        {/* Level Up Notification */}
+        {!sending && levelUp && (
+          <div className="narrative-item level-up-item">
+            <div className="level-up-notification-narrative">
+              <span className="level-up-narrative-icon">🎊</span>
+              <div className="level-up-narrative-content">
+                <div className="level-up-narrative-title">升至 {levelUp.new_level} 级！</div>
+                <div className="level-up-narrative-details">
+                  HP +{levelUp.hp_increase} · 熟练加值 +{levelUp.new_proficiency_bonus}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {sending && streamingPreview && (
+          <div className={`narrative-item streaming ${isCombat ? "narrative-combat-item" : ""}`}>
+            <div className="narrative-text">
+              {streamingPreview.narration
+                .split("\n")
+                .map((line, i) =>
+                  line.trim() ? <p key={i}>{line}</p> : null
+                )}
+            </div>
+            <div className="streaming-indicator">
+              <span className={`streaming-dot ${isCombat ? "combat-dot" : ""}`} />
+              GM 正在叙述…
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Combat Screen Components
+// ---------------------------------------------------------------------------
+
+interface CombatScreenProps {
+  combat: CombatState;
+  actor: Actor | null;
+  combatNarrative: string;
+  isNarrativeStreaming: boolean;
+  selectedTarget: string | null;
+  onTargetChange: (targetId: string) => void;
+  selectedWeapon: string;
+  onWeaponChange: (weapon: string) => void;
+  onAction: (actionType: CombatActionType) => void;
+  onClassFeatureAction: (feature: "second_wind" | "action_surge") => void;
+  onFlee: () => void;
+  loading: boolean;
+}
+
+function CombatScreen({
+  combat,
+  actor,
+  combatNarrative,
+  isNarrativeStreaming,
+  selectedTarget,
+  onTargetChange,
+  selectedWeapon,
+  onWeaponChange,
+  onAction,
+  onClassFeatureAction,
+  onFlee,
+  loading,
+}: CombatScreenProps) {
+  const currentParticipant = combat.participants.find((p) => p.id === combat.current_actor_id);
+  const isPlayerTurn = currentParticipant?.is_player ?? false;
+  const enemies = combat.participants.filter((p) => !p.is_player && p.hp > 0);
+  const weapons = ["longsword", "shortsword", "dagger", "shortbow"];
+
+  // Sort participants by initiative for initiative order display
+  const sortedParticipants = [...combat.participants].sort((a, b) => b.initiative - a.initiative);
+
+  const getHpStatus = (hp: number, max: number): "high" | "medium" | "low" => {
+    const ratio = hp / max;
+    if (ratio > 0.6) return "high";
+    if (ratio > 0.3) return "medium";
+    return "low";
+  };
+
+  return (
+    <div className="combat-screen">
+      {/* Combat Header with Round Info */}
+      <div className="combat-header">
+        <div className="combat-round">⚔️ 第 {combat.round_number} 轮</div>
+        <div className={`combat-turn ${isPlayerTurn ? "player-turn" : "enemy-turn"}`}>
+          {isPlayerTurn ? "▶ 你的回合" : `⏳ ${currentParticipant?.name} 的回合`}
+        </div>
+      </div>
+
+      {/* Initiative Order - Clear Turn Order Display */}
+      <div className="initiative-order-panel">
+        <div className="initiative-order-header">
+          <span className="initiative-order-title">先攻顺序</span>
+          <span className="initiative-order-hint">按先攻值排序</span>
+        </div>
+        <div className="initiative-order-list">
+          {sortedParticipants.map((participant, index) => {
+            const isCurrent = participant.id === combat.current_actor_id;
+            const isDefeated = participant.hp <= 0;
+            return (
+              <div
+                key={participant.id}
+                className={`initiative-item ${isCurrent ? "current" : ""} ${
+                  participant.is_player ? "player" : "enemy"
+                } ${isDefeated ? "defeated" : ""}`}
+              >
+                <div className="initiative-rank">{index + 1}</div>
+                <div className="initiative-avatar">{participant.is_player ? "🧙" : "👹"}</div>
+                <div className="initiative-info">
+                  <div className="initiative-name">
+                    {participant.name}
+                    {isCurrent && <span className="turn-indicator">▶</span>}
+                  </div>
+                  <div className="initiative-hp-bar">
+                    <div
+                      className={`initiative-hp-fill ${getHpStatus(participant.hp, participant.hp_max)}`}
+                      style={{ width: `${Math.max(0, (participant.hp / participant.hp_max) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="initiative-stats">
+                  <div className="initiative-value" title="先攻值">
+                    {participant.initiative}
+                  </div>
+                  <div className={`initiative-hp-text ${getHpStatus(participant.hp, participant.hp_max)}`}>
+                    {participant.hp}/{participant.hp_max}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Combat Arena - Current Actors */}
+      <div className="combat-arena">
+        {combat.participants.map((participant) => (
+          <div
+            key={participant.id}
+            className={`combat-actor ${participant.is_player ? "player" : "enemy"} ${
+              participant.id === combat.current_actor_id ? "current" : ""
+            } ${participant.hp <= 0 ? "defeated" : ""}`}
+          >
+            <div className="combat-actor-avatar">{participant.is_player ? "🧙" : "👹"}</div>
+            <div className="combat-actor-info">
+              <div className="combat-actor-name">
+                {participant.name}
+                {participant.id === combat.current_actor_id && (
+                  <span className="current-turn-badge">当前</span>
+                )}
+              </div>
+              <div className="combat-actor-stats">
+                <span className="combat-actor-ac" title="护甲等级">🛡️ {participant.ac}</span>
+              </div>
+              <div className="combat-actor-hp-bar">
+                <div
+                  className={`combat-actor-hp-fill ${getHpStatus(participant.hp, participant.hp_max)}`}
+                  style={{ width: `${Math.max(0, (participant.hp / participant.hp_max) * 100)}%` }}
+                />
+              </div>
+              <div className={`combat-actor-hp-text ${getHpStatus(participant.hp, participant.hp_max)}`}>
+                HP: {participant.hp}/{participant.hp_max}
+              </div>
+            </div>
+            {participant.conditions.length > 0 && (
+              <div className="combat-actor-conditions">
+                {participant.conditions.map((c) => (
+                  <span key={c} className="condition-tag">
+                    {c}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="combat-narrative">
+        {isNarrativeStreaming || combatNarrative ? (
+          <div className="narration-block">
+            <div className="narration-header">
+              <span className="narration-icon">⚔️</span>
+              <span className="narration-label">战斗叙事</span>
+            </div>
+            <div className="narration-content">
+              <p className="narration-paragraph">{combatNarrative}</p>
+              {isNarrativeStreaming && <span className="streaming-cursor">▌</span>}
+            </div>
+          </div>
+        ) : (
+          <div className="combat-hint">选择行动并点击执行</div>
+        )}
+      </div>
+
+      {isPlayerTurn && (
+        <div className="combat-actions">
+          <div className="combat-action-row">
+            <label>目标:</label>
+            <select
+              value={selectedTarget || ""}
+              onChange={(e) => onTargetChange(e.target.value)}
+              disabled={loading}
+            >
+              {enemies.map((enemy) => (
+                <option key={enemy.id} value={enemy.id}>
+                  {enemy.name} (HP: {enemy.hp}/{enemy.hp_max})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="combat-action-row">
+            <label>武器:</label>
+            <select
+              value={selectedWeapon}
+              onChange={(e) => onWeaponChange(e.target.value)}
+              disabled={loading}
+            >
+              {weapons.map((w) => (
+                <option key={w} value={w}>
+                  {w}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* Class feature buttons */}
+          {actor?.character_class === "warrior" && (
+            <div className="combat-class-features">
+              {!actor.class_features?.second_wind_used && (
+                <button
+                  className="combat-btn second-wind"
+                  onClick={() => onClassFeatureAction("second_wind")}
+                  disabled={loading}
+                  title="恢复 1d10 + 等级 生命值"
+                >
+                  ❤️ Second Wind
+                </button>
+              )}
+              {!actor.class_features?.action_surge_used && (
+                <button
+                  className="combat-btn action-surge"
+                  onClick={() => onClassFeatureAction("action_surge")}
+                  disabled={loading}
+                  title="额外获得一次行动"
+                >
+                  ⚡ Action Surge
+                </button>
+              )}
+            </div>
+          )}
+          {actor?.character_class === "rogue" && (
+            <div className="combat-class-features">
+              <span className={`sneak-attack-badge ${actor.class_features?.sneak_attack_available ? "available" : "unavailable"}`}>
+                🗡️ 偷袭 {actor.class_features?.sneak_attack_available ? "可用" : "已用"}
+              </span>
+            </div>
+          )}
+          <div className="combat-action-buttons">
+            <button
+              className="combat-btn attack"
+              onClick={() => onAction("attack")}
+              disabled={loading}
+            >
+              {loading ? "执行中…" : "⚔️ 攻击"}
+            </button>
+            <button
+              className="combat-btn defend"
+              onClick={() => onAction("defend")}
+              disabled={loading}
+            >
+              🛡️ 防御
+            </button>
+            <button className="combat-btn flee" onClick={onFlee} disabled={loading}>
+              🏃 逃跑
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface CombatEndScreenProps {
+  combat: CombatState;
+  onReturn: () => void;
+  xpGained?: number;
+  levelUp?: LevelUpInfo | null;
+}
+
+function CombatEndScreen({ combat, onReturn, xpGained, levelUp }: CombatEndScreenProps) {
+  const isVictory = combat.status === "victory";
+  const isEscape = combat.status === "escaped";
+
+  return (
+    <div className="combat-end-screen">
+      <div className={`combat-result ${combat.status}`}>
+        <div className="combat-result-icon">{isVictory ? "🏆" : isEscape ? "🏃" : "💀"}</div>
+        <h2>
+          {isVictory ? "🎉 战斗胜利！" : isEscape ? "🏃 成功逃脱" : "💀 战斗失败"}
+        </h2>
+        <p className="combat-result-description">
+          {isVictory 
+            ? "你成功击败了所有敌人！" 
+            : isEscape 
+              ? "你成功逃离了战斗。" 
+              : "你在战斗中倒下了…"}
+        </p>
+        
+        {/* XP Gained */}
+        {isVictory && xpGained !== undefined && xpGained > 0 && (
+          <div className="xp-gained-badge" style={{ marginBottom: 16 }}>
+            获得 {xpGained} XP
+          </div>
+        )}
+        
+        {/* Level Up Notification */}
+        {levelUp && (
+          <div className="level-up-notification">
+            <span className="level-up-icon">🎊</span>
+            <div className="level-up-content">
+              <div className="level-up-title">升级！Lv.{levelUp.old_level} → Lv.{levelUp.new_level}</div>
+              <div className="level-up-details">
+                HP +{levelUp.hp_increase} · 熟练加值 +{levelUp.new_proficiency_bonus}
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div className="combat-result-stats">
+          <div className="result-stat">
+            <span className="result-stat-label">战斗轮数</span>
+            <span className="result-stat-value">{combat.round_number}</span>
+          </div>
+          <div className="result-stat">
+            <span className="result-stat-label">存活着</span>
+            <span className="result-stat-value">
+              {combat.participants.filter(p => p.hp > 0).length}/{combat.participants.length}
+            </span>
+          </div>
+        </div>
+        <div className="combat-result-participants">
+          {combat.participants.map((p) => (
+            <div key={p.id} className={`result-participant ${p.is_player ? "player" : "enemy"}`}>
+              <div className="result-participant-info">
+                <span className="result-participant-avatar">{p.is_player ? "🧙" : "👹"}</span>
+                <span className="result-participant-name">{p.name}</span>
+              </div>
+              <div className={`result-participant-status ${p.hp <= 0 ? "defeated" : "survived"}`}>
+                {p.hp <= 0 ? (
+                  <>
+                    <span className="status-icon">💀</span>
+                    <span>倒下</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="status-icon">❤️</span>
+                    <span>{p.hp}/{p.hp_max} HP</span>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        {isVictory && (
+          <div className="auto-return-hint">
+            3秒后自动返回探索…
+          </div>
+        )}
+        <button className="return-btn" onClick={onReturn}>
+          {isVictory ? "继续冒险 →" : "返回"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -970,6 +1634,10 @@ function CharacterCreationScreen({
                 ))}
               </div>
             </div>
+            <div className="creation-preview-section">
+              <h3>技能熟练</h3>
+              <SkillsList actor={actorPreview} compact />
+            </div>
           </>
         ) : (
           <div className="sidebar-loading">输入姓名并选择职业后查看预览。</div>
@@ -983,29 +1651,49 @@ function createPreviewActor(draft: CharacterDraft): Actor | null {
   const trimmedName = draft.name.trim();
   if (!trimmedName) return null;
 
-  const classHp: Record<CharacterClass, number> = { warrior: 12, mage: 8, rogue: 10 };
-  const baseAc: Record<CharacterClass, number> = { warrior: 16, mage: 12, rogue: 14 };
+  // Hit dice match backend CLASS_HIT_DICE
+  const classHitDie: Record<CharacterClass, number> = { warrior: 10, mage: 6, rogue: 8 };
+
+  // Calculate HP: hit die max + CON modifier (matches backend)
+  const conMod = getModifier(draft.abilities.con);
+  const hp = classHitDie[draft.characterClass] + conMod;
 
   // Calculate AC based on abilities
   const dexMod = getModifier(draft.abilities.dex);
-  let ac = baseAc[draft.characterClass];
+  let ac = 16;
   if (draft.characterClass === "mage") {
     ac = 10 + dexMod;
   } else if (draft.characterClass === "rogue") {
     ac = 11 + dexMod;
   }
 
+  // Compute skills to match backend logic
+  const profBonus = 2;
+  const classProfSkills = CLASS_SKILLS[draft.characterClass] ?? [];
+  const allSkills = [...SKILLS, ...EXTRA_SKILLS];
+  const skills = allSkills.map((skill) => {
+    const abilityMod = getModifier(draft.abilities[skill.ability]);
+    const isProficient = classProfSkills.includes(skill.name);
+    return {
+      name: skill.name,
+      ability: skill.ability,
+      proficient: isProficient,
+      modifier: abilityMod + (isProficient ? profBonus : 0),
+    };
+  });
+
   return {
     id: `preview-${draft.characterClass}`,
     name: trimmedName,
     character_class: draft.characterClass,
     abilities: draft.abilities,
-    proficiency_bonus: 2,
-    hp: classHp[draft.characterClass],
-    hp_max: classHp[draft.characterClass],
+    proficiency_bonus: profBonus,
+    hp,
+    hp_max: hp,
     ac,
     description: CLASS_SUMMARIES[draft.characterClass],
     conditions: [],
+    skills,
   };
 }
 
@@ -1090,6 +1778,8 @@ function restoreMessagesFromHistory(history: NarrativeHistoryEntry[]): Message[]
           action_summary: entry.action_summary,
           resolution_type: entry.resolution_summary.resolution_type ?? "auto_success",
           check: entry.resolution_summary.check ?? null,
+          skill_check: null,
+          item_use: null,
           outcome: entry.resolution_summary.outcome ?? "success",
           effects: [],
           narration: entry.narration,
@@ -1119,14 +1809,32 @@ function restoreTimelineFromHistory(history: NarrativeHistoryEntry[]): TimelineE
 
       if (entry.resolution_summary.resolution_type === "check" && entry.resolution_summary.check) {
         const check = entry.resolution_summary.check;
+        const abilityName = ABILITY_LABELS[check.ability] ?? check.ability;
+        const skillName = check.skill_name;
+        const isSkillCheck = skillName !== null && skillName !== undefined;
+        
+        const title = isSkillCheck && skillName
+          ? `${SKILL_LABELS[skillName] ?? skillName}检定 DC${check.dc}`
+          : `${abilityName}检定 DC${check.dc}`;
+        
+        const totalModifier = check.modifier + check.proficiency_bonus;
+        const modifierText = totalModifier >= 0 ? `+${totalModifier}` : `${totalModifier}`;
+        
+        let rollIndicator = "";
+        if (check.roll === 20) {
+          rollIndicator = "【大成功!】";
+        } else if (check.roll === 1) {
+          rollIndicator = "【大失败!】";
+        }
+        
+        const details = `掷出 ${check.roll}${rollIndicator} ${modifierText} = ${check.total} vs DC ${check.dc} — ${entry.resolution_summary.outcome === "success" ? "成功" : "失败"}`;
+        
         items.push({
           id: baseId + 1,
           type: "check",
-          title: `${ABILITY_LABELS[check.ability] ?? check.ability}检定 DC${check.dc}`,
+          title,
           outcome: entry.resolution_summary.outcome,
-          details: `掷骰: d20=${check.roll} 调整值:${check.modifier >= 0 ? "+" : ""}${check.modifier}${
-            check.proficiency_bonus > 0 ? `+${check.proficiency_bonus}` : ""
-          } = ${check.total}`,
+          details,
           timestamp: baseId + 1,
         });
       }
@@ -1153,25 +1861,6 @@ function restoreTimelineFromHistory(history: NarrativeHistoryEntry[]): TimelineE
     .sort((left, right) => right.timestamp - left.timestamp);
 }
 
-async function fetchCharacter(sessionId: string | null): Promise<CharacterCardFromAPI | null> {
-  if (!sessionId) return null;
-  try {
-    const response = await fetch(apiUrl("/character"), {
-      headers: buildSessionHeaders(sessionId),
-    });
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error(`Failed to fetch character: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching character:", error);
-    return null;
-  }
-}
-
 function App() {
   const [sessionId, setSessionId] = useState<string | null>(() => getStoredSessionId());
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1179,6 +1868,7 @@ function App() {
   const [health, setHealth] = useState<HealthStatus>("loading");
   const [sending, setSending] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [creatingCharacter, setCreatingCharacter] = useState(false);
   const [bootstrap, setBootstrap] = useState<BootstrapState | null>(null);
   const [previousBootstrap, setPreviousBootstrap] = useState<BootstrapState | null>(null);
@@ -1192,28 +1882,30 @@ function App() {
     abilityGeneration: "standard_array",
   });
   const [creationError, setCreationError] = useState<string | null>(null);
-  const [characterCard, setCharacterCard] = useState<CharacterCardFromAPI | null>(null);
-  const messagesEnd = useRef<HTMLDivElement>(null);
+  // Combat state
+  const [combat, setCombat] = useState<CombatState | null>(null);
+  // Save/Load state
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [savesList, setSavesList] = useState<SaveFile[]>([]);
+  const [loadingSaves, setLoadingSaves] = useState(false);
+  const [loadingGame, setLoadingGame] = useState(false);
+  const [combatLoading, setCombatLoading] = useState(false);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+  const [selectedWeapon, setSelectedWeapon] = useState<string>("longsword");
+  const [combatNarrative, setCombatNarrative] = useState<string>("");
+  const [isCombatNarrativeStreaming, setIsCombatNarrativeStreaming] = useState(false);
+  const [lastCombatXp, setLastCombatXp] = useState<number | undefined>(undefined);
+  const [lastCombatLevelUp, setLastCombatLevelUp] = useState<LevelUpInfo | null>(null);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
   const newConditions = useMemo(() => stateDiff.newConditions, [stateDiff]);
   const inAdventure = bootstrap?.phase === "adventure" && bootstrap.actor !== null;
+  const gamePhase = bootstrap?.game_phase ?? "exploration";
+  const inCombat = gamePhase === "combat";
+  const combatEnded = gamePhase === "ended";
 
-  // Fetch character card when entering adventure mode
-  useEffect(() => {
-    if (inAdventure && sessionId) {
-      fetchCharacter(sessionId).then((card) => {
-        setCharacterCard(card);
-      });
-    } else if (!inAdventure) {
-      setCharacterCard(null);
-    }
-  }, [inAdventure, sessionId]);
 
-  useEffect(() => {
-    messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending, streamingPreview]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1367,6 +2059,11 @@ function App() {
       setMessages([]);
       setTimeline([]);
       setInput("");
+      // Clear combat state
+      setCombat(null);
+      setCombatNarrative("");
+      setSelectedTarget(null);
+      setIsCombatNarrativeStreaming(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setMessages((previous) => [
@@ -1375,6 +2072,124 @@ function App() {
       ]);
     } finally {
       setResetting(false);
+    }
+  };
+
+  const saveGame = async () => {
+    if (saving) return;
+
+    setSaving(true);
+    try {
+      const response = await fetch(apiUrl("/save"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId),
+      });
+      if (!response.ok) {
+        if (response.status === 404) {
+          storeSessionId(null);
+          setSessionId(null);
+          await recoverExpiredSession("会话已过期，已创建新会话。");
+          return;
+        }
+        throw new Error(await response.text());
+      }
+      const result = await response.json();
+      setMessages((previous) => [
+        ...previous,
+        { id: Date.now(), role: "system", text: `游戏已存档 (${new Date(result.timestamp).toLocaleString("zh-CN")})`, timestamp: Date.now() },
+      ]);
+      addToTimeline({
+        type: "system",
+        title: "游戏存档",
+        details: `存档时间: ${new Date(result.timestamp).toLocaleString("zh-CN")}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((previous) => [
+        ...previous,
+        { id: Date.now(), role: "system", text: `存档失败: ${message}`, timestamp: Date.now() },
+      ]);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const fetchSavesList = async () => {
+    setLoadingSaves(true);
+    try {
+      const response = await fetch(apiUrl("/saves"));
+      if (!response.ok) {
+        throw new Error(`获取存档列表失败 (${response.status})`);
+      }
+      const data = await response.json();
+      setSavesList(data.saves || []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((previous) => [
+        ...previous,
+        { id: Date.now(), role: "system", text: `获取存档列表失败: ${message}`, timestamp: Date.now() },
+      ]);
+    } finally {
+      setLoadingSaves(false);
+    }
+  };
+
+  const openLoadDialog = async () => {
+    await fetchSavesList();
+    setShowLoadDialog(true);
+  };
+
+  const loadGame = async (saveId: string) => {
+    if (loadingGame) return;
+
+    setLoadingGame(true);
+    try {
+      const response = await fetch(apiUrl("/load"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ save_id: saveId }),
+      });
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("存档文件不存在");
+        } else if (response.status === 400) {
+          const errorText = await response.text();
+          throw new Error(`存档文件损坏: ${errorText}`);
+        }
+        throw new Error(`读档失败 (${response.status})`);
+      }
+      const data: BootstrapState = await response.json();
+      
+      // Update session and state
+      setSessionId(data.session_id);
+      storeSessionId(data.session_id);
+      setBootstrap(data);
+      setPreviousBootstrap(null);
+      setMessages(restoreMessagesFromHistory(data.narrative_history));
+      setTimeline(restoreTimelineFromHistory(data.narrative_history));
+      setCombat(null);
+      setCombatNarrative("");
+      setSelectedTarget(null);
+      setIsCombatNarrativeStreaming(false);
+      setShowLoadDialog(false);
+      
+      setMessages((previous) => [
+        ...previous,
+        { id: Date.now(), role: "system", text: `存档已加载，欢迎回来，${data.actor?.name || "冒险者"}！`, timestamp: Date.now() },
+      ]);
+      addToTimeline({
+        type: "system",
+        title: "读取存档",
+        details: `角色: ${data.actor?.name || "未知"}, 场景: ${data.scene.name}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((previous) => [
+        ...previous,
+        { id: Date.now(), role: "system", text: `读档失败: ${message}`, timestamp: Date.now() },
+      ]);
+    } finally {
+      setLoadingGame(false);
     }
   };
 
@@ -1408,14 +2223,12 @@ function App() {
         ability_generation: creationDraft.abilityGeneration,
       };
 
-      // Backend ignores abilities when ability_generation is standard_array.
-      // To respect the player's allocation, send as manual with the chosen abilities.
-      if (creationDraft.abilityGeneration === "standard_array") {
+      // Backend ignores abilities when ability_generation is standard_array or random_4d6.
+      // To respect the player's chosen/rolled abilities, send as manual with the chosen abilities.
+      if (creationDraft.abilityGeneration === "standard_array" || creationDraft.abilityGeneration === "random_4d6") {
         body.ability_generation = "manual";
-        body.abilities = creationDraft.abilities;
-      } else {
-        body.abilities = creationDraft.abilities;
       }
+      body.abilities = creationDraft.abilities;
 
       const response = await fetch(apiUrl("/character/create"), {
         method: "POST",
@@ -1504,6 +2317,13 @@ function App() {
       ...prev,
       abilities: rollRandomAbilities(),
     }));
+  };
+
+  const handleExitClick = (direction: string) => {
+    // Auto-fill movement command to input
+    const movementCommands = ["前往", "去", "走向", "进入"];
+    const command = movementCommands[Math.floor(Math.random() * movementCommands.length)];
+    setInput(`${command}${direction}`);
   };
 
   const send = async () => {
@@ -1676,13 +2496,41 @@ function App() {
       if (data.resolution_type === "check" && data.check) {
         const check = data.check;
         const abilityName = ABILITY_LABELS[check.ability] ?? check.ability;
+        
+        // Check for skill check (has skill_name or skill_check field)
+        const skillName = data.skill_check?.skill ?? check.skill_name;
+        const isSkillCheck = skillName !== null && skillName !== undefined;
+        
+        // Build skill check display text
+        let title: string;
+        let details: string;
+        
+        if (isSkillCheck && skillName) {
+          const skillLabel = SKILL_LABELS[skillName] ?? skillName;
+          title = `${skillLabel}检定 DC${check.dc}`;
+        } else {
+          title = `${abilityName}检定 DC${check.dc}`;
+        }
+        
+        // Calculate total modifier (ability + proficiency)
+        const totalModifier = check.modifier + check.proficiency_bonus;
+        const modifierText = totalModifier >= 0 ? `+${totalModifier}` : `${totalModifier}`;
+        
+        // Determine special roll (natural 20 or 1)
+        let rollIndicator = "";
+        if (check.roll === 20) {
+          rollIndicator = "【大成功!】";
+        } else if (check.roll === 1) {
+          rollIndicator = "【大失败!】";
+        }
+        
+        details = `掷出 ${check.roll}${rollIndicator} ${modifierText} = ${check.total} vs DC ${check.dc} — ${data.outcome === "success" ? "成功" : "失败"}`;
+        
         addToTimeline({
           type: "check",
-          title: `${abilityName}检定 DC${check.dc}`,
+          title,
           outcome: data.outcome,
-          details: `掷骰: d20=${check.roll} 调整值:${check.modifier >= 0 ? "+" : ""}${check.modifier}${
-            check.proficiency_bonus > 0 ? `+${check.proficiency_bonus}` : ""
-          } = ${check.total}`,
+          details,
         });
       } else {
         addToTimeline({
@@ -1739,6 +2587,243 @@ function App() {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Combat Functions
+  // ---------------------------------------------------------------------------
+
+  const startCombat = async () => {
+    if (!sessionId || combatLoading) return;
+    setCombatLoading(true);
+    try {
+      const response = await fetch(apiUrl("/combat/start"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId, { "Content-Type": "application/json" }),
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      const data = await response.json();
+      setCombat(data);
+      setSelectedTarget(data.participants.find((p: CombatParticipant) => !p.is_player)?.id || null);
+      addToTimeline({
+        type: "system",
+        title: "战斗开始",
+        details: `遭遇战开始，${data.participants.length} 名参与者`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "system", text: `战斗启动失败: ${message}`, timestamp: Date.now() },
+      ]);
+    } finally {
+      setCombatLoading(false);
+    }
+  };
+
+  const executeClassFeatureAction = async (feature: "second_wind" | "action_surge") => {
+    if (!sessionId || combatLoading) return;
+    setCombatLoading(true);
+    try {
+      const response = await fetch(apiUrl("/action"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId, {
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          scene_id: bootstrap?.scene.id || "combat",
+          actor: bootstrap?.actor?.name || "",
+          intent: feature,
+          approach: "",
+        }),
+      });
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      const data = await response.json();
+      addToTimeline({
+        type: "action",
+        title: feature === "second_wind" ? "Second Wind" : "Action Surge",
+        outcome: "success",
+        details: data.narration || "",
+      });
+      await refreshState();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "system", text: message, timestamp: Date.now() },
+      ]);
+    } finally {
+      setCombatLoading(false);
+    }
+  };
+
+  const executeCombatAction = async (actionType: CombatActionType) => {
+    if (!sessionId || !combat || combatLoading) return;
+    if (combat.current_actor_id !== combat.participants.find((p) => p.is_player)?.id) {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "system", text: "还不是你的回合", timestamp: Date.now() },
+      ]);
+      return;
+    }
+    setCombatLoading(true);
+    setCombatNarrative("");
+    setIsCombatNarrativeStreaming(true);
+    try {
+      const response = await fetch(apiUrl("/combat/action"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId, {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        }),
+        body: JSON.stringify({
+          action_type: actionType,
+          target_id: selectedTarget,
+          weapon: selectedWeapon,
+        }),
+      });
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      if (!response.body) {
+        throw new Error("后端未返回可读流");
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalResult: CombatActionResult | null = null;
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop() ?? "";
+        for (const block of blocks) {
+          const parsed = parseStreamEvent(block);
+          if (!parsed) continue;
+          if (parsed.event === "chunk") {
+            const payload = parsed.data as { field?: string; delta?: string };
+            if (payload.field === "narrative" && payload.delta) {
+              setCombatNarrative((prev) => prev + payload.delta);
+            }
+          } else if (parsed.event === "complete") {
+            finalResult = parsed.data as CombatActionResult;
+          }
+        }
+      }
+      if (buffer.trim()) {
+        const parsed = parseStreamEvent(buffer);
+        if (parsed?.event === "complete") {
+          finalResult = parsed.data as CombatActionResult;
+        }
+      }
+      if (finalResult) {
+        setCombat(finalResult.combat_state);
+        // Capture XP and level-up info
+        if (finalResult.xp_gained !== undefined) {
+          setLastCombatXp(finalResult.xp_gained);
+        }
+        if (finalResult.level_up) {
+          setLastCombatLevelUp(finalResult.level_up);
+        }
+        addToTimeline({
+          type: "action",
+          title: `战斗: ${actionType}`,
+          outcome: finalResult.hit ? "success" : "failure",
+          details: finalResult.hit
+            ? `命中，造成 ${finalResult.damage} 点伤害`
+            : "未命中",
+        });
+        // Refresh bootstrap state to get updated game_phase
+        await refreshState();
+        // If combat ended, show result and auto-return to exploration after delay
+        if (finalResult.combat_state.status !== "active") {
+          const isVictory = finalResult.combat_state.status === "victory";
+          addToTimeline({
+            type: "system",
+            title: isVictory ? "战斗胜利" : "战斗结束",
+            details: `战斗在 ${finalResult.combat_state.round_number} 轮后结束`,
+          });
+          // Auto-return to exploration after showing victory/defeat screen for 3 seconds
+          if (isVictory) {
+            setTimeout(() => {
+              returnToAdventure();
+              // Add victory message to chat
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: Date.now(),
+                  role: "system",
+                  text: finalResult.level_up 
+                    ? `🎉 战斗胜利！你成功击败了所有敌人，升级到 Lv.${finalResult.level_up.new_level}！`
+                    : "🎉 战斗胜利！你成功击败了所有敌人，继续你的冒险吧。",
+                  timestamp: Date.now(),
+                },
+              ]);
+            }, 3000);
+          }
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "system", text: `战斗行动失败: ${message}`, timestamp: Date.now() },
+      ]);
+    } finally {
+      setCombatLoading(false);
+      setIsCombatNarrativeStreaming(false);
+    }
+  };
+
+  const endCombat = async (reason: "flee" | "surrender" | "victory" | "defeat") => {
+    if (!sessionId || !combat) return;
+    try {
+      const response = await fetch(apiUrl("/combat/end"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId, { "Content-Type": "application/json" }),
+        body: JSON.stringify({ reason }),
+      });
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+      const data = await response.json();
+      setCombat(null);
+      // Refresh bootstrap state to get updated game_phase
+      await refreshState();
+      addToTimeline({
+        type: "system",
+        title: "战斗结束",
+        details: `结果: ${data.status}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "system", text: `结束战斗失败: ${message}`, timestamp: Date.now() },
+      ]);
+    }
+  };
+
+  const returnToAdventure = async () => {
+    setCombat(null);
+    setCombatNarrative("");
+    setSelectedTarget(null);
+    setLastCombatXp(undefined);
+    setLastCombatLevelUp(null);
+    await refreshState();
+  };
+
+  // Combat state is now managed by backend via game_phase
+  // Local combat state is only used for combat UI details when in combat
+
   return (
     <div className="app">
       <header className="header">
@@ -1764,12 +2849,19 @@ function App() {
               ))}
             </select>
           </div>
+          <button className="header-button" onClick={saveGame} disabled={saving || sending || creatingCharacter}>
+            {saving ? "存档中…" : "保存游戏"}
+          </button>
+          <button className="header-button" onClick={openLoadDialog} disabled={loadingSaves || sending || creatingCharacter}>
+            {loadingSaves ? "加载中…" : "读取存档"}
+          </button>
           <button className="header-button" onClick={resetSession} disabled={resetting || sending || creatingCharacter}>
             {resetting ? "重置中…" : "重置"}
           </button>
+          {inCombat && <span className="combat-badge">⚔️ 战斗中</span>}
           <HealthDot status={health} />
           <span className="subtitle">
-            {inAdventure ? "AI 跑团原型" : "角色创建阶段"}
+            {inCombat ? `第 ${combat?.round_number} 轮` : inAdventure ? "AI 跑团原型" : "角色创建阶段"}
           </span>
         </div>
       </header>
@@ -1782,14 +2874,40 @@ function App() {
               scene={bootstrap.scene}
               playerName={bootstrap.actor?.id}
               previousScene={previousBootstrap?.scene ?? null}
+              onExitClick={handleExitClick}
             />
           ) : (
             <div className="sidebar-loading">加载中…</div>
           )}
         </section>
         <section>
-          <h2>{inAdventure ? "角色" : "职业预览"}</h2>
-          {inAdventure && bootstrap?.actor ? (
+          <h2>{inCombat ? "战斗参与者" : inAdventure ? "角色" : "职业预览"}</h2>
+          {inCombat && combat ? (
+            <div className="combat-participants">
+              {combat.initiative_order.map((participantId) => {
+                const participant = combat.participants.find((p) => p.id === participantId);
+                if (!participant) return null;
+                const isCurrentTurn = participantId === combat.current_actor_id;
+                const isPlayer = participant.is_player;
+                return (
+                  <div
+                    key={participantId}
+                    className={`combat-participant ${isCurrentTurn ? "current" : ""} ${isPlayer ? "player" : "enemy"}`}
+                  >
+                    <div className="combat-participant-initiative">{participant.initiative}</div>
+                    <div className="combat-participant-info">
+                      <div className="combat-participant-name">
+                        {participant.name} {isCurrentTurn && "▶"}
+                      </div>
+                      <div className="combat-participant-hp">
+                        HP: {participant.hp}/{participant.hp_max}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : inAdventure && bootstrap?.actor ? (
             <ul>
               <li className="active">{bootstrap.actor.name}</li>
             </ul>
@@ -1804,42 +2922,56 @@ function App() {
       </aside>
 
       <main className="chat">
-        {inAdventure ? (
+        {inCombat && combat ? (
+          <CombatScreen
+            combat={combat}
+            actor={bootstrap?.actor || null}
+            combatNarrative={combatNarrative}
+            isNarrativeStreaming={isCombatNarrativeStreaming}
+            selectedTarget={selectedTarget}
+            onTargetChange={setSelectedTarget}
+            selectedWeapon={selectedWeapon}
+            onWeaponChange={setSelectedWeapon}
+            onAction={executeCombatAction}
+            onClassFeatureAction={executeClassFeatureAction}
+            onFlee={() => endCombat("flee")}
+            loading={combatLoading}
+          />
+        ) : combatEnded && combat ? (
+          <CombatEndScreen
+            combat={combat}
+            onReturn={returnToAdventure}
+            xpGained={lastCombatXp}
+            levelUp={lastCombatLevelUp}
+          />
+        ) : inAdventure ? (
           <>
-            <div className="messages">
-              {messages.length === 0 && <div className="empty-hint">输入一个行动开始冒险…</div>}
-              {messages.map((message) => (
-                <div key={message.id} className={`message ${message.role}`}>
-                  <div className="role">
-                    {message.role === "gm" ? "GM" : message.role === "player" ? "玩家" : "系统"}
-                  </div>
-                  {message.resolution ? (
-                    <ResolutionCard res={message.resolution} />
-                  ) : message.streamingPreview ? (
-                    <StreamingNarrationCard preview={message.streamingPreview} />
-                  ) : (
-                    message.text
-                  )}
-                </div>
-              ))}
-              {sending && streamingPreview && (
-                <div className="message gm loading">
-                  <div className="role">GM</div>
-                  <StreamingNarrationCard preview={streamingPreview} />
-                </div>
-              )}
-              <div ref={messagesEnd} />
-            </div>
+            <ScrollableNarrativeHistory
+              messages={messages}
+              streamingPreview={streamingPreview}
+              sending={sending}
+              gamePhase={gamePhase}
+              xpGained={lastCombatXp}
+              levelUp={lastCombatLevelUp}
+            />
             <div className="input-bar">
               <input
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && send()}
-                placeholder={sending ? "裁定中…" : "输入你的行动…"}
+                placeholder={sending ? "裁定中…" : "输入你的行动（或先创建角色）…"}
                 disabled={sending}
               />
               <button onClick={send} disabled={sending}>
                 {sending ? "…" : "发送"}
+              </button>
+              <button
+                className="combat-start-btn"
+                onClick={startCombat}
+                disabled={combatLoading || sending}
+                title="开始战斗"
+              >
+                ⚔️ 战斗
               </button>
             </div>
           </>
@@ -1887,56 +3019,8 @@ function App() {
 
             <section>
               <h2>技能</h2>
-              <SkillsList actor={bootstrap.actor} compact characterCard={characterCard} />
+              <SkillsList actor={bootstrap.actor} compact />
             </section>
-
-            {bootstrap.actor.equipped && (
-              <section>
-                <h2>装备</h2>
-                <div className="equipment-list">
-                  <div className="equipment-item">
-                    <span className="equipment-slot">武器:</span>
-                    <span className="equipment-name">
-                      {bootstrap.actor.equipped.weapon?.name || "无（徒手）"}
-                    </span>
-                    {bootstrap.actor.equipped.weapon?.damage_dice && (
-                      <span className="equipment-stat">({bootstrap.actor.equipped.weapon.damage_dice})</span>
-                    )}
-                  </div>
-                  <div className="equipment-item">
-                    <span className="equipment-slot">护甲:</span>
-                    <span className="equipment-name">
-                      {bootstrap.actor.equipped.armor?.name || "无"}
-                    </span>
-                    {bootstrap.actor.equipped.armor?.base_ac !== undefined && (
-                      <span className="equipment-stat">(AC {bootstrap.actor.equipped.armor.base_ac})</span>
-                    )}
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {bootstrap.actor.inventory && bootstrap.actor.inventory.length > 0 && (
-              <section>
-                <h2>物品栏 ({bootstrap.actor.inventory.length})</h2>
-                <div className="inventory-list">
-                  {bootstrap.actor.inventory.map((item) => (
-                    <div key={item.id} className="inventory-item">
-                      <span className="inventory-icon">
-                        {item.type === "weapon" ? "⚔️" : "🛡️"}
-                      </span>
-                      <span className="inventory-name">{item.name}</span>
-                      {item.damage_dice && (
-                        <span className="inventory-stat">{item.damage_dice}</span>
-                      )}
-                      {item.base_ac !== undefined && (
-                        <span className="inventory-stat">AC{item.base_ac}</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
 
             {bootstrap.actor.conditions && bootstrap.actor.conditions.length > 0 && (
               <section>
@@ -1985,6 +3069,60 @@ function App() {
           <Timeline entries={timeline} onToggle={toggleTimelineEntry} />
         </section>
       </aside>
+
+      {/* Load Game Dialog */}
+      {showLoadDialog && (
+        <div className="load-dialog-overlay" onClick={() => setShowLoadDialog(false)}>
+          <div className="load-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="load-dialog-header">
+              <h2>📂 读取存档</h2>
+              <button className="close-btn" onClick={() => setShowLoadDialog(false)}>✕</button>
+            </div>
+            <div className="load-dialog-content">
+              {loadingSaves ? (
+                <div className="loading-saves">加载存档列表中…</div>
+              ) : savesList.length === 0 ? (
+                <div className="no-saves">暂无存档</div>
+              ) : (
+                <div className="saves-list">
+                  {savesList.map((save) => (
+                    <div key={save.save_id} className="save-item">
+                      <div className="save-info">
+                        <div className="save-name">{save.save_name}</div>
+                        <div className="save-details">
+                          {save.character_name ? (
+                            <span className="save-character">
+                              {save.character_name}
+                              {save.class && ` · ${CLASS_LABELS[save.class as CharacterClass] || save.class}`}
+                              {save.character_level !== null && ` Lv.${save.character_level}`}
+                              {save.hp !== null && save.hp_max !== null && ` · HP ${save.hp}/${save.hp_max}`}
+                            </span>
+                          ) : (
+                            <span className="save-no-character">未创建角色</span>
+                          )}
+                          {save.scene_name && (
+                            <span className="save-scene"> 📍 {save.scene_name}</span>
+                          )}
+                        </div>
+                        <div className="save-time">
+                          {new Date(save.saved_at).toLocaleString("zh-CN")}
+                        </div>
+                      </div>
+                      <button
+                        className="load-btn"
+                        onClick={() => loadGame(save.save_id)}
+                        disabled={loadingGame}
+                      >
+                        {loadingGame ? "加载中…" : "读取"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -102,6 +102,8 @@ def resolve_attack(
     weapon: str,
     dice_roller: DiceRoller | None = None,
     damage_roller: DamageRoller | None = None,
+    sneak_attack: bool = False,
+    sneak_attack_dice: str = "1d6",
 ) -> AttackResult:
     """Resolve a melee or ranged attack.
 
@@ -120,6 +122,7 @@ def resolve_attack(
     hit = total_attack >= target.ac
 
     damage_detail = None
+    sneak_attack_detail = None
     if hit:
         damage_expr = get_weapon_damage(weapon)
         rolls_total, rolls = dmg_roller(damage_expr)
@@ -132,12 +135,25 @@ def resolve_attack(
             total=damage_total,
         )
 
+        if sneak_attack:
+            sa_rolls_total, sa_rolls = dmg_roller(sneak_attack_dice)
+            sa_total = max(1, sa_rolls_total)
+            sneak_attack_detail = DamageDetail(
+                dice_expression=sneak_attack_dice,
+                rolls=sa_rolls,
+                modifier=0,
+                total=sa_total,
+            )
+            # Add sneak attack damage to total weapon damage
+            damage_detail.total += sa_total
+
     return AttackResult(
         hit_roll=hit_roll,
         total_attack=total_attack,
         target_ac=target.ac,
         hit=hit,
         damage=damage_detail,
+        sneak_attack_damage=sneak_attack_detail,
     )
 
 
@@ -215,6 +231,8 @@ def execute_attack_action(
     weapon: str,
     dice_roller: DiceRoller | None = None,
     damage_roller: DamageRoller | None = None,
+    sneak_attack: bool = False,
+    sneak_attack_dice: str = "1d6",
 ) -> AttackResult:
     """Full attack action execution: resolve attack, apply damage, check end."""
     attacker = combat_state.get_combatant(attacker_id)
@@ -226,13 +244,17 @@ def execute_attack_action(
         attacker, target, weapon,
         dice_roller=dice_roller,
         damage_roller=damage_roller,
+        sneak_attack=sneak_attack,
+        sneak_attack_dice=sneak_attack_dice,
     )
 
     if result.hit and result.damage is not None:
         apply_damage(combat_state, target, result.damage.total)
-        combat_state.add_log(
-            f"{attacker.name} hits {target.name} for {result.damage.total} damage."
-        )
+        total_damage = result.damage.total - (result.sneak_attack_damage.total if result.sneak_attack_damage else 0)
+        log_msg = f"{attacker.name} hits {target.name} for {total_damage} damage."
+        if result.sneak_attack_damage:
+            log_msg = f"{attacker.name} hits {target.name} for {result.damage.total} damage (including {result.sneak_attack_damage.total} sneak attack)."
+        combat_state.add_log(log_msg)
     else:
         combat_state.add_log(
             f"{attacker.name} attacks {target.name} but misses."

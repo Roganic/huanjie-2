@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import MapPanel from "./components/MapPanel";
+import ModulePanel from "./components/ModulePanel";
+import type { Module, ActiveModuleState } from "./types/module";
 
 interface Message {
   id: number;
@@ -170,6 +172,7 @@ interface BootstrapState {
   scene: Scene;
   narrative_history: NarrativeHistoryEntry[];
   action_history: { action: string; result: string; narrative_summary: string }[];
+  active_module?: ActiveModuleState | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -383,6 +386,134 @@ function apiUrl(path: string): string {
   }
 
   return API_BASE_URL ? `${API_BASE_URL}${path}` : `/api${path}`;
+}
+
+// Mock module data for development (will be replaced with real API calls)
+const MOCK_MODULES: Module[] = [
+  {
+    id: "tutorial",
+    name: "新手教程：觉醒",
+    description: "一个引导新玩家熟悉游戏机制的入门模组。你将扮演一名刚刚觉醒能力的冒险者，在导师的指引下学习战斗、探索和交互的基础操作。",
+    author: "幻界团队",
+    version: "1.0.0",
+    status: "inactive",
+    scenes: [
+      { id: "tut_01", name: "觉醒之间", description: "一个充满神秘符文的圆形房间，这是你觉醒的地方。" },
+      { id: "tut_02", name: "训练场", description: "开阔的户外训练场地，有木桩和靶子供练习。" },
+      { id: "tut_03", name: "导师书房", description: "摆满古籍的书房，散发着淡淡的墨香。" },
+    ],
+    npcs: [
+      { id: "mentor", name: "艾尔导师", description: "一位慈祥但严格的老法师，负责指导新手冒险者。", type: "friendly", role: "导师" },
+      { id: "dummy", name: "训练傀儡", description: "用于战斗练习的魔法傀儡，不会真正伤害你。", type: "neutral", role: "练习目标" },
+    ],
+    quests: [
+      { id: "q_start", name: "初次觉醒", description: "完成觉醒仪式，掌握基础能力。", objectives: ["与导师对话", "完成觉醒仪式", "学习基础操作"], is_main: true },
+      { id: "q_combat", name: "战斗训练", description: "在训练场练习战斗技巧。", objectives: ["前往训练场", "击败训练傀儡", "掌握攻击和防御"], is_main: true },
+    ],
+  },
+  {
+    id: "forest_mystery",
+    name: "迷雾森林的召唤",
+    description: "精灵村落附近出现奇怪的现象，动物变得狂暴，植物开始枯萎。你被委托调查这一现象的根源，却发现了沉睡数百年的古老秘密。",
+    author: "幻界团队",
+    version: "1.0.0",
+    status: "inactive",
+    scenes: [
+      { id: "fm_01", name: "精灵村落", description: "宁静的精灵村落，树屋错落有致，充满自然气息。" },
+      { id: "fm_02", name: "迷雾森林入口", description: "森林边缘弥漫着薄雾，能见度逐渐降低。" },
+      { id: "fm_03", name: "古树祭坛", description: "一棵千年古树的根部，有一个被遗忘的祭坛。" },
+      { id: "fm_04", name: "地底遗迹", description: "隐藏在森林下的古代遗迹，充满未知的危险。" },
+    ],
+    npcs: [
+      { id: "elder", name: "长老艾瑞尔", description: "精灵村的长老，忧心忡忡地委托你调查森林异变。", type: "friendly", role: "委托人" },
+      { id: "druid", name: "失踪的德鲁伊", description: "调查森林异变时失踪的德鲁伊，似乎发现了什么。", type: "neutral", role: "关键NPC" },
+      { id: "corrupted", name: "腐化守卫", description: "被黑暗力量腐化的森林守卫，曾经是森林的守护者。", type: "hostile", role: "敌人" },
+    ],
+    quests: [
+      { id: "q_investigate", name: "森林异变", description: "调查迷雾森林的异常现象。", objectives: ["与长老对话", "前往迷雾森林", "寻找线索"], is_main: true },
+      { id: "q_druid", name: "失踪的德鲁伊", description: "寻找失踪的德鲁伊。", objectives: ["搜索森林", "找到德鲁伊的踪迹", "解救德鲁伊"], is_main: true },
+      { id: "q_cure", name: "净化之源", description: "找到并净化腐化的源头。", objectives: ["找到祭坛", "击败腐化守卫", "净化森林"], is_main: true },
+      { id: "q_herbs", name: "采集草药", description: "为精灵药师采集治疗草药。", objectives: ["采集月见草 x3", "采集银叶草 x2"], is_main: false },
+    ],
+  },
+  {
+    id: "shadow_guild",
+    name: "暗影公会的阴谋",
+    description: "城市地下世界中，暗影公会正在策划一场针对王国的阴谋。你需要潜入公会内部，揭露并阻止他们的计划。",
+    author: "幻界团队",
+    version: "0.9.0",
+    status: "inactive",
+    scenes: [
+      { id: "sg_01", name: "王城酒馆", description: "冒险者和情报贩子的聚集地，暗影公会的秘密联络点。" },
+      { id: "sg_02", name: "地下通道", description: "通往公会据点的秘密通道，充满陷阱。" },
+      { id: "sg_03", name: "公会据点", description: "暗影公会的秘密基地，戒备森严。" },
+      { id: "sg_04", name: "密室", description: "存放公会机密文件的房间，只有高层才能进入。" },
+    ],
+    npcs: [
+      { id: "informant", name: "影子", description: "神秘的情报贩子，知道暗影公会的内幕。", type: "neutral", role: "情报源" },
+      { id: "guard", name: "公会守卫", description: "训练有素的暗影公会成员，对入侵者毫不留情。", type: "hostile", role: "敌人" },
+      { id: "master", name: "公会首领", description: "暗影公会的领导者，一个城府极深的人物。", type: "hostile", role: "Boss" },
+    ],
+    quests: [
+      { id: "q_intel", name: "潜入暗影", description: "潜入暗影公会获取情报。", objectives: ["找到影子", "获取通行证", "潜入据点"], is_main: true },
+      { id: "q_evidence", name: "收集证据", description: "收集公会阴谋的证据。", objectives: ["搜索密室", "找到计划书", "逃离据点"], is_main: true },
+      { id: "q_confront", name: "正面对决", description: "与公会首领对峙，阻止阴谋。", objectives: ["找到首领", "击败首领", "解救俘虏"], is_main: true },
+    ],
+  },
+];
+
+// Module API functions
+async function fetchModules(): Promise<{ modules: Module[]; active_module: ActiveModuleState | null }> {
+  // TODO: Replace with real API call when backend is ready
+  // const response = await fetch(apiUrl("/modules"));
+  // return response.json();
+  
+  // For now, return mock data
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({
+        modules: MOCK_MODULES,
+        active_module: null,
+      });
+    }, 500);
+  });
+}
+
+async function activateModule(moduleId: string): Promise<{ success: boolean; active_module: ActiveModuleState }> {
+  // TODO: Replace with real API call when backend is ready
+  // const response = await fetch(apiUrl("/modules/activate"), {
+  //   method: "POST",
+  //   headers: { "Content-Type": "application/json" },
+  //   body: JSON.stringify({ module_id: moduleId }),
+  // });
+  // return response.json();
+  
+  const module = MOCK_MODULES.find(m => m.id === moduleId);
+  if (!module) {
+    throw new Error("Module not found");
+  }
+  
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const mainQuest = module.quests.find(q => q.is_main);
+      resolve({
+        success: true,
+        active_module: {
+          module_id: module.id,
+          module_name: module.name,
+          current_story_node: module.scenes[0]?.name || "开始",
+          current_story_description: module.scenes[0]?.description || "冒险即将开始...",
+          active_quests: mainQuest ? [{
+            quest_id: mainQuest.id,
+            quest_name: mainQuest.name,
+            current_objective: mainQuest.objectives[0] || "开始任务",
+            is_main: true,
+          }] : [],
+          completed_quests: [],
+        },
+      });
+    }, 800);
+  });
 }
 
 function getModifier(score: number): number {
@@ -1899,6 +2030,10 @@ function App() {
   const [lastCombatLevelUp, setLastCombatLevelUp] = useState<LevelUpInfo | null>(null);
   // Map state
   const [showMap, setShowMap] = useState(false);
+  // Module state
+  const [showModulePanel, setShowModulePanel] = useState(false);
+  const [modules, setModules] = useState<Module[]>([]);
+  const [modulesLoading, setModulesLoading] = useState(false);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
@@ -2824,6 +2959,70 @@ function App() {
     await refreshState();
   };
 
+  // ---------------------------------------------------------------------------
+  // Module Functions
+  // ---------------------------------------------------------------------------
+
+  const openModulePanel = async () => {
+    setShowModulePanel(true);
+    if (modules.length === 0) {
+      setModulesLoading(true);
+      try {
+        const data = await fetchModules();
+        setModules(data.modules);
+        // If there's an active module from backend, update bootstrap
+        if (data.active_module && bootstrap) {
+          setBootstrap({ ...bootstrap, active_module: data.active_module });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now(), role: "system", text: `加载模组列表失败: ${message}`, timestamp: Date.now() },
+        ]);
+      } finally {
+        setModulesLoading(false);
+      }
+    }
+  };
+
+  const handleActivateModule = async (moduleId: string) => {
+    try {
+      const result = await activateModule(moduleId);
+      if (result.success && bootstrap) {
+        // Update module list status
+        setModules((prev) =>
+          prev.map((m) => ({
+            ...m,
+            status: m.id === moduleId ? "active" : m.status === "active" ? "inactive" : m.status,
+          }))
+        );
+        // Update bootstrap with active module
+        setBootstrap({ ...bootstrap, active_module: result.active_module });
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            role: "system",
+            text: `模组「${result.active_module.module_name}」已激活！当前剧情：${result.active_module.current_story_node}`,
+            timestamp: Date.now(),
+          },
+        ]);
+        addToTimeline({
+          type: "system",
+          title: "模组已激活",
+          details: `开始冒险: ${result.active_module.module_name}`,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "system", text: `激活模组失败: ${message}`, timestamp: Date.now() },
+      ]);
+    }
+  };
+
   // Combat state is now managed by backend via game_phase
   // Local combat state is only used for combat UI details when in combat
 
@@ -2860,6 +3059,14 @@ function App() {
           </button>
           <button className="header-button" onClick={resetSession} disabled={resetting || sending || creatingCharacter}>
             {resetting ? "重置中…" : "重置"}
+          </button>
+          <button
+            className="header-button module-button"
+            onClick={openModulePanel}
+            disabled={modulesLoading || sending || creatingCharacter}
+            title="管理模组"
+          >
+            📦 模组
           </button>
           {inAdventure && (
             <button 
@@ -3055,6 +3262,49 @@ function App() {
             </section>
 
             <RecentChanges diff={stateDiff} />
+
+            {/* Active Module - Story Node & Quests */}
+            {bootstrap?.active_module && (
+              <>
+                <section>
+                  <h2>📖 当前剧情</h2>
+                  <div className="story-node-section">
+                    <div className="story-node-header">
+                      <span className="story-node-icon">🎭</span>
+                      <span>剧情节点</span>
+                    </div>
+                    <div className="story-node-name">{bootstrap.active_module.current_story_node}</div>
+                    <div className="story-node-description">{bootstrap.active_module.current_story_description}</div>
+                  </div>
+                </section>
+
+                <section>
+                  <h2>📜 任务目标</h2>
+                  <div className="active-quests-section">
+                    {bootstrap.active_module.active_quests.length > 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                        {bootstrap.active_module.active_quests.map((quest) => (
+                          <div
+                            key={quest.quest_id}
+                            className={`active-quest-item ${quest.is_main ? "main-quest" : "side-quest"}`}
+                          >
+                            <div className="active-quest-name">
+                              {quest.quest_name}
+                              <span className={`quest-type-badge ${quest.is_main ? "" : "side"}`}>
+                                {quest.is_main ? "主线" : "支线"}
+                              </span>
+                            </div>
+                            <div className="active-quest-objective">{quest.current_objective}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="no-active-quest">暂无活跃任务</div>
+                    )}
+                  </div>
+                </section>
+              </>
+            )}
           </>
         ) : (
           <section>
@@ -3134,6 +3384,19 @@ function App() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Module Panel */}
+      {showModulePanel && (
+        <div className="module-panel-overlay">
+          <ModulePanel
+            modules={modules}
+            activeModule={bootstrap?.active_module || null}
+            onActivateModule={handleActivateModule}
+            onClose={() => setShowModulePanel(false)}
+            loading={modulesLoading}
+          />
         </div>
       )}
 

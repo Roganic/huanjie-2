@@ -140,7 +140,7 @@ def _handle_spell_action(req: ActionRequest, actor) -> Optional[ActionResponse]:
     """Handle spell casting actions."""
     from .spells.spell_resolver import is_cast_command, parse_cast_command, cast_spell
     from .models.action import Effect
-    from .state import get_actor_by_id_or_name, consume_actor_spell_slot
+    from .state import get_actor_by_id_or_name
     
     if not is_cast_command(req.intent):
         return None
@@ -228,34 +228,9 @@ def _handle_rest_action(req: ActionRequest, actor) -> Optional[ActionResponse]:
     """Handle short rest and long rest actions."""
     from .spells.spell_resolver import is_rest_command
     from .models.action import Effect
-    from .state import restore_actor_spell_slots, apply_effects
-    
-    is_rest, rest_type = is_rest_command(req.intent)
-    if not is_rest:
-        return None
-    
-    rest_name = "长休" if rest_type == "long" else "短休"
-    result = restore_actor_spell_slots(rest_type)
-    
-    effects: list[Effect] = []
-    if result.get("restored"):
-        effects.append(Effect(
-            target=actor.id,
-            field="spell_slots_restored",
-            delta=rest_type,
-            description=f"{rest_name}后法术位已恢复",
-        ))
-        apply_effects(effects)
-    
-    return ActionResponse(
-        action_summary=f"{actor.name} 进行{rest_name}",
-        resolution_type=ResolutionType.AUTO_SUCCESS,
-        outcome=Outcome.SUCCESS,
-        effects=effects,
-        narration=f"{actor.name} 完成了一次{rest_name}，感觉精神焕发。",
-        scene_progression=f"{rest_name}完成。" + ("法术位已恢复。" if result.get("restored") else ""),
-        gm_prompt=f"{actor.name} 已完成{rest_name}。",
-    )
+    # Rest actions are now handled directly in routers/action.py
+    # This function is kept for backwards compatibility but does nothing
+    return None
 
 
 def handle_equipment_action(

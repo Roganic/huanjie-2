@@ -1308,3 +1308,80 @@ def get_character_rest_status(session_id: str | None = None) -> dict | None:
         "spell_slots": actor.spell_slots,
         "spell_slots_max": actor.spell_slots_max,
     }
+
+
+# ---------------------------------------------------------------------------
+# Equipment Functions
+# ---------------------------------------------------------------------------
+
+def equip_item_for_actor(item_name: str, session_id: str | None = None) -> dict:
+    """Equip an item for the current actor.
+    
+    Args:
+        item_name: The name of the item to equip
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        Dictionary with success status, equipped item info, and new AC
+    """
+    from .equipment import equip_item, ItemNotFoundError, InvalidItemTypeError
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=False)
+        if session.actor is None:
+            return {"success": False, "error": "没有角色"}
+        
+        try:
+            updated_actor, equipped_item, previous_item = equip_item(session.actor, item_name)
+            
+            # Persist the updated actor
+            session.actor = updated_actor
+            _save_session(session)
+            
+            return {
+                "success": True,
+                "item": {"id": equipped_item.id, "name": equipped_item.name, "type": equipped_item.type.value},
+                "previous_item": {"id": previous_item.id, "name": previous_item.name} if previous_item else None,
+                "ac": updated_actor.ac,
+            }
+        except ItemNotFoundError as e:
+            return {"success": False, "error": str(e)}
+        except InvalidItemTypeError as e:
+            return {"success": False, "error": str(e)}
+
+
+def unequip_item_from_actor(slot: str, session_id: str | None = None) -> dict:
+    """Unequip an item from the current actor.
+    
+    Args:
+        slot: The slot to unequip ("weapon" or "armor")
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        Dictionary with success status, removed item info, and new AC
+    """
+    from .equipment import unequip_item
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=False)
+        if session.actor is None:
+            return {"success": False, "error": "没有角色"}
+        
+        try:
+            updated_actor, removed_item = unequip_item(session.actor, slot)
+            
+            # Persist the updated actor
+            session.actor = updated_actor
+            _save_session(session)
+            
+            return {
+                "success": True,
+                "removed_item": {"id": removed_item.id, "name": removed_item.name} if removed_item else None,
+                "ac": updated_actor.ac,
+            }
+        except ValueError as e:
+            return {"success": False, "error": str(e)}

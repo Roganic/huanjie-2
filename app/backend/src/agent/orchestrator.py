@@ -30,14 +30,17 @@ from ..models.action import (
     ResolutionType,
     SavingThrowDetail,
 )
-from ..models.state import Actor, NarrativeHistoryEntry, SceneHistoryEntry
+from ..models.state import Actor, NarrativeHistoryEntry
 from ..state import (
     append_narrative_history,
-    append_scene_history,
+    end_combat_session,
     get_actor,
     get_actor_by_id_or_name,
+    get_combat_state,
     get_narrative_context,
     get_scene,
+    start_combat_session,
+    update_combatant_hp,
 )
 from .narrator import generate_narration
 from .tools import (
@@ -177,6 +180,9 @@ class GMAgent:
         check_result: Optional[dict] = None,
         attack_result: Optional[dict] = None,
         saving_throw_result: Optional[dict] = None,
+        combat_round: Optional[int] = None,
+        is_combat_ended: Optional[bool] = None,
+        combat_outcome: Optional[str] = None,
     ) -> NarrativeResult:
         """Call generate_narrative tool and record result."""
         result = tool_generate_narrative(
@@ -187,6 +193,9 @@ class GMAgent:
             saving_throw_result=saving_throw_result,
             effects=self.effects,
             narrative_history=get_narrative_context(),
+            combat_round=combat_round,
+            is_combat_ended=is_combat_ended,
+            combat_outcome=combat_outcome,
         )
         self.tool_results.append(result)
         return result
@@ -224,46 +233,6 @@ class GMAgent:
                 scene_progression=narration_result.scene_progression,
                 gm_prompt=narration_result.gm_prompt,
                 created_at=int(time.time() * 1000),
-            )
-        )
-
-    def _record_scene_history(
-        self,
-        action_type: str,
-        outcome: Outcome,
-        check_result: Optional[dict] = None,
-        attack_result: Optional[dict] = None,
-        narrative_keywords: Optional[list[str]] = None,
-    ) -> None:
-        """Persist a compact scene event for narrative continuity."""
-        npc_changes: list[str] = []
-        for effect in self.effects:
-            if effect.field == "hp" and isinstance(effect.delta, int):
-                delta_str = f"+{effect.delta}" if effect.delta > 0 else str(effect.delta)
-                npc_changes.append(f"{effect.target} HP {delta_str}")
-            elif effect.field == "conditions_add" and isinstance(effect.delta, str):
-                npc_changes.append(f"{effect.target} 获得状态 [{effect.delta}]")
-            elif effect.field == "conditions_remove" and isinstance(effect.delta, str):
-                npc_changes.append(f"{effect.target} 移除状态 [{effect.delta}]")
-
-        check_summary: dict[str, object] = {"outcome": outcome.value}
-        if check_result:
-            check_summary["ability"] = check_result.get("ability")
-            check_summary["total"] = check_result.get("total")
-            check_summary["dc"] = check_result.get("dc")
-        if attack_result:
-            check_summary["weapon"] = attack_result.get("weapon")
-            check_summary["target"] = attack_result.get("target")
-            damage = attack_result.get("damage")
-            if damage:
-                check_summary["damage"] = damage.get("total")
-
-        append_scene_history(
-            SceneHistoryEntry(
-                action_type=action_type,
-                check_result=check_summary,
-                narrative_keywords=narrative_keywords or [],
-                npc_changes=npc_changes,
             )
         )
     
@@ -361,12 +330,6 @@ class GMAgent:
             narration_result=narrative_result,
             check_result=check_result,
         )
-        self._record_scene_history(
-            action_type="skill_check",
-            outcome=outcome,
-            check_result=check_result,
-            narrative_keywords=[skill_name, ability, req.intent, req.approach],
-        )
         
         return ActionResponse(
             action_summary=action_summary,
@@ -413,11 +376,6 @@ class GMAgent:
             outcome=Outcome.SUCCESS,
             narration_result=narrative_result,
         )
-        self._record_scene_history(
-            action_type="auto_success",
-            outcome=Outcome.SUCCESS,
-            narrative_keywords=[req.intent, req.approach],
-        )
         
         return ActionResponse(
             action_summary=action_summary,
@@ -459,7 +417,7 @@ class GMAgent:
         check = CheckDetail(
             ability=ability,
             modifier=modifier,
-            proficiency_bonus=actor.proficiency_bonus,
+            proficiency_bonus=0,
             advantage=advantage,
             roll=roll_result.roll,
             total=total,
@@ -489,12 +447,6 @@ class GMAgent:
             narration_result=narrative_result,
             check_result=check_result,
         )
-        self._record_scene_history(
-            action_type="ability_check",
-            outcome=outcome,
-            check_result=check_result,
-            narrative_keywords=[ability, req.intent, req.approach],
-        )
         
         return ActionResponse(
             action_summary=action_summary,
@@ -517,27 +469,18 @@ class GMAgent:
         if target is None:
             return self._resolve_attack_no_target(req, actor, target_id)
         
+        # Ensure combat is active
+        combat_state = get_combat_state()
+        if not combat_state.is_active:
+            start_combat_session()
+            combat_state = get_combat_state()
+        
         action_summary = f"{actor.name} attacks {target.name} with {req.weapon or 'weapon'}"
         
         # Determine attack parameters
-        # Priority: 1. Request override, 2. Equipped weapon, 3. Default fallback
-        if req.weapon:
-            weapon = req.weapon
-            damage_dice = req.damage_dice or self._get_weapon_damage(weapon)
-        elif actor.equipped and actor.equipped.weapon:
-            equipped_weapon = actor.equipped.weapon
-            weapon = equipped_weapon.name
-            damage_dice = req.damage_dice or equipped_weapon.damage_dice or self._get_weapon_damage(equipped_weapon.id)
-        else:
-            weapon = "longsword"
-            damage_dice = req.damage_dice or self._get_weapon_damage(weapon)
-
-        if req.ability:
-            ability = req.ability
-        elif not req.weapon and actor.equipped and actor.equipped.weapon and actor.equipped.weapon.attack_ability:
-            ability = actor.equipped.weapon.attack_ability
-        else:
-            ability = self._infer_attack_ability(weapon)
+        weapon = req.weapon or "longsword"
+        damage_dice = req.damage_dice or self._get_weapon_damage(weapon)
+        ability = req.ability or self._infer_attack_ability(weapon)
         modifier = actor.abilities.modifier(ability)
         prof = actor.proficiency_bonus
         advantage = req.advantage
@@ -553,6 +496,7 @@ class GMAgent:
         total_attack = attack_roll.total
         target_ac = target.ac
         outcome = Outcome.SUCCESS if total_attack >= target_ac else Outcome.FAILURE
+        hit = outcome == Outcome.SUCCESS
         
         # Build attack detail (will be updated with damage if hit)
         attack_detail = AttackDetail(
@@ -565,9 +509,11 @@ class GMAgent:
         )
         
         damage_detail: Optional[DamageDetail] = None
+        is_combat_ended = False
+        combat_outcome: Optional[str] = None
         
         # Step 2: If hit, roll damage and apply
-        if outcome == Outcome.SUCCESS:
+        if hit:
             damage_result = self._call_roll_dice(
                 dice_type=DiceType.DAMAGE,
                 reason=f"Damage with {weapon}",
@@ -593,15 +539,24 @@ class GMAgent:
                 description=f"{actor.name} hits {target.name} with {weapon} for {damage_total} damage.",
             )
             
+            # Refresh target to get updated HP
+            target = get_actor_by_id_or_name(target_id) or target
+            update_combatant_hp(target.id, target.hp)
+            
             # Check for defeat
-            new_hp = max(0, target.hp - damage_total)
-            if new_hp == 0:
+            if target.hp == 0:
                 self._call_apply_state_change(
                     target=target.id,
                     field="conditions_add",
                     delta="defeated",
                     description=f"{target.name} has been defeated!",
                 )
+                is_combat_ended = True
+                combat_outcome = "victory"
+                end_combat_session("victory")
+        
+        # Update attacker HP in combat state
+        update_combatant_hp(actor.id, actor.hp)
         
         # Step 3: Advance time
         scene = get_scene()
@@ -612,16 +567,20 @@ class GMAgent:
             description="战斗时间流逝。",
         )
         
-        # Step 4: Generate narrative
+        # Step 4: Generate narrative with combat context
         attack_result = {
             "weapon": weapon,
             "target": target.name,
+            "hit": hit,
             "damage": damage_detail.model_dump() if damage_detail else None,
         }
         narrative_result = self._call_generate_narrative(
             req=req,
             outcome=outcome,
             attack_result=attack_result,
+            combat_round=combat_state.round_number,
+            is_combat_ended=is_combat_ended,
+            combat_outcome=combat_outcome,
         )
         self._record_narrative_history(
             action_summary=action_summary,
@@ -630,12 +589,11 @@ class GMAgent:
             narration_result=narrative_result,
             attack_result=attack_result,
         )
-        self._record_scene_history(
-            action_type="attack",
-            outcome=outcome,
-            attack_result=attack_result,
-            narrative_keywords=[weapon, target.name, req.intent],
-        )
+        
+        # Advance combat round for next action
+        from ..state import advance_combat_round
+        if not is_combat_ended:
+            advance_combat_round()
         
         return ActionResponse(
             action_summary=action_summary,
@@ -691,6 +649,12 @@ class GMAgent:
         if target is None:
             return self._resolve_attack_no_target(req, actor, target_id)
         
+        # Ensure combat is active
+        combat_state = get_combat_state()
+        if not combat_state.is_active:
+            start_combat_session()
+            combat_state = get_combat_state()
+        
         action_summary = f"{actor.name} casts {req.intent} at {target.name}"
         
         # Spell parameters
@@ -725,6 +689,8 @@ class GMAgent:
         saving_throw_detail: Optional[SavingThrowDetail] = None
         damage_detail: Optional[DamageDetail] = None
         outcome = Outcome.FAILURE
+        is_combat_ended = False
+        combat_outcome: Optional[str] = None
         
         # Step 2: If spell hits, target makes saving throw
         if hit:
@@ -776,18 +742,27 @@ class GMAgent:
                 ),
             )
             
+            # Refresh target to get updated HP
+            target = get_actor_by_id_or_name(target_id) or target
+            update_combatant_hp(target.id, target.hp)
+            
             # Check for defeat
-            new_hp = max(0, target.hp - damage_total)
-            if new_hp == 0:
+            if target.hp == 0:
                 self._call_apply_state_change(
                     target=target.id,
                     field="conditions_add",
                     delta="defeated",
                     description=f"{target.name} has been defeated!",
                 )
+                is_combat_ended = True
+                combat_outcome = "victory"
+                end_combat_session("victory")
             
             # Overall outcome is success if spell hit
             outcome = Outcome.SUCCESS
+        
+        # Update attacker HP in combat state
+        update_combatant_hp(actor.id, actor.hp)
         
         # Step 5: Advance time
         scene = get_scene()
@@ -798,10 +773,11 @@ class GMAgent:
             description="战斗时间流逝。",
         )
         
-        # Step 6: Generate narrative
+        # Step 6: Generate narrative with combat context
         attack_result = {
             "weapon": "spell",
             "target": target.name,
+            "hit": hit,
             "damage": damage_detail.model_dump() if damage_detail else None,
             "saving_throw": saving_throw_detail.model_dump() if saving_throw_detail else None,
         }
@@ -810,6 +786,9 @@ class GMAgent:
             outcome=outcome,
             attack_result=attack_result,
             saving_throw_result=saving_throw_detail.model_dump() if saving_throw_detail else None,
+            combat_round=combat_state.round_number,
+            is_combat_ended=is_combat_ended,
+            combat_outcome=combat_outcome,
         )
         self._record_narrative_history(
             action_summary=action_summary,
@@ -819,12 +798,11 @@ class GMAgent:
             attack_result=attack_result,
             saving_throw_result=saving_throw_detail.model_dump() if saving_throw_detail else None,
         )
-        self._record_scene_history(
-            action_type="spell_attack",
-            outcome=outcome,
-            attack_result=attack_result,
-            narrative_keywords=["spell", target.name, req.intent],
-        )
+        
+        # Advance combat round for next action
+        from ..state import advance_combat_round
+        if not is_combat_ended:
+            advance_combat_round()
         
         return ActionResponse(
             action_summary=action_summary,

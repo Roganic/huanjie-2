@@ -18,6 +18,7 @@ from typing import Optional
 
 from ..models.action import ActionRequest, Effect, Outcome
 from ..models.state import Actor, NarrativeHistoryEntry, Scene
+from ..state import get_combat_state
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +189,10 @@ class NarrationConstraintContext:
     effects: Optional[list[Effect]] = None
     actor: Optional[Actor] = None
     target: Optional[Actor] = None
+    # Combat-specific context
+    combat_round: Optional[int] = None
+    is_combat_ended: Optional[bool] = None
+    combat_outcome: Optional[str] = None
 
 
 @dataclass
@@ -204,6 +209,14 @@ def build_hard_constraints(context: NarrationConstraintContext) -> list[str]:
 
     outcome_cn = "成功" if context.outcome == Outcome.SUCCESS else "失败"
     lines.append(f"- 裁定结果 / Outcome: {outcome_cn} ({context.outcome.value})")
+    
+    # Add combat-specific constraints
+    if context.combat_round is not None:
+        lines.append(f"- 战斗回合 / Combat Round: 第 {context.combat_round} 回合")
+    
+    if context.is_combat_ended:
+        outcome_str = context.combat_outcome or "ended"
+        lines.append(f"- 战斗结束 / Combat Ended: {outcome_str}")
 
     if context.check_result:
         ability = context.check_result.get("ability", "")
@@ -344,10 +357,48 @@ def build_narrative_prompt(
     if context.attack_result:
         weapon = context.attack_result.get("weapon", "weapon")
         target_name = context.attack_result.get("target", "enemy")
+        hit = context.attack_result.get("hit")
+        damage = context.attack_result.get("damage")
+        
         lines.append("")
-        lines.append("战斗信息 / Combat Info:")
-        lines.append(f"- 武器 / Weapon: {weapon}")
-        lines.append(f"- 目标 / Target: {target_name}")
+        lines.append("战斗裁定 / COMBAT RESOLUTION:")
+        lines.append(f"- 攻击方 / Attacker: {context.actor.name if context.actor else 'unknown'}")
+        lines.append(f"- 防御方 / Defender: {target_name}")
+        lines.append(f"- 命中结果 / Hit Result: {'命中 / HIT' if hit else '未命中 / MISS'}")
+        if damage and hit:
+            damage_total = damage.get("total", 0) if isinstance(damage, dict) else 0
+            lines.append(f"- 伤害数值 / Damage Value: {damage_total}")
+        else:
+            lines.append("- 伤害数值 / Damage Value: 0")
+        if context.target:
+            lines.append(f"- 攻击方当前HP / Attacker Current HP: {context.actor.hp if context.actor else 'unknown'}")
+            lines.append(f"- 防御方当前HP / Defender Current HP: {context.target.hp}")
+            if context.target.hp == 0:
+                lines.append("- 战斗结果 / Combat Result: 敌方被击败 / ENEMY DEFEATED")
+        
+        # Add combat round info if available
+        if context.combat_round is not None:
+            lines.append(f"- 当前回合 / Current Round: 第 {context.combat_round} 回合")
+        
+        # Add initiative order from combat state
+        try:
+            combat_state = get_combat_state()
+            if combat_state.turn_order:
+                turn_order_names = []
+                for idx, cid in enumerate(combat_state.turn_order):
+                    name = combat_state.combatant_names.get(cid, cid)
+                    if cid == (context.actor.id if context.actor else None):
+                        name = f"{name} (当前行动 / CURRENT)"
+                    turn_order_names.append(name)
+                lines.append(f"- 先攻顺序 / Initiative Order: {' -> '.join(turn_order_names)}")
+            if combat_state.combatant_hp:
+                hp_lines = []
+                for cid, hp in combat_state.combatant_hp.items():
+                    name = combat_state.combatant_names.get(cid, cid)
+                    hp_lines.append(f"{name}: {hp} HP")
+                lines.append(f"- 战场HP / Battlefield HP: {', '.join(hp_lines)}")
+        except Exception:
+            pass
 
     lines.append("")
     lines.append("=" * 60)
@@ -362,7 +413,24 @@ def build_narrative_prompt(
     lines.append("5. scene_progression 负责描述动作结算后立刻发生的场景变化")
     lines.append("6. gm_prompt 必须像 GM 主动抛出的下一拍，包含明确暗示、压力或可响应事件")
     lines.append("7. gm_prompt 要尽量引用会话历史里的已发生事件，让场景呈现连续演进")
-    lines.append('8. 仅返回 JSON，例如 {"action_result": "...", "scene_progression": "...", "gm_prompt": "..."}')
+    
+    # Add combat-specific narrative guidance
+    if context.attack_result:
+        lines.append("")
+        lines.append("【战斗叙事专项要求 / COMBAT NARRATIVE REQUIREMENTS】")
+        lines.append("- 必须根据命中/未命中结果描述相应的战斗场景")
+        lines.append("- 命中时：描述武器击中的感官细节（碰撞、伤口、冲击感），但不得宣布具体伤害数字")
+        lines.append("- 未命中时：描述闪避、格挡、或攻击落空的动态，不得描述造成伤害")
+        lines.append("- 参考双方HP比例描述战斗的紧张程度")
+        lines.append("- 连续战斗回合中，要引用之前的战斗事件保持连贯性")
+        if context.is_combat_ended:
+            lines.append("- 这是战斗结束回合：必须生成战斗终结叙事，描述敌人倒下的场景")
+            lines.append("- 不要提出战斗中的选择，而是转向战后的场景描写")
+        elif context.combat_round and context.combat_round > 1:
+            lines.append(f"- 这是第 {context.combat_round} 回合，叙事应体现战斗的持续节奏和累积的疲劳")
+    
+    lines.append('')
+    lines.append('仅返回 JSON，例如 {"action_result": "...", "scene_progression": "...", "gm_prompt": "..."}')
 
     return "\n".join(lines)
 

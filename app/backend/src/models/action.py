@@ -9,6 +9,26 @@ from pydantic import BaseModel, Field, validator
 
 
 # ---------------------------------------------------------------------------
+# Combat State
+# ---------------------------------------------------------------------------
+
+class CombatState(BaseModel):
+    """Combat context for narrative generation.
+    
+    Provides combat-specific information to AI narrator for generating
+    contextually appropriate combat narratives.
+    """
+    is_active: bool = Field(default=False, description="Whether combat is currently active")
+    round_number: int = Field(default=1, description="Current combat round number")
+    current_turn_index: int = Field(default=0, description="Index in turn_order for current actor")
+    turn_order: list[str] = Field(default_factory=list, description="Ordered list of combatant IDs")
+    combatant_hp: dict[str, int] = Field(default_factory=dict, description="Current HP for each combatant by ID")
+    combatant_names: dict[str, str] = Field(default_factory=dict, description="Names for each combatant by ID")
+    combat_ended: bool = Field(default=False, description="Whether combat has ended (victory/defeat)")
+    outcome: Optional[str] = Field(default=None, description="Combat outcome if ended: 'victory', 'defeat', or None")
+
+
+# ---------------------------------------------------------------------------
 # Request
 # ---------------------------------------------------------------------------
 
@@ -170,6 +190,7 @@ class ActionResponse(BaseModel):
     saving_throw: Optional[SavingThrowDetail] = None
     outcome: Outcome
     effects: list[Effect] = Field(default_factory=list)
+    combat_state: Optional[CombatState] = Field(default=None, description="Combat context if in combat")
     narration: str
     scene_progression: str
     gm_prompt: str

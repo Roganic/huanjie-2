@@ -282,6 +282,9 @@ def tool_generate_narrative(
     saving_throw_result: Optional[dict] = None,
     effects: Optional[list[Effect]] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
+    combat_round: Optional[int] = None,
+    is_combat_ended: Optional[bool] = None,
+    combat_outcome: Optional[str] = None,
 ) -> NarrativeResult:
     """Generate narrative text for the action resolution.
     
@@ -291,6 +294,9 @@ def tool_generate_narrative(
         check_result: Optional ability check details
         attack_result: Optional attack details
         saving_throw_result: Optional saving throw details
+        combat_round: Optional combat round number
+        is_combat_ended: Whether combat has ended
+        combat_outcome: Combat outcome if ended
         
     Returns:
         NarrativeResult with generated narrative
@@ -315,6 +321,9 @@ def tool_generate_narrative(
         effects=effects,
         target=target,
         narrative_history=narrative_history or get_narrative_context(),
+        combat_round=combat_round,
+        is_combat_ended=is_combat_ended,
+        combat_outcome=combat_outcome,
     )
     
     return NarrativeResult(

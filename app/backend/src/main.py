@@ -29,6 +29,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(action.router)
+app.include_router(combat.router)
 app.include_router(character.router)
 app.include_router(state.router)
 app.include_router(combat.router)

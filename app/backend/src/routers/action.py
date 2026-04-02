@@ -36,6 +36,8 @@ from ..state import (
     set_current_session,
     switch_scene,
     update_combatant_hp,
+    use_action_surge,
+    use_second_wind,
     _get_session,
     _resolve_session_id,
     _save_session,
@@ -164,6 +166,112 @@ async def submit_action(req: ActionRequest, request: Request):
             create_character(
                 CharacterCreateRequest(name="Aldric", character_class="warrior"),
                 session_id=session_id,
+            )
+
+        # Check for class feature actions before routing to agent
+        intent_lower = req.intent.strip().lower()
+        if intent_lower == "second_wind":
+            sw_result = use_second_wind(session_id=session_id)
+            if not sw_result["success"]:
+                raise HTTPException(status_code=400, detail=sw_result["error"])
+            
+            actor = get_actor(session_id=session_id) or actor
+            effects = []
+            if actor is not None:
+                effects.append(Effect(
+                    target=actor.id,
+                    field="hp",
+                    delta=sw_result["hp_healed"],
+                    description=f"Second Wind 恢复 {sw_result['hp_healed']} 点生命值",
+                ))
+                session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+                if session.game_phase == AdventurePhase.COMBAT:
+                    update_combatant_hp(actor.id, actor.hp)
+            
+            result = ActionResponse(
+                action_summary="使用 Second Wind",
+                resolution_type=ResolutionType.AUTO_SUCCESS,
+                outcome=Outcome.SUCCESS,
+                effects=effects,
+                narration=f"你集中精神，调动体内的战斗本能，恢复了 {sw_result['hp_healed']} 点生命值。",
+                scene_progression="",
+                gm_prompt="",
+            )
+            append_action_history(
+                {
+                    "action": result.action_summary,
+                    "result": result.outcome.value,
+                    "narrative_summary": result.narration,
+                },
+                session_id=session_id,
+            )
+            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
+            if not accepts_stream:
+                return result
+            return StreamingResponse(
+                _stream_action_response(result),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+        
+        if intent_lower == "action_surge":
+            as_result = use_action_surge(session_id=session_id)
+            if not as_result["success"]:
+                raise HTTPException(status_code=400, detail=as_result["error"])
+            
+            actor = get_actor(session_id=session_id)
+            effects = []
+            if actor is not None:
+                effects.append(Effect(
+                    target=actor.id,
+                    field="class_features",
+                    delta="action_surge_used",
+                    description="Action Surge 已使用",
+                ))
+            
+            result = ActionResponse(
+                action_summary="使用 Action Surge",
+                resolution_type=ResolutionType.AUTO_SUCCESS,
+                outcome=Outcome.SUCCESS,
+                effects=effects,
+                narration="肾上腺素涌动，你获得了一次额外的行动机会！",
+                scene_progression="",
+                gm_prompt="",
+            )
+            # Inject extra_action_available into the raw response for non-streaming
+            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
+            if not accepts_stream:
+                raw = result.model_dump(mode="json")
+                raw["extra_action_available"] = True
+                append_action_history(
+                    {
+                        "action": result.action_summary,
+                        "result": result.outcome.value,
+                        "narrative_summary": result.narration,
+                    },
+                    session_id=session_id,
+                )
+                return raw
+            append_action_history(
+                {
+                    "action": result.action_summary,
+                    "result": result.outcome.value,
+                    "narrative_summary": result.narration,
+                },
+                session_id=session_id,
+            )
+            return StreamingResponse(
+                _stream_action_response(result),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
             )
 
         # Check for item use actions before routing to agent

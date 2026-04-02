@@ -9,7 +9,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .npc import NPC, NPCType, get_npcs_by_ids
+from .models.state import NPC, NPCType
 
 
 class SceneData(BaseModel):

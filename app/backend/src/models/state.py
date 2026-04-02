@@ -239,6 +239,7 @@ class NPC(BaseModel):
     description: str = Field(default="", description="Brief description of the NPC")
     race: Optional[str] = Field(default=None, description="NPC race/species")
     occupation: Optional[str] = Field(default=None, description="NPC occupation or role")
+    dialogue_count: int = Field(default=0, description="Number of dialogue interactions with this NPC")
 
 
 class Scene(BaseModel):

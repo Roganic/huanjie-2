@@ -335,6 +335,13 @@ def build_narrative_prompt(
                 "hostile": "敌对",
             }.get(npc.type.value, npc.type.value)
             lines.append(f"  - {npc.name} [{type_label}]: {npc.description}")
+        
+        # Add NPC dialogue context for relevant NPCs
+        # Check if the action intent involves talking to a specific NPC
+        dialogue_context = _build_npc_dialogue_context(req, scene)
+        if dialogue_context:
+            lines.append("")
+            lines.append(dialogue_context)
     lines.append("")
     lines.append(f"角色 / Character: {actor.name}")
     lines.append(f"角色描述 / Character Description: {actor.description}")
@@ -802,6 +809,79 @@ def find_scene_contradictions(
                     break
     
     return list(dict.fromkeys(reasons))
+
+
+def _build_npc_dialogue_context(
+    req: ActionRequest,
+    scene: Scene,
+) -> str:
+    """Build NPC dialogue context for the narrative prompt.
+    
+    Detects if the action involves talking to an NPC and returns
+    the appropriate dialogue context (first contact vs continued dialogue).
+    
+    Args:
+        req: The action request
+        scene: The current scene with NPCs
+        
+    Returns:
+        Dialogue context string for prompt injection, or empty string
+    """
+    # Keywords that indicate talking/speaking to an NPC
+    dialogue_keywords = [
+        "talk", "speak", "say", "ask", "chat", "greet", "hello", "hi",
+        "conversation", "dialogue", "tell", "inquire", "question",
+        "说", "说话", "谈话", "交谈", "问", "询问", "打招呼", "问候",
+        "聊", "聊聊", "告诉", "打听",
+    ]
+    
+    # Check if action involves dialogue
+    action_text = f"{req.intent} {req.approach}".lower()
+    is_dialogue_action = any(kw in action_text for kw in dialogue_keywords)
+    
+    if not is_dialogue_action:
+        return ""
+    
+    # Try to identify which NPC the player is talking to
+    # Match NPC names from the scene
+    target_npc = None
+    for npc in scene.npcs:
+        # Check for exact name match or partial match
+        npc_name_lower = npc.name.lower()
+        npc_id_lower = npc.id.lower()
+        if (
+            npc_name_lower in action_text
+            or npc_id_lower in action_text
+            or any(part in action_text for part in npc_name_lower.split())
+        ):
+            target_npc = npc
+            break
+    
+    # If no specific NPC matched but there's only one friendly/neutral NPC, use that
+    if target_npc is None:
+        non_hostile = [n for n in scene.npcs if n.type.value in ("friendly", "neutral")]
+        if len(non_hostile) == 1:
+            target_npc = non_hostile[0]
+    
+    if target_npc is None:
+        return ""
+    
+    # Import here to avoid circular imports
+    from ..npc.dialogue_state import (
+        build_dialogue_context_for_prompt,
+        is_first_npc_contact,
+    )
+    
+    # Check if this is first contact or continued dialogue
+    if is_first_npc_contact(target_npc.id):
+        return (
+            f"【NPC 对话情境 / NPC DIALOGUE CONTEXT】\n"
+            f"这是玩家第一次与 {target_npc.name} 对话。\n"
+            f"NPC 还不认识玩家，应该以初次见面的态度回应。\n"
+        )
+    else:
+        # Get dialogue history context
+        return build_dialogue_context_for_prompt(target_npc.id, target_npc.name)
 
 
 def validate_narrative_for_overreach(

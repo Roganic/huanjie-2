@@ -43,6 +43,11 @@ from ..state import (
     update_combatant_hp,
 )
 from .narrator import generate_narration
+from ..npc.dialogue_operations import (
+    is_npc_dialogue_action,
+    identify_target_npc,
+    record_dialogue_from_action,
+)
 from .tools import (
     ApplyStateChangeResult,
     CurrentStateResult,
@@ -236,6 +241,29 @@ class GMAgent:
             )
         )
     
+    def _maybe_record_npc_dialogue(
+        self,
+        req: ActionRequest,
+        narration_result: NarrativeResult,
+    ) -> None:
+        """Record NPC dialogue if this was a dialogue action.
+        
+        This method checks if the action involved talking to an NPC and,
+        if so, records the dialogue to the NPC's dialogue state.
+        """
+        if is_npc_dialogue_action(req):
+            npc_info = identify_target_npc(req)
+            if npc_info:
+                npc_id, npc_name = npc_info
+                # Record player message
+                player_message = f"{req.intent} (方式: {req.approach})"
+                from ..state import record_npc_dialogue
+                record_npc_dialogue(npc_id, npc_name, "player", player_message)
+                
+                # Record NPC response (truncated)
+                npc_response = narration_result.narrative[:300]
+                record_npc_dialogue(npc_id, npc_name, npc_name, npc_response)
+    
     # -----------------------------------------------------------------------
     # Resolution Paths
     # -----------------------------------------------------------------------
@@ -330,6 +358,7 @@ class GMAgent:
             narration_result=narrative_result,
             check_result=check_result,
         )
+        self._maybe_record_npc_dialogue(req, narrative_result)
         
         return ActionResponse(
             action_summary=action_summary,
@@ -376,6 +405,7 @@ class GMAgent:
             outcome=Outcome.SUCCESS,
             narration_result=narrative_result,
         )
+        self._maybe_record_npc_dialogue(req, narrative_result)
         
         return ActionResponse(
             action_summary=action_summary,
@@ -447,6 +477,7 @@ class GMAgent:
             narration_result=narrative_result,
             check_result=check_result,
         )
+        self._maybe_record_npc_dialogue(req, narrative_result)
         
         return ActionResponse(
             action_summary=action_summary,

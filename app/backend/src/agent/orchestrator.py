@@ -44,7 +44,7 @@ from ..state import (
     update_combatant_hp,
     _resolve_session_id,
 )
-from ..memory import add_memory_entry, ActionType, ResolutionOutcome
+from ..memory import add_memory_entry, ActionType as MemoryActionType, ResolutionOutcome as MemoryResolutionOutcome
 from .narrator import generate_narration
 from .tools import (
     ApplyStateChangeResult,
@@ -273,12 +273,13 @@ class GMAgent:
             scene = get_scene()
             actor = get_actor()
             
-            # Determine action type from resolution data
-            action_type = ActionType.OTHER
+            # Determine memory action type from resolution data
+            # (using MemoryActionType from session_memory module)
+            memory_action_type = MemoryActionType.OTHER
             if attack_result:
-                action_type = ActionType.ATTACK
+                memory_action_type = MemoryActionType.ATTACK
             elif check_result and check_result.get("skill"):
-                action_type = ActionType.SKILL_CHECK
+                memory_action_type = MemoryActionType.SKILL_CHECK
             
             # Extract key numeric values
             hit_roll = None
@@ -303,11 +304,11 @@ class GMAgent:
             
             add_memory_entry(
                 session_id=session_id,
-                action_type=action_type,
+                action_type=memory_action_type,
                 action_summary=action_summary,
                 intent=action_summary,  # Using summary as intent fallback
                 actor_name=actor.name if actor else "Unknown",
-                outcome=ResolutionOutcome.SUCCESS if outcome == Outcome.SUCCESS else ResolutionOutcome.FAILURE,
+                outcome=MemoryResolutionOutcome.SUCCESS if outcome == Outcome.SUCCESS else MemoryResolutionOutcome.FAILURE,
                 resolution_summary=resolution_summary,
                 hit_roll=hit_roll,
                 damage=damage,

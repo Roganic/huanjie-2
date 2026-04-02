@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "saved_at": "2026-04-02T12:00:03.627531",
-  "session_id": "c41e4a6e98c34f16b5118438659bf29f",
+  "saved_at": "2026-04-02T12:02:07.707503",
+  "session_id": "0fd9e48febe14488850ea9bb0b5712aa",
   "phase": "adventure",
   "game_phase": "exploration",
   "character": {
-    "id": "warrior-aldric",
-    "name": "Aldric",
+    "id": "warrior-persisthero",
+    "name": "PersistHero",
     "character_class": "warrior",
     "abilities": {
       "str": 15,
@@ -213,7 +213,7 @@
     "name": "锈迹斑斑的灯笼酒馆",
     "description": "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒，角落里传来轻柔的竖琴声。酒保老马库斯在吧台后面擦拭着酒杯，不时用独眼打量着客人。",
     "actors": [
-      "warrior-aldric"
+      "warrior-persisthero"
     ],
     "npcs": [
       {
@@ -244,7 +244,7 @@
         "role": "merchant"
       }
     ],
-    "time": 1,
+    "time": 2,
     "flags": [],
     "exits": [
       {
@@ -256,19 +256,45 @@
   "combat_state": null,
   "action_history": [
     {
-      "action_summary": "Aldric uses athletics to do the impossible",
+      "action_summary": "PersistHero attempts to do something by try",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "success",
+        "check": {
+          "ability": "str",
+          "modifier": 2,
+          "dc": 15,
+          "roll": 18,
+          "total": 22
+        },
+        "attack": null,
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "tavern-01",
+            "field": "time",
+            "delta": 1,
+            "description": "时间流逝。"
+          }
+        ]
+      },
+      "narration_summary": "PersistHero sets out to do something. Through skill and determination, the attempt succeeds, bringing the desired result. A ripple of response moves through 锈迹斑斑的灯笼酒馆 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed. A fresh opening has appeared in 锈迹斑斑的灯笼酒馆, but it will not stay open for long. Time ",
+      "narration": "PersistHero sets out to do something. Through skill and determination, the attempt succeeds, bringing the desired result.",
+      "scene_progression": "A ripple of response moves through 锈迹斑斑的灯笼酒馆 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed.",
+      "gm_prompt": "A fresh opening has appeared in 锈迹斑斑的灯笼酒馆, but it will not stay open for long. Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 1. Do you exploit that opening immediately, question whoever reacts, or examine what just shifted?",
+      "created_at": 1775102527702
+    },
+    {
+      "action_summary": "PersistHero attempts to do another thing by try again",
       "resolution_summary": {
         "resolution_type": "check",
         "outcome": "failure",
         "check": {
           "ability": "str",
-          "skill": "athletics",
-          "proficient": true,
           "modifier": 2,
-          "proficiency_bonus": 2,
-          "dc": 50,
-          "roll": 4,
-          "total": 8
+          "dc": 15,
+          "roll": 8,
+          "total": 12
         },
         "attack": null,
         "saving_throw": null,
@@ -280,18 +306,18 @@
             "description": "时间流逝。"
           },
           {
-            "target": "warrior-aldric",
+            "target": "warrior-persisthero",
             "field": "hp",
             "delta": -1,
             "description": "体力消耗造成轻微伤害。"
           }
         ]
       },
-      "narration_summary": "Aldric attempts to do the impossible, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Aldric. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. Time in",
-      "narration": "Aldric attempts to do the impossible, but fortune does not favor them this time. The effort falls short of success.",
-      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Aldric. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
-      "gm_prompt": "The failed attempt gives the scene permission to push back. Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 1. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
-      "created_at": 1775102403626
+      "narration_summary": "PersistHero attempts to do another thing, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around PersistHero. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back",
+      "narration": "PersistHero attempts to do another thing, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around PersistHero. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
+      "gm_prompt": "The failed attempt gives the scene permission to push back. The room is still reacting to the last beat: PersistHero sets out to do something. Through skill and determination, the attempt succeeds, bringing the desired res... Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 2. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
+      "created_at": 1775102527706
     }
   ],
   "scene_history": []

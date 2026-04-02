@@ -107,7 +107,7 @@ function CompactResolutionSummary({ res }: { res: ActionResponse }) {
 }
 
 export function NarrativeHistory({ messages, streamingPreview, sending }: NarrativeHistoryProps) {
-  const gmMessages = messages.filter((m) => m.role === "gm").slice(-5);
+  const gmMessages = messages.filter((m) => m.role === "gm");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

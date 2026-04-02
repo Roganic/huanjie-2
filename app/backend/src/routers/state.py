@@ -2,10 +2,12 @@
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ..memory_manager import get_recent_event_memories
 from ..models.state import BootstrapState
 from ..state import (
     create_session,
     get_bootstrap_state,
+    get_narrative_history,
     require_bootstrap_state,
     reset_current_session,
     reset_state,
@@ -81,3 +83,48 @@ async def reset(request: Request):
         return result
     finally:
         reset_current_session(token)
+
+
+@router.get("/memory")
+async def get_memory(request: Request):
+    """Get recent event memories for the current session.
+    
+    Returns a list of recent event memory entries including:
+    - timestamp: Event timestamp in milliseconds
+    - scene_name: Name of the scene where the action occurred
+    - action_type: Type of action (attack, skill_check, etc.)
+    - action_description: Brief description of the action
+    - result_summary: Summary of the action result
+    - outcome: "success" or "failure"
+    
+    Query parameters:
+    - limit: Maximum number of events to return (default: 10, max: 50)
+    """
+    session_id = _request_session_id(request)
+    
+    # Resolve session - requires explicit session_id or uses default
+    if session_id is None:
+        from ..state import DEFAULT_SESSION_ID
+        session_id = DEFAULT_SESSION_ID
+    
+    try:
+        require_bootstrap_state(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
+    
+    # Get limit from query params
+    try:
+        limit = int(request.query_params.get("limit", 10))
+        limit = max(1, min(50, limit))  # Clamp between 1 and 50
+    except ValueError:
+        limit = 10
+    
+    # Get narrative history and convert to memory entries
+    narrative_history = get_narrative_history(session_id)
+    events = get_recent_event_memories(narrative_history, max_events=limit)
+    
+    return {
+        "events": events,
+        "total": len(events),
+        "session_id": session_id,
+    }

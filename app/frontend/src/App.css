@@ -304,6 +304,87 @@
   color: var(--accent-light);
 }
 
+/* Scene NPCs */
+.scene-npcs {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.scene-npcs-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.npc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.npc-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  font-size: 12px;
+  transition: all var(--transition-fast);
+}
+
+.npc-item:hover {
+  background: var(--bg-panel-hover);
+}
+
+.npc-item.npc-friendly {
+  border-left: 3px solid #4a9c4a;
+}
+
+.npc-item.npc-neutral {
+  border-left: 3px solid #c7a86d;
+}
+
+.npc-item.npc-hostile {
+  border-left: 3px solid #d9534f;
+}
+
+.npc-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.npc-type {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+
+.npc-item.npc-friendly .npc-type {
+  background: rgba(74, 156, 74, 0.2);
+  color: #7dd87d;
+}
+
+.npc-item.npc-hostile .npc-type {
+  background: rgba(217, 83, 79, 0.2);
+  color: #e07d7a;
+}
+
+.npc-desc {
+  flex: 1 1 100%;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
 .sidebar-loading {
   padding: 16px;
   color: var(--text-muted);

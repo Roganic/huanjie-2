@@ -13,12 +13,14 @@ from fastapi.responses import StreamingResponse
 from ..agent.orchestrator import resolve_action_with_agent
 from ..models.action import ActionRequest, ActionResponse
 from ..models.state import AdventurePhase
+from ..scene import get_scene_transition, build_scene_context_for_prompt, get_scene_by_id
 from ..state import (
     has_character,
     require_bootstrap_state,
     reset_current_session,
     set_combat_scene,
     set_current_session,
+    switch_scene,
     _get_session,
     _resolve_session_id,
     _save_session,
@@ -110,11 +112,18 @@ async def submit_action(req: ActionRequest, request: Request):
 
             return StreamingResponse(error_stream(), media_type="text/event-stream")
 
-        # Check if this action should trigger combat
-        # Only trigger if we're currently in exploration phase
+        # Check for scene transitions based on action intent
         session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
         if session.game_phase == AdventurePhase.EXPLORATION:
-            if _should_trigger_combat(req.intent, req.approach):
+            # Check for scene transition keywords
+            target_scene_id = get_scene_transition(req.intent)
+            if target_scene_id and target_scene_id != session.scene.id:
+                # Switch to new scene
+                switch_scene(target_scene_id, session_id)
+                # Re-fetch session to get updated state
+                session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+            # Check if this action should trigger combat
+            elif _should_trigger_combat(req.intent, req.approach):
                 # Transition to combat
                 set_combat_scene(session_id)
                 # Re-fetch session to get updated state

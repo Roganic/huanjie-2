@@ -14,19 +14,27 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .models.action import CombatState, Effect
+from .models.action import Effect
+from .scene import SceneData, get_default_exploration_scene, get_scene_by_id
 from .models.state import (
     AbilityScores,
     Actor,
+    AdventurePhase,
     BootstrapState,
     CharacterCard,
     CharacterClass,
+    CharacterEquipped,
     CharacterCreateRequest,
     CharacterSkill,
+    DEFAULT_ARMORS,
+    DEFAULT_WEAPONS,
+    EquippedItems,
     GamePhase,
     HP,
+    InventoryItem,
     NarrativeHistoryEntry,
     Scene,
+    SceneHistoryEntry,
     Skill,
 )
 
@@ -40,12 +48,16 @@ _CHARACTER_CREATION_SCENE_INIT = dict(
     actors=[],
 )
 
-_ADVENTURE_SCENE_INIT = dict(
-    id="tavern-01",
-    name="锈迹斑斑的灯笼酒馆",
-    description="十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒。",
-    actors=[],
-)
+def _get_adventure_scene_init() -> dict:
+    """Get the initial adventure scene with NPCs."""
+    scene = get_default_exploration_scene()
+    return {
+        "id": scene.id,
+        "name": scene.name,
+        "description": scene.description,
+        "actors": [],
+        "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
+    }
 
 _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
     CharacterClass.WARRIOR: {
@@ -142,6 +154,7 @@ _COMBAT_SCENE_INIT = dict(
 )
 
 MAX_STORED_NARRATIVE_HISTORY = 50
+MAX_SCENE_HISTORY = 10
 DEFAULT_PROMPT_HISTORY_ENTRIES = 5
 DEFAULT_PROMPT_HISTORY_CHARS = 1800
 DEFAULT_SESSION_ID = "default-session"
@@ -158,11 +171,12 @@ _SESSION_LOCK = threading.RLock()
 class SessionData(BaseModel):
     session_id: str
     phase: GamePhase = GamePhase.CHARACTER_CREATION
+    game_phase: AdventurePhase = AdventurePhase.EXPLORATION
     actor: Actor | None = None
     enemy: Actor = Field(default_factory=lambda: Actor(**_ENEMY_INIT))
     scene: Scene = Field(default_factory=lambda: Scene(**_CHARACTER_CREATION_SCENE_INIT))
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
-    combat_state: CombatState = Field(default_factory=CombatState)
+    scene_history: list[SceneHistoryEntry] = Field(default_factory=list)
     updated_at: float = Field(default_factory=time.time)
 
 
@@ -232,6 +246,25 @@ def get_narrative_history(session_id: str | None = None) -> list[NarrativeHistor
     return list(session.narrative_history)
 
 
+def get_scene_history(session_id: str | None = None) -> list[SceneHistoryEntry]:
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return list(session.scene_history)
+
+
+def append_scene_history(
+    entry: SceneHistoryEntry,
+    session_id: str | None = None,
+) -> None:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        session.scene_history = [
+            *session.scene_history,
+            entry,
+        ][-MAX_SCENE_HISTORY:]
+        _save_session(session)
+
+
 def append_narrative_history(
     entry: NarrativeHistoryEntry,
     session_id: str | None = None,
@@ -273,82 +306,84 @@ def set_combat_scene(session_id: str | None = None) -> None:
         actors = ["goblin-01"]
         if session.actor is not None:
             actors.insert(0, session.actor.id)
-        session.scene = Scene(**{**_COMBAT_SCENE_INIT, "actors": actors})
+        # Use combat scene from scene system with NPCs
+        from .scene import COMBAT_ENCOUNTER_SCENE
+        session.scene = Scene(
+            id=COMBAT_ENCOUNTER_SCENE.id,
+            name=COMBAT_ENCOUNTER_SCENE.name,
+            description=COMBAT_ENCOUNTER_SCENE.description,
+            actors=actors,
+            npcs=COMBAT_ENCOUNTER_SCENE.npcs,
+        )
+        session.game_phase = AdventurePhase.COMBAT
         _save_session(session)
 
 
-def get_combat_state(session_id: str | None = None) -> CombatState:
-    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-    return session.combat_state
-
-
-def set_combat_state(combat_state: CombatState, session_id: str | None = None) -> None:
+def set_exploration_phase(session_id: str | None = None) -> None:
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:
         session = _get_session(resolved_session_id, create_if_missing=True)
-        session.combat_state = combat_state
+        session.game_phase = AdventurePhase.EXPLORATION
         _save_session(session)
 
 
-def start_combat_session(session_id: str | None = None) -> CombatState:
-    """Initialize combat state for the current session."""
+def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
+    """Switch to a different scene.
+    
+    Args:
+        scene_id: The ID of the scene to switch to
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        True if scene was switched, False if scene_id not found
+    """
+    from .scene import get_scene_by_id
+    
+    scene_data = get_scene_by_id(scene_id)
+    if scene_data is None:
+        return False
+    
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:
         session = _get_session(resolved_session_id, create_if_missing=True)
-        set_combat_scene(resolved_session_id)
-        turn_order: list[str] = []
-        combatant_hp: dict[str, int] = {}
-        combatant_names: dict[str, str] = {}
-        if session.actor is not None:
-            turn_order.append(session.actor.id)
-            combatant_hp[session.actor.id] = session.actor.hp
-            combatant_names[session.actor.id] = session.actor.name
-        turn_order.append(session.enemy.id)
-        combatant_hp[session.enemy.id] = session.enemy.hp
-        combatant_names[session.enemy.id] = session.enemy.name
-        session.combat_state = CombatState(
-            is_active=True,
-            round_number=1,
-            current_turn_index=0,
-            turn_order=turn_order,
-            combatant_hp=combatant_hp,
-            combatant_names=combatant_names,
-            combat_ended=False,
-            outcome=None,
+        # Preserve the player actor in the actors list
+        actors = [session.actor.id] if session.actor else []
+        session.scene = Scene(
+            id=scene_data.id,
+            name=scene_data.name,
+            description=scene_data.description,
+            actors=actors,
+            npcs=scene_data.npcs,
+            time=session.scene.time,  # Preserve time from previous scene
         )
         _save_session(session)
-        return session.combat_state
+    return True
 
 
-def end_combat_session(outcome: str, session_id: str | None = None) -> CombatState:
+def get_game_phase(session_id: str | None = None) -> AdventurePhase:
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return session.game_phase
+
+
+def check_and_update_combat_status(session_id: str | None = None) -> bool:
+    """Check if combat should end (all enemies defeated) and update phase accordingly.
+    
+    Returns True if phase was changed to exploration (combat ended), False otherwise.
+    """
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:
         session = _get_session(resolved_session_id, create_if_missing=True)
-        session.combat_state.combat_ended = True
-        session.combat_state.outcome = outcome
-        session.combat_state.is_active = False
-        _save_session(session)
-        return session.combat_state
-
-
-def advance_combat_round(session_id: str | None = None) -> CombatState:
-    resolved_session_id = _resolve_session_id(session_id)
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=True)
-        cs = session.combat_state
-        if cs.is_active and not cs.combat_ended:
-            cs.round_number += 1
+        if session.game_phase != AdventurePhase.COMBAT:
+            return False
+        
+        # Check if enemy is defeated (HP <= 0 or has 'defeated' condition)
+        enemy_defeated = session.enemy.hp <= 0 or "defeated" in session.enemy.conditions
+        
+        if enemy_defeated:
+            session.game_phase = AdventurePhase.EXPLORATION
             _save_session(session)
-        return cs
-
-
-def update_combatant_hp(combatant_id: str, hp: int, session_id: str | None = None) -> None:
-    resolved_session_id = _resolve_session_id(session_id)
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=True)
-        if combatant_id in session.combat_state.combatant_hp:
-            session.combat_state.combatant_hp[combatant_id] = max(0, hp)
-            _save_session(session)
+            return True
+        return False
 
 
 def has_character(session_id: str | None = None) -> bool:
@@ -387,6 +422,40 @@ def _build_skills(abilities: AbilityScores, character_class: CharacterClass, pro
     return skills
 
 
+def _get_starting_equipment(character_class: CharacterClass) -> tuple[InventoryItem, InventoryItem]:
+    """Get starting weapon and armor for a character class."""
+    if character_class == CharacterClass.WARRIOR:
+        weapon = InventoryItem.from_weapon(DEFAULT_WEAPONS["longsword"])
+        armor = InventoryItem.from_armor(DEFAULT_ARMORS["chain_mail"])
+    elif character_class == CharacterClass.MAGE:
+        weapon = InventoryItem.from_weapon(DEFAULT_WEAPONS["quarterstaff"])
+        armor = InventoryItem.from_armor(DEFAULT_ARMORS["robe"])
+    else:  # ROGUE
+        weapon = InventoryItem.from_weapon(DEFAULT_WEAPONS["shortsword"])
+        armor = InventoryItem.from_armor(DEFAULT_ARMORS["leather"])
+    return weapon, armor
+
+
+def _calculate_ac_with_armor(abilities: AbilityScores, armor_item: InventoryItem | None) -> int:
+    """Calculate AC based on equipped armor and abilities."""
+    if armor_item is None:
+        # Unarmored: 10 + DEX modifier
+        return 10 + abilities.modifier("dex")
+    
+    base_ac = armor_item.base_ac or 10
+    
+    if not armor_item.add_dex_modifier:
+        # Heavy armor: use base AC only
+        return base_ac
+    
+    # Light/medium armor: add DEX modifier (with optional cap)
+    dex_mod = abilities.modifier("dex")
+    if armor_item.max_dex_bonus is not None:
+        dex_mod = min(dex_mod, armor_item.max_dex_bonus)
+    
+    return base_ac + dex_mod
+
+
 def create_character(
     req: CharacterCreateRequest,
     session_id: str | None = None,
@@ -396,7 +465,6 @@ def create_character(
         session = _get_session(resolved_session_id, create_if_missing=True)
         template = _CLASS_TEMPLATES[req.character_class]
         base_hp = int(template["hp"])
-        base_ac = int(template["ac"])
         actor_id = f"{req.character_class.value}-{req.name.strip().lower().replace(' ', '-')}"
 
         # Determine ability scores based on generation method
@@ -411,14 +479,13 @@ def create_character(
         con_mod = abilities.modifier("con")
         hp = base_hp + con_mod
 
-        # Calculate AC based on DEX modifier (for light armor classes)
-        dex_mod = abilities.modifier("dex")
-        if req.character_class == CharacterClass.MAGE:
-            ac = 10 + dex_mod  # Unarmored
-        elif req.character_class == CharacterClass.ROGUE:
-            ac = 11 + dex_mod  # Leather armor
-        else:  # WARRIOR
-            ac = base_ac  # Chain mail (no DEX bonus)
+        # Get starting equipment for the class
+        weapon, armor = _get_starting_equipment(req.character_class)
+        inventory = [weapon, armor]
+        equipped = EquippedItems(weapon=weapon, armor=armor)
+
+        # Calculate AC based on equipped armor
+        ac = _calculate_ac_with_armor(abilities, armor)
 
         skills = _build_skills(abilities, req.character_class, proficiency_bonus=2)
 
@@ -434,20 +501,55 @@ def create_character(
             ac=ac,
             description=str(template["description"]),
             skills=skills,
+            inventory=inventory,
+            equipped=equipped,
         )
         session.phase = GamePhase.ADVENTURE
-        session.scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [session.actor.id]})
+        # Initialize scene with NPCs from scene system
+        scene_data = get_default_exploration_scene()
+        session.scene = Scene(
+            id=scene_data.id,
+            name=scene_data.name,
+            description=scene_data.description,
+            actors=[session.actor.id],
+            npcs=scene_data.npcs,
+        )
         session.enemy = Actor(**_ENEMY_INIT)
         session.narrative_history = []
-        session.combat_state = CombatState()
+        session.scene_history = []
         _save_session(session)
     return get_bootstrap_state(session_id=resolved_session_id)
+
+
+def _inventory_item_to_dict(item: InventoryItem) -> dict:
+    """Convert an inventory item to a dictionary for API response."""
+    result = {
+        "id": item.id,
+        "name": item.name,
+        "type": item.type.value,
+        "description": item.description,
+    }
+    if item.damage_dice:
+        result["damage_dice"] = item.damage_dice
+    if item.attack_ability:
+        result["attack_ability"] = item.attack_ability
+    if item.base_ac is not None:
+        result["base_ac"] = item.base_ac
+    return result
 
 
 def get_character_card(session_id: str | None = None) -> CharacterCard | None:
     actor = get_actor(session_id=session_id)
     if actor is None:
         return None
+    
+    # Build equipped items dict
+    equipped_dict = CharacterEquipped()
+    if actor.equipped.weapon:
+        equipped_dict.weapon = _inventory_item_to_dict(actor.equipped.weapon)
+    if actor.equipped.armor:
+        equipped_dict.armor = _inventory_item_to_dict(actor.equipped.armor)
+    
     return CharacterCard(
         name=actor.name,
         class_=actor.character_class.value if actor.character_class else "",
@@ -490,6 +592,8 @@ def get_character_card(session_id: str | None = None) -> CharacterCard | None:
             )
             for skill in actor.skills
         ],
+        inventory=[_inventory_item_to_dict(item) for item in actor.inventory],
+        equipped=equipped_dict,
     )
 
 
@@ -518,11 +622,9 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
 
     if actor is not None and eff.target in (actor.id, actor.name):
         if eff.field == "hp" and isinstance(eff.delta, int):
-            new_hp = max(0, min(actor.hp_max, actor.hp + eff.delta))
             session.actor = actor.model_copy(
-                update={"hp": new_hp}
+                update={"hp": max(0, min(actor.hp_max, actor.hp + eff.delta))}
             )
-            update_combatant_hp(actor.id, new_hp, session_id=session.session_id)
         elif eff.field == "conditions_add" and isinstance(eff.delta, str):
             if eff.delta not in actor.conditions:
                 session.actor = actor.model_copy(
@@ -536,11 +638,9 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
 
     if eff.target in (enemy.id, enemy.name):
         if eff.field == "hp" and isinstance(eff.delta, int):
-            new_hp = max(0, min(enemy.hp_max, enemy.hp + eff.delta))
             session.enemy = enemy.model_copy(
-                update={"hp": new_hp}
+                update={"hp": max(0, min(enemy.hp_max, enemy.hp + eff.delta))}
             )
-            update_combatant_hp(enemy.id, new_hp, session_id=session.session_id)
         elif eff.field == "conditions_add" and isinstance(eff.delta, str):
             if eff.delta not in enemy.conditions:
                 session.enemy = enemy.model_copy(
@@ -554,15 +654,23 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
 
     if eff.target == scene.id and eff.field == "time" and isinstance(eff.delta, int):
         session.scene = scene.model_copy(update={"time": scene.time + eff.delta})
+        return
+
+    if eff.target == scene.id and eff.field == "flags" and isinstance(eff.delta, str):
+        if eff.delta not in scene.flags:
+            session.scene = scene.model_copy(update={"flags": [*scene.flags, eff.delta]})
+        return
 
 
 def _bootstrap_from_session(session: SessionData) -> BootstrapState:
     return BootstrapState(
         session_id=session.session_id,
         phase=session.phase,
+        game_phase=session.game_phase,
         actor=session.actor,
         scene=session.scene,
         narrative_history=list(session.narrative_history),
+        scene_history=list(session.scene_history),
     )
 
 
@@ -589,7 +697,14 @@ def _create_fresh_session(session_id: str) -> SessionData:
         actor_id = "aldric-01"
         con_mod = abilities.modifier("con")  # (14-10)//2 = 2
         hp = 10 + con_mod  # Warrior base 10 + CON mod = 12
-        ac = 16  # Warrior heavy armor
+
+        # Get starting equipment for warrior
+        weapon, armor = _get_starting_equipment(CharacterClass.WARRIOR)
+        inventory = [weapon, armor]
+        equipped = EquippedItems(weapon=weapon, armor=armor)
+
+        # Calculate AC based on equipped armor
+        ac = _calculate_ac_with_armor(abilities, armor)
 
         # Build skills for warrior
         warrior_skills = _build_skills(abilities, CharacterClass.WARRIOR, proficiency_bonus=2)
@@ -606,10 +721,19 @@ def _create_fresh_session(session_id: str) -> SessionData:
             ac=ac,
             description="久经沙场的前线战士，信奉钢铁与意志。",
             skills=warrior_skills,
+            inventory=inventory,
+            equipped=equipped,
         )
         session.phase = GamePhase.ADVENTURE
         # Scene with actor in actors list for backward compatibility
-        session.scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [actor_id]})
+        scene_data = get_default_exploration_scene()
+        session.scene = Scene(
+            id=scene_data.id,
+            name=scene_data.name,
+            description=scene_data.description,
+            actors=[actor_id],
+            npcs=scene_data.npcs,
+        )
 
     return session
 

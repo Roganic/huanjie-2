@@ -219,6 +219,7 @@ interface SaveFile {
   save_name: string;
   character_name: string | null;
   class: string | null;
+  character_level: number | null;
   hp: number | null;
   hp_max: number | null;
   scene_name: string | null;
@@ -2795,6 +2796,7 @@ function App() {
                             <span className="save-character">
                               {save.character_name}
                               {save.class && ` · ${CLASS_LABELS[save.class as CharacterClass] || save.class}`}
+                              {save.character_level !== null && ` Lv.${save.character_level}`}
                               {save.hp !== null && save.hp_max !== null && ` · HP ${save.hp}/${save.hp_max}`}
                             </span>
                           ) : (

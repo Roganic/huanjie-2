@@ -1499,3 +1499,13 @@ def get_map_state(session_id: str | None = None) -> dict:
         "connections": connections,
         "explored_nodes": explored_nodes,
     }
+
+
+def get_character_rest_status(session_id: str | None = None) -> dict | None:
+    """获取角色的休息状态，包括生命骰和法术槽信息。
+
+    由 game/state.py 提供核心实现，此处为向后兼容的委托函数。
+    """
+    from .game.state import get_character_rest_status as _get_rest_status
+    resolved_id = _resolve_session_id(session_id)
+    return _get_rest_status(resolved_id)

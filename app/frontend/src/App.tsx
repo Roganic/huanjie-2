@@ -2271,7 +2271,7 @@ function App() {
             onFlee={() => endCombat("flee")}
             loading={combatLoading}
           />
-        ) : combatEnded ? (
+        ) : combatEnded && combat ? (
           <CombatEndScreen
             combat={combat}
             onReturn={returnToAdventure}

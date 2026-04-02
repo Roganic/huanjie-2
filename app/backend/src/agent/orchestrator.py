@@ -30,9 +30,10 @@ from ..models.action import (
     ResolutionType,
     SavingThrowDetail,
 )
-from ..models.state import Actor, NarrativeHistoryEntry
+from ..models.state import Actor, NarrativeHistoryEntry, SceneHistoryEntry
 from ..state import (
     append_narrative_history,
+    append_scene_history,
     get_actor,
     get_actor_by_id_or_name,
     get_narrative_context,
@@ -225,6 +226,46 @@ class GMAgent:
                 created_at=int(time.time() * 1000),
             )
         )
+
+    def _record_scene_history(
+        self,
+        action_type: str,
+        outcome: Outcome,
+        check_result: Optional[dict] = None,
+        attack_result: Optional[dict] = None,
+        narrative_keywords: Optional[list[str]] = None,
+    ) -> None:
+        """Persist a compact scene event for narrative continuity."""
+        npc_changes: list[str] = []
+        for effect in self.effects:
+            if effect.field == "hp" and isinstance(effect.delta, int):
+                delta_str = f"+{effect.delta}" if effect.delta > 0 else str(effect.delta)
+                npc_changes.append(f"{effect.target} HP {delta_str}")
+            elif effect.field == "conditions_add" and isinstance(effect.delta, str):
+                npc_changes.append(f"{effect.target} 获得状态 [{effect.delta}]")
+            elif effect.field == "conditions_remove" and isinstance(effect.delta, str):
+                npc_changes.append(f"{effect.target} 移除状态 [{effect.delta}]")
+
+        check_summary: dict[str, object] = {"outcome": outcome.value}
+        if check_result:
+            check_summary["ability"] = check_result.get("ability")
+            check_summary["total"] = check_result.get("total")
+            check_summary["dc"] = check_result.get("dc")
+        if attack_result:
+            check_summary["weapon"] = attack_result.get("weapon")
+            check_summary["target"] = attack_result.get("target")
+            damage = attack_result.get("damage")
+            if damage:
+                check_summary["damage"] = damage.get("total")
+
+        append_scene_history(
+            SceneHistoryEntry(
+                action_type=action_type,
+                check_result=check_summary,
+                narrative_keywords=narrative_keywords or [],
+                npc_changes=npc_changes,
+            )
+        )
     
     # -----------------------------------------------------------------------
     # Resolution Paths
@@ -320,6 +361,12 @@ class GMAgent:
             narration_result=narrative_result,
             check_result=check_result,
         )
+        self._record_scene_history(
+            action_type="skill_check",
+            outcome=outcome,
+            check_result=check_result,
+            narrative_keywords=[skill_name, ability, req.intent, req.approach],
+        )
         
         return ActionResponse(
             action_summary=action_summary,
@@ -365,6 +412,11 @@ class GMAgent:
             resolution_type=ResolutionType.AUTO_SUCCESS,
             outcome=Outcome.SUCCESS,
             narration_result=narrative_result,
+        )
+        self._record_scene_history(
+            action_type="auto_success",
+            outcome=Outcome.SUCCESS,
+            narrative_keywords=[req.intent, req.approach],
         )
         
         return ActionResponse(
@@ -436,6 +488,12 @@ class GMAgent:
             outcome=outcome,
             narration_result=narrative_result,
             check_result=check_result,
+        )
+        self._record_scene_history(
+            action_type="ability_check",
+            outcome=outcome,
+            check_result=check_result,
+            narrative_keywords=[ability, req.intent, req.approach],
         )
         
         return ActionResponse(
@@ -556,6 +614,12 @@ class GMAgent:
             outcome=outcome,
             narration_result=narrative_result,
             attack_result=attack_result,
+        )
+        self._record_scene_history(
+            action_type="attack",
+            outcome=outcome,
+            attack_result=attack_result,
+            narrative_keywords=[weapon, target.name, req.intent],
         )
         
         return ActionResponse(
@@ -739,6 +803,12 @@ class GMAgent:
             narration_result=narrative_result,
             attack_result=attack_result,
             saving_throw_result=saving_throw_detail.model_dump() if saving_throw_detail else None,
+        )
+        self._record_scene_history(
+            action_type="spell_attack",
+            outcome=outcome,
+            attack_result=attack_result,
+            narrative_keywords=["spell", target.name, req.intent],
         )
         
         return ActionResponse(

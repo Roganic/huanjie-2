@@ -27,6 +27,7 @@ from .models.state import (
     HP,
     NarrativeHistoryEntry,
     Scene,
+    SceneHistoryEntry,
     Skill,
 )
 
@@ -142,6 +143,7 @@ _COMBAT_SCENE_INIT = dict(
 )
 
 MAX_STORED_NARRATIVE_HISTORY = 50
+MAX_SCENE_HISTORY = 10
 DEFAULT_PROMPT_HISTORY_ENTRIES = 5
 DEFAULT_PROMPT_HISTORY_CHARS = 1800
 DEFAULT_SESSION_ID = "default-session"
@@ -162,6 +164,7 @@ class SessionData(BaseModel):
     enemy: Actor = Field(default_factory=lambda: Actor(**_ENEMY_INIT))
     scene: Scene = Field(default_factory=lambda: Scene(**_CHARACTER_CREATION_SCENE_INIT))
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
+    scene_history: list[SceneHistoryEntry] = Field(default_factory=list)
     updated_at: float = Field(default_factory=time.time)
 
 
@@ -229,6 +232,25 @@ def get_scene(session_id: str | None = None) -> Scene:
 def get_narrative_history(session_id: str | None = None) -> list[NarrativeHistoryEntry]:
     session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
     return list(session.narrative_history)
+
+
+def get_scene_history(session_id: str | None = None) -> list[SceneHistoryEntry]:
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return list(session.scene_history)
+
+
+def append_scene_history(
+    entry: SceneHistoryEntry,
+    session_id: str | None = None,
+) -> None:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        session.scene_history = [
+            *session.scene_history,
+            entry,
+        ][-MAX_SCENE_HISTORY:]
+        _save_session(session)
 
 
 def append_narrative_history(
@@ -364,6 +386,7 @@ def create_character(
         session.scene = Scene(**{**_ADVENTURE_SCENE_INIT, "actors": [session.actor.id]})
         session.enemy = Actor(**_ENEMY_INIT)
         session.narrative_history = []
+        session.scene_history = []
         _save_session(session)
     return get_bootstrap_state(session_id=resolved_session_id)
 
@@ -483,6 +506,7 @@ def _bootstrap_from_session(session: SessionData) -> BootstrapState:
         actor=session.actor,
         scene=session.scene,
         narrative_history=list(session.narrative_history),
+        scene_history=list(session.scene_history),
     )
 
 

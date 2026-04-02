@@ -23,7 +23,8 @@ from ..models.action import (
     Effect,
     Outcome,
 )
-from ..models.state import Actor, NarrativeHistoryEntry, Scene
+from ..models.state import Actor, NarrativeHistoryEntry, Scene, SceneHistoryEntry
+from ..state import get_scene_history
 from .providers import get_provider
 from .resolution_constraints import (
     NarrationConstraintContext,
@@ -235,7 +236,40 @@ def _fallback_scene_progression(
     )
 
 
-def _build_history_callback(narrative_history: Optional[list[NarrativeHistoryEntry]]) -> str:
+def _format_scene_history_for_prompt(scene_history: list[SceneHistoryEntry]) -> str:
+    lines: list[str] = [
+        "",
+        "【场景历史 / SCENE HISTORY】",
+        "以下是最近发生的场景事件，请在叙事中自然引用这些历史，保持场景连贯性：",
+        "",
+    ]
+    for idx, entry in enumerate(scene_history[-10:], start=1):
+        lines.append(f"{idx}. 行动类型: {entry.action_type}")
+        if entry.check_result:
+            check_json = json.dumps(entry.check_result, ensure_ascii=False, separators=(",", ":"))
+            lines.append(f"   检定结果: {check_json}")
+        if entry.narrative_keywords:
+            lines.append(f"   叙事关键词: {', '.join(entry.narrative_keywords)}")
+        if entry.npc_changes:
+            lines.append(f"   NPC状态变化: {', '.join(entry.npc_changes)}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _build_history_callback(
+    narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
+    scene_history: Optional[list[SceneHistoryEntry]] = None,
+) -> str:
+    if scene_history:
+        keywords: list[str] = []
+        for entry in scene_history[-3:]:
+            keywords.extend(entry.narrative_keywords)
+        if keywords:
+            compact = ", ".join(keywords[:5])
+            if len(scene_history) >= 3:
+                return f" The scene carries momentum from what came before: {compact}."
+            return f" The room still reacts to recent events: {compact}."
+
     if not narrative_history:
         return ""
 
@@ -257,8 +291,9 @@ def _fallback_gm_prompt(
     outcome: Outcome,
     attack_result: Optional[dict] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
+    scene_history: Optional[list[SceneHistoryEntry]] = None,
 ) -> str:
-    history_callback = _build_history_callback(narrative_history)
+    history_callback = _build_history_callback(narrative_history, scene_history)
     time_pressure = (
         f" Time in {scene.name} has advanced to beat {scene.time}."
         if scene.time
@@ -296,11 +331,12 @@ def _fallback_narration_bundle(
     outcome: Outcome,
     attack_result: Optional[dict] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
+    scene_history: Optional[list[SceneHistoryEntry]] = None,
 ) -> NarrationBundle:
     return NarrationBundle(
         action_result=_fallback_action_result(req, actor, scene, outcome, attack_result),
         scene_progression=_fallback_scene_progression(req, actor, scene, outcome, attack_result),
-        gm_prompt=_fallback_gm_prompt(req, actor, scene, outcome, attack_result, narrative_history),
+        gm_prompt=_fallback_gm_prompt(req, actor, scene, outcome, attack_result, narrative_history, scene_history),
     )
 
 
@@ -387,6 +423,7 @@ def generate_narration(
     effects: Optional[list[Effect]] = None,
     target: Optional[Actor] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
+    scene_history: Optional[list[SceneHistoryEntry]] = None,
 ) -> NarrationBundle:
     """Generate structured narrative text for an action resolution.
     
@@ -430,6 +467,12 @@ def generate_narration(
         target=target,
         narrative_history=narrative_history,
     )
+
+    resolved_scene_history = scene_history or get_scene_history()
+    if resolved_scene_history:
+        prompt += _format_scene_history_for_prompt(resolved_scene_history)
+
+    logger.info("Narrative prompt with scene_history:\n%s", prompt)
 
     def _run_provider(current_prompt: str) -> Optional[NarrationBundle]:
         try:
@@ -506,4 +549,5 @@ def generate_narration(
         outcome,
         attack_result,
         narrative_history,
+        resolved_scene_history,
     )

@@ -14,6 +14,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from .memory import ActionHistoryEntry, Memory
 from .models.action import CombatState, Effect
 from .scene import SceneData, get_default_exploration_scene, get_scene_by_id
 from .models.state import (
@@ -37,12 +38,6 @@ from .models.state import (
     SceneHistoryEntry,
     Skill,
 )
-from .npc.dialogue_state import (
-    NPCDialogueState,
-    get_all_npc_dialogue_counts,
-    get_all_npc_dialogue_states,
-    reset_session_npc_states,
-)
 
 _CHARACTER_CREATION_SCENE_INIT = dict(
     id="character-creation-01",
@@ -63,7 +58,7 @@ def _get_adventure_scene_init() -> dict:
         "description": scene.description,
         "actors": [],
         "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
-        "exits": [exit.model_dump(mode="json") for exit in scene.exits],
+        "exits": [exit.model_dump(mode="json") for exit in getattr(scene, "exits", [])],
     }
 
 
@@ -165,6 +160,7 @@ _COMBAT_SCENE_INIT = dict(
 
 MAX_STORED_NARRATIVE_HISTORY = 50
 MAX_SCENE_HISTORY = 10
+MAX_ACTION_HISTORY = 10
 DEFAULT_PROMPT_HISTORY_ENTRIES = 5
 DEFAULT_PROMPT_HISTORY_CHARS = 1800
 DEFAULT_SESSION_ID = "default-session"
@@ -223,10 +219,7 @@ class SessionData(BaseModel):
     scene: Scene = Field(default_factory=lambda: Scene(**_CHARACTER_CREATION_SCENE_INIT))
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
     scene_history: list[SceneHistoryEntry] = Field(default_factory=list)
-    npc_dialogue_states: dict[str, NPCDialogueState] = Field(
-        default_factory=dict,
-        description="NPC dialogue states by NPC ID"
-    )
+    action_history: list[dict] = Field(default_factory=list)
     updated_at: float = Field(default_factory=time.time)
 
 
@@ -337,6 +330,25 @@ def append_narrative_history(
             pass
 
 
+def get_action_history(session_id: str | None = None) -> list[dict]:
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return list(session.action_history)
+
+
+def append_action_history(
+    entry: dict[str, str],
+    session_id: str | None = None,
+) -> None:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        session.action_history = [
+            *session.action_history,
+            entry,
+        ][-MAX_ACTION_HISTORY:]
+        _save_session(session)
+
+
 def get_narrative_context(
     max_entries: int = DEFAULT_PROMPT_HISTORY_ENTRIES,
     max_chars: int = DEFAULT_PROMPT_HISTORY_CHARS,
@@ -373,7 +385,7 @@ def set_combat_scene(session_id: str | None = None) -> None:
             actors=actors,
             npcs=COMBAT_ENCOUNTER_SCENE.npcs,
             time=session.scene.time,  # Preserve time from previous scene
-            exits=COMBAT_ENCOUNTER_SCENE.exits,
+            exits=getattr(COMBAT_ENCOUNTER_SCENE, "exits", []),
         )
         session.game_phase = AdventurePhase.COMBAT
         _save_session(session)
@@ -415,7 +427,7 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
             actors=actors,
             npcs=scene_data.npcs,
             time=session.scene.time,  # Preserve time from previous scene
-            exits=scene_data.exits,  # Include exits for navigation
+            exits=getattr(scene_data, "exits", []),  # Include exits for navigation
         )
         _save_session(session)
     return True
@@ -574,11 +586,12 @@ def create_character(
             description=scene_data.description,
             actors=[session.actor.id],
             npcs=scene_data.npcs,
-            exits=scene_data.exits,
+            exits=getattr(scene_data, "exits", []),
         )
         session.enemy = Actor(**_ENEMY_INIT)
         session.narrative_history = []
         session.scene_history = []
+        session.action_history = []
         _save_session(session)
         
         # Persist to save file for session restoration after restart
@@ -682,8 +695,6 @@ def reset_state(session_id: str | None = None) -> BootstrapState:
         session = _create_fresh_session(resolved_session_id)
         _sessions[resolved_session_id] = session
         _persist_session(session)
-        # Reset NPC dialogue states for the session
-        reset_session_npc_states(resolved_session_id)
     return _bootstrap_from_session(session)
 
 
@@ -735,26 +746,12 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
 
 
 def _bootstrap_from_session(session: SessionData) -> BootstrapState:
-    # Build scene with NPC dialogue counts
-    scene_npcs_with_counts = []
-    for npc in session.scene.npcs:
-        # Get dialogue count from session's npc_dialogue_states
-        dialogue_count = 0
-        if npc.id in session.npc_dialogue_states:
-            dialogue_count = session.npc_dialogue_states[npc.id].dialogue_count
-        # Create NPC copy with dialogue_count
-        npc_with_count = npc.model_copy(update={"dialogue_count": dialogue_count})
-        scene_npcs_with_counts.append(npc_with_count)
-    
-    # Create scene copy with updated NPCs
-    scene_with_counts = session.scene.model_copy(update={"npcs": scene_npcs_with_counts})
-    
     return BootstrapState(
         session_id=session.session_id,
         phase=session.phase,
         game_phase=session.game_phase,
         actor=session.actor,
-        scene=scene_with_counts,
+        scene=session.scene,
         narrative_history=list(session.narrative_history),
         scene_history=list(session.scene_history),
     )
@@ -819,7 +816,7 @@ def _create_fresh_session(session_id: str) -> SessionData:
             description=scene_data.description,
             actors=[actor_id],
             npcs=scene_data.npcs,
-            exits=scene_data.exits,
+            exits=getattr(scene_data, "exits", []),
         )
 
     return session
@@ -891,106 +888,3 @@ def _delete_session(session_id: str) -> None:
 
 def _is_expired(session: SessionData) -> bool:
     return (time.time() - session.updated_at) > SESSION_TTL_SECONDS
-
-# ---------------------------------------------------------------------------
-# NPC Dialogue State Functions
-# ---------------------------------------------------------------------------
-
-def record_npc_dialogue(
-    npc_id: str,
-    npc_name: str,
-    speaker: str,
-    content: str,
-    session_id: str | None = None,
-) -> None:
-    """Record a dialogue entry for an NPC.
-    
-    Args:
-        npc_id: The NPC's unique ID
-        npc_name: The NPC's display name
-        speaker: Who spoke ('player' or NPC name)
-        content: What was said
-        session_id: The session ID (uses current session if None)
-    """
-    from .npc.dialogue_state import record_dialogue as _record_dialogue
-    resolved_session_id = _resolve_session_id(session_id)
-    with _SESSION_LOCK:
-        session = _get_session(resolved_session_id, create_if_missing=True)
-        dialogue_state = _record_dialogue(npc_id, npc_name, speaker, content, resolved_session_id)
-        # Update session's npc_dialogue_states
-        session.npc_dialogue_states[npc_id] = dialogue_state
-        _save_session(session)
-
-
-def get_npc_dialogue_count(
-    npc_id: str,
-    session_id: str | None = None,
-) -> int:
-    """Get the dialogue count for a specific NPC.
-    
-    Args:
-        npc_id: The NPC's unique ID
-        session_id: The session ID (uses current session if None)
-        
-    Returns:
-        Number of dialogue interactions (0 if never spoken)
-    """
-    from .npc.dialogue_state import get_npc_dialogue_count as _get_count
-    resolved_session_id = _resolve_session_id(session_id)
-    return _get_count(npc_id, resolved_session_id)
-
-
-def get_npc_dialogue_history(
-    npc_id: str,
-    session_id: str | None = None,
-    max_entries: int = 5,
-) -> list:
-    """Get dialogue history for a specific NPC.
-    
-    Args:
-        npc_id: The NPC's unique ID
-        session_id: The session ID (uses current session if None)
-        max_entries: Maximum number of entries to return
-        
-    Returns:
-        List of dialogue entries
-    """
-    from .npc.dialogue_state import get_dialogue_history as _get_history
-    resolved_session_id = _resolve_session_id(session_id)
-    return _get_history(npc_id, resolved_session_id, max_entries)
-
-
-def build_npc_dialogue_context_for_prompt(
-    npc_id: str,
-    npc_name: str,
-    session_id: str | None = None,
-) -> str:
-    """Build dialogue context string for prompt injection.
-    
-    Args:
-        npc_id: The NPC's unique ID
-        npc_name: The NPC's display name
-        session_id: The session ID (uses current session if None)
-        
-    Returns:
-        Formatted dialogue context string for prompt injection
-    """
-    from .npc.dialogue_state import build_dialogue_context_for_prompt as _build_context
-    resolved_session_id = _resolve_session_id(session_id)
-    return _build_context(npc_id, npc_name, resolved_session_id)
-
-
-def is_first_npc_contact(
-    npc_id: str,
-    session_id: str | None = None,
-) -> bool:
-    """Check if this is the first interaction with an NPC.
-    
-    Args:
-        npc_id: The NPC's unique ID
-        session_id: The session ID (uses current session if None)
-        
-    Returns:
-        True if this is the first contact, False otherwise
-    """
-    return get_npc_dialogue_count(npc_id, session_id) == 0

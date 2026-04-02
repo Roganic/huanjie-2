@@ -15,6 +15,7 @@ from ..models.action import ActionRequest, ActionResponse
 from ..models.state import AdventurePhase
 from ..scene import get_scene_transition, build_scene_context_for_prompt, get_scene_by_id
 from ..state import (
+    append_action_history,
     has_character,
     require_bootstrap_state,
     reset_current_session,
@@ -139,6 +140,16 @@ async def submit_action(req: ActionRequest, request: Request):
                 yield _sse_event("error", {"message": error_message})
 
             return StreamingResponse(error_stream(), media_type="text/event-stream")
+
+        # Persist action summary to session memory
+        append_action_history(
+            {
+                "action": result.action_summary,
+                "result": result.outcome.value,
+                "narrative_summary": (result.narration or "")[:400],
+            },
+            session_id=session_id,
+        )
 
         # Check for scene transitions based on action intent
         session = _get_session(_resolve_session_id(session_id), create_if_missing=True)

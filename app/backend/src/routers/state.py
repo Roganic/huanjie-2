@@ -7,6 +7,7 @@ from ..models.state import BootstrapState
 from ..persistence import reset_session as persistence_reset_session
 from ..state import (
     create_session,
+    get_action_history,
     get_bootstrap_state,
     get_narrative_history,
     require_bootstrap_state,
@@ -36,11 +37,16 @@ def _resolve_session(request: Request, create_if_missing: bool) -> tuple[str, ob
         raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
 
 
-@router.get("/state", response_model=BootstrapState)
+@router.get("/state")
 async def state(request: Request):
-    """Return the current game state for clients."""
-    _, bootstrap = _resolve_session(request, create_if_missing=True)
-    return bootstrap
+    """Return the current game state for clients, including action_history."""
+    session_id, bootstrap = _resolve_session(request, create_if_missing=True)
+    result = bootstrap.model_dump(mode="json")
+    # Include action_history from session storage
+    provided_session_id = _request_session_id(request)
+    resolved_id = provided_session_id or session_id
+    result["action_history"] = get_action_history(resolved_id)
+    return result
 
 
 @router.get("/state/bootstrap", response_model=BootstrapState)

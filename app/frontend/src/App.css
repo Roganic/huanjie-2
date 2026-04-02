@@ -659,6 +659,64 @@
   margin-top: 2px;
 }
 
+/* Equipment Display */
+.equipment-display {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.equipment-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.equipment-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.equipment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.equipment-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.equipment-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.equipment-stat {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.equipment-empty {
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 /* Proficiency Badge */
 .proficiency-badge {
   display: inline-flex;

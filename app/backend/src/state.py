@@ -9,6 +9,7 @@ import threading
 import time
 import uuid
 from contextvars import ContextVar, Token
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -58,6 +59,9 @@ def _get_adventure_scene_init() -> dict:
         "actors": [],
         "npcs": [npc.model_dump(mode="json") for npc in scene.npcs],
     }
+
+# Export for backward compatibility
+_ADVENTURE_SCENE_INIT = _get_adventure_scene_init()
 
 _CLASS_TEMPLATES: dict[CharacterClass, dict[str, object]] = {
     CharacterClass.WARRIOR: {
@@ -800,6 +804,105 @@ def _persist_session(session: SessionData) -> None:
 def _delete_session(session_id: str) -> None:
     _sessions.pop(session_id, None)
     _session_file(session_id).unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Combat State Management
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CombatSessionState:
+    """Combat session state for orchestrator."""
+    is_active: bool = False
+    round_number: int = 1
+    turn_order: list[str] = field(default_factory=list)
+    combatant_hp: dict[str, int] = field(default_factory=dict)
+    combatant_names: dict[str, str] = field(default_factory=dict)
+    outcome: Optional[str] = None
+
+
+# In-memory combat state storage (per session_id)
+_combat_states: dict[str, CombatSessionState] = {}
+
+
+def get_combat_state(session_id: str | None = None) -> CombatSessionState:
+    """Get combat state for a session.
+    
+    Returns a CombatSessionState object. If no combat state exists,
+    returns an inactive state.
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    if resolved_session_id not in _combat_states:
+        _combat_states[resolved_session_id] = CombatSessionState()
+    return _combat_states[resolved_session_id]
+
+
+def start_combat_session(session_id: str | None = None) -> CombatSessionState:
+    """Start a new combat session.
+    
+    Initializes combat state with current actors from session.
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    session = _get_session(resolved_session_id, create_if_missing=True)
+    
+    combat_state = CombatSessionState(
+        is_active=True,
+        round_number=1,
+        turn_order=[],
+        combatant_hp={},
+        combatant_names={},
+    )
+    
+    # Add player if exists
+    if session.actor:
+        combat_state.combatant_hp[session.actor.id] = session.actor.hp
+        combat_state.combatant_names[session.actor.id] = session.actor.name
+        combat_state.turn_order.append(session.actor.id)
+    
+    # Add enemy
+    combat_state.combatant_hp[session.enemy.id] = session.enemy.hp
+    combat_state.combatant_names[session.enemy.id] = session.enemy.name
+    combat_state.turn_order.append(session.enemy.id)
+    
+    _combat_states[resolved_session_id] = combat_state
+    return combat_state
+
+
+def end_combat_session(outcome: str, session_id: str | None = None) -> None:
+    """End the current combat session.
+    
+    Args:
+        outcome: The combat outcome ('victory', 'defeat', 'escaped')
+        session_id: The session ID (uses current session if None)
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    if resolved_session_id in _combat_states:
+        _combat_states[resolved_session_id].is_active = False
+        _combat_states[resolved_session_id].outcome = outcome
+
+
+def update_combatant_hp(combatant_id: str, hp: int, session_id: str | None = None) -> None:
+    """Update a combatant's HP in the combat state.
+    
+    Args:
+        combatant_id: The ID of the combatant
+        hp: The new HP value
+        session_id: The session ID (uses current session if None)
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    if resolved_session_id in _combat_states:
+        _combat_states[resolved_session_id].combatant_hp[combatant_id] = hp
+
+
+def advance_combat_round(session_id: str | None = None) -> None:
+    """Advance to the next combat round.
+    
+    Args:
+        session_id: The session ID (uses current session if None)
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    if resolved_session_id in _combat_states:
+        _combat_states[resolved_session_id].round_number += 1
 
 
 def _is_expired(session: SessionData) -> bool:

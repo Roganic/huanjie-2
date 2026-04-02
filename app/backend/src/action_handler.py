@@ -226,11 +226,26 @@ def _handle_spell_action(req: ActionRequest, actor) -> Optional[ActionResponse]:
 
 def _handle_rest_action(req: ActionRequest, actor) -> Optional[ActionResponse]:
     """Handle short rest and long rest actions."""
-    from .spells.spell_resolver import is_rest_command
-    from .models.action import Effect
-    # Rest actions are now handled directly in routers/action.py
-    # This function is kept for backwards compatibility but does nothing
-    return None
+    from .game.action_handler import is_rest_intent, handle_long_rest, handle_short_rest
+
+    is_rest, rest_type = is_rest_intent(req.intent)
+    if not is_rest:
+        return None
+
+    if rest_type == "long":
+        result = handle_long_rest(actor)
+    else:
+        result = handle_short_rest(actor)
+
+    return ActionResponse(
+        action_summary=f"{actor.name} 进行{'长休' if rest_type == 'long' else '短休'}",
+        resolution_type=ResolutionType.AUTO_SUCCESS,
+        outcome=Outcome.SUCCESS,
+        effects=[],
+        narration=result["narration"],
+        scene_progression="休息后，你感觉精神焕发。" if rest_type == "long" else "短暂休息后，你准备好继续前进。",
+        gm_prompt=f"{actor.name} 完成{'长休' if rest_type == 'long' else '短休'}。",
+    )
 
 
 def handle_equipment_action(

@@ -6,7 +6,6 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import action, character, combat, health, state
 from . import game_state as gs
 from .models.state import BootstrapState
 from .state import get_bootstrap_state, has_character
@@ -30,13 +29,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(health.router)
-app.include_router(action.router)
-app.include_router(character.router)
-app.include_router(state.router)
-app.include_router(combat.router)
 
-
+# Define persistence endpoints BEFORE including routers
+# This ensures these endpoints take precedence over any in routers
 @app.get("/")
 async def root():
     return {"name": "幻界 2.0", "status": "running"}
@@ -122,6 +117,16 @@ async def get_save_info():
     if info is None:
         raise HTTPException(status_code=404, detail="No save file found")
     return info
+
+
+# Include routers AFTER defining persistence endpoints
+from .routers import action, character, combat, health, state
+
+app.include_router(health.router)
+app.include_router(action.router)
+app.include_router(character.router)
+app.include_router(state.router)
+app.include_router(combat.router)
 
 
 # Auto-load saved game on startup (if exists)

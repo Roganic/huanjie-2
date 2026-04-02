@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import MapPanel from "./components/MapPanel";
 
 interface Message {
   id: number;
@@ -1896,6 +1897,8 @@ function App() {
   const [isCombatNarrativeStreaming, setIsCombatNarrativeStreaming] = useState(false);
   const [lastCombatXp, setLastCombatXp] = useState<number | undefined>(undefined);
   const [lastCombatLevelUp, setLastCombatLevelUp] = useState<LevelUpInfo | null>(null);
+  // Map state
+  const [showMap, setShowMap] = useState(false);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
@@ -2858,6 +2861,16 @@ function App() {
           <button className="header-button" onClick={resetSession} disabled={resetting || sending || creatingCharacter}>
             {resetting ? "重置中…" : "重置"}
           </button>
+          {inAdventure && (
+            <button 
+              className="header-button map-button" 
+              onClick={() => setShowMap(true)}
+              disabled={sending || creatingCharacter}
+              title="打开地图"
+            >
+              🗺️ 地图
+            </button>
+          )}
           {inCombat && <span className="combat-badge">⚔️ 战斗中</span>}
           <HealthDot status={health} />
           <span className="subtitle">
@@ -3123,6 +3136,16 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Map Panel */}
+      <MapPanel
+        apiUrl={apiUrl}
+        sessionId={sessionId}
+        buildSessionHeaders={buildSessionHeaders}
+        currentSceneId={bootstrap?.scene?.id ?? ""}
+        isVisible={showMap}
+        onClose={() => setShowMap(false)}
+      />
     </div>
   );
 }

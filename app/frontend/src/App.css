@@ -1510,6 +1510,88 @@
   border: 1px solid var(--failure);
 }
 
+.combat-log-badges {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.combat-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.combat-badge.hit {
+  background: rgba(231, 76, 60, 0.15);
+  color: #e74c3c;
+  border: 1px solid rgba(231, 76, 60, 0.35);
+}
+
+.combat-badge.miss {
+  background: rgba(149, 165, 166, 0.15);
+  color: #95a5a6;
+  border: 1px solid rgba(149, 165, 166, 0.35);
+}
+
+.combat-log-entry.log-player {
+  border-left-color: #3498db;
+  background: rgba(52, 152, 219, 0.06);
+}
+
+.combat-log-entry.log-enemy {
+  border-left-color: #e74c3c;
+  background: rgba(231, 76, 60, 0.06);
+}
+
+.combat-log-entry.log-system {
+  border-left-color: var(--accent);
+}
+
+.typewriter-cursor {
+  animation: blink 1s step-end infinite;
+  color: var(--accent);
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.combat-turn-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.turn-badge {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.turn-badge.player-turn {
+  background: rgba(92, 184, 92, 0.15);
+  color: #5cb85c;
+  border: 1px solid rgba(92, 184, 92, 0.35);
+}
+
+.turn-badge.enemy-turn {
+  background: rgba(217, 83, 79, 0.15);
+  color: #d9534f;
+  border: 1px solid rgba(217, 83, 79, 0.35);
+}
+
+.combat-action-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .combat-enter-btn {
   width: 100%;
   padding: 10px 14px;

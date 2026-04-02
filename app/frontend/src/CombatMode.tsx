@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface CombatantState {
   id: string;
@@ -9,6 +9,23 @@ interface CombatantState {
   ac: number;
   initiative: number;
   status: string;
+}
+
+interface CombatStartData {
+  session_id: string;
+  round_number: number;
+  current_turn: string | null;
+  turn_order: string[];
+  combatants: CombatantState[];
+  outcome: "ongoing" | "victory" | "defeat";
+  log: string[];
+  enemy_start_action?: {
+    actor: string;
+    hit: boolean;
+    damage: number;
+    updated_hp: number;
+    narrative: string;
+  } | null;
 }
 
 interface CombatStateData {
@@ -43,6 +60,14 @@ interface CombatActionResponse {
   victory: boolean;
 }
 
+interface LogEntry {
+  id: number;
+  text: string;
+  variant: "player" | "enemy" | "system";
+  hit?: boolean | null;
+  damage?: number;
+}
+
 interface CombatModeProps {
   sessionId: string | null;
   apiUrl: (path: string) => string;
@@ -51,12 +76,68 @@ interface CombatModeProps {
   onExit: () => void;
 }
 
+function useTypewriter(text: string, speed: number = 18) {
+  const [displayed, setDisplayed] = useState("");
+  const indexRef = useRef(0);
+  const textRef = useRef(text);
+
+  useEffect(() => {
+    indexRef.current = 0;
+    textRef.current = text;
+    setDisplayed("");
+    const timer = setInterval(() => {
+      indexRef.current += 1;
+      setDisplayed(textRef.current.slice(0, indexRef.current));
+      if (indexRef.current >= textRef.current.length) {
+        clearInterval(timer);
+      }
+    }, speed);
+    return () => clearInterval(timer);
+  }, [text, speed]);
+
+  return displayed;
+}
+
+function TypewriterLine({ text, className }: { text: string; className?: string }) {
+  const displayed = useTypewriter(text);
+  return (
+    <span className={className}>
+      {displayed}
+      <span className="typewriter-cursor">|</span>
+    </span>
+  );
+}
+
+function LogItem({ entry, isLatest }: { entry: LogEntry; isLatest: boolean }) {
+  const content = isLatest ? <TypewriterLine text={entry.text} /> : <span>{entry.text}</span>;
+  const variantClass =
+    entry.variant === "player" ? "log-player" : entry.variant === "enemy" ? "log-enemy" : "log-system";
+
+  return (
+    <div className={`combat-log-entry ${variantClass}`}>
+      <div className="combat-log-badges">
+        {entry.hit === true && entry.damage !== undefined && entry.damage > 0 && (
+          <span className="combat-badge hit">命中 -{entry.damage}</span>
+        )}
+        {entry.hit === true && entry.damage === 0 && <span className="combat-badge hit">命中</span>}
+        {entry.hit === false && <span className="combat-badge miss">未命中</span>}
+      </div>
+      <div className="combat-log-text">{content}</div>
+    </div>
+  );
+}
+
 export function CombatMode({ sessionId, apiUrl, buildSessionHeaders, refreshState, onExit }: CombatModeProps) {
   const [combatState, setCombatState] = useState<CombatStateData | null>(null);
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<"victory" | "defeat" | null>(null);
-  const [log, setLog] = useState<string[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
 
   useEffect(() => {
     let mounted = true;
@@ -69,14 +150,41 @@ export function CombatMode({ sessionId, apiUrl, buildSessionHeaders, refreshStat
           headers: buildSessionHeaders(sessionId),
         });
         if (!response.ok) throw new Error(await response.text());
-        const data: CombatStateData = await response.json();
-        if (mounted) {
-          setCombatState(data);
-          setLog(data.log || []);
-          setResult(null);
-          setError(null);
+        const data: CombatStartData = await response.json();
+        if (!mounted) return;
+
+        const initialLogs: LogEntry[] = (data.log || []).map((text, idx) => ({
+          id: Date.now() + idx,
+          text,
+          variant: "system",
+        }));
+
+        // Handle enemy winning initiative and attacking immediately
+        if (data.enemy_start_action) {
+          const esa = data.enemy_start_action;
+          initialLogs.push({
+            id: Date.now() + 1000,
+            text: esa.narrative,
+            variant: "enemy",
+            hit: esa.hit,
+            damage: esa.damage,
+          });
         }
-        await refreshState();
+
+        setCombatState(data);
+        setLogs(initialLogs);
+        setError(null);
+
+        // If combat already ended from enemy start action
+        if (data.outcome !== "ongoing") {
+          const res = data.outcome === "victory" ? "victory" : "defeat";
+          setResult(res);
+          await refreshState();
+          setTimeout(() => onExit(), 2500);
+        } else {
+          setResult(null);
+          await refreshState();
+        }
       } catch (e) {
         if (mounted) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -87,7 +195,7 @@ export function CombatMode({ sessionId, apiUrl, buildSessionHeaders, refreshStat
     return () => {
       mounted = false;
     };
-  }, [sessionId, apiUrl, buildSessionHeaders, refreshState]);
+  }, [sessionId, apiUrl, buildSessionHeaders, refreshState, onExit]);
 
   const doAction = async (actionType: "attack" | "skill_check") => {
     if (!sessionId || !combatState) return;
@@ -102,16 +210,33 @@ export function CombatMode({ sessionId, apiUrl, buildSessionHeaders, refreshStat
       if (!response.ok) throw new Error(await response.text());
       const data: CombatActionResponse = await response.json();
 
-      const newLogs: string[] = [data.narrative];
-      data.enemy_actions.forEach((action) => newLogs.push(action.narrative));
-      setLog((prev) => [...prev, ...newLogs]);
+      const newLogs: LogEntry[] = [];
+      newLogs.push({
+        id: Date.now(),
+        text: data.narrative,
+        variant: "player",
+        hit: data.hit,
+        damage: data.damage,
+      });
+      data.enemy_actions.forEach((action, idx) => {
+        newLogs.push({
+          id: Date.now() + idx + 1,
+          text: action.narrative,
+          variant: "enemy",
+          hit: action.hit,
+          damage: action.damage,
+        });
+      });
+      setLogs((prev) => [...prev, ...newLogs]);
 
       setCombatState((prev) => {
         if (!prev) return null;
         const updatedCombatants = prev.combatants.map((c) => {
           if (c.id === data.target) return { ...c, hp: data.updated_hp };
-          const enemyAction = data.enemy_actions.find(() => c.type === "player");
-          if (enemyAction && c.type === "player") return { ...c, hp: enemyAction.updated_hp };
+          // Apply enemy action damage to player combatants (single-player assumption)
+          if (c.type === "player" && data.enemy_actions.length > 0) {
+            return { ...c, hp: data.enemy_actions[0].updated_hp };
+          }
           return c;
         });
         return {
@@ -130,7 +255,7 @@ export function CombatMode({ sessionId, apiUrl, buildSessionHeaders, refreshStat
         await refreshState();
         setTimeout(() => {
           onExit();
-        }, 2000);
+        }, 2500);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -161,6 +286,9 @@ export function CombatMode({ sessionId, apiUrl, buildSessionHeaders, refreshStat
     ? [...combatState.combatants].sort((a, b) => b.initiative - a.initiative)
     : [];
 
+  const playerCombatant = orderedCombatants.find((c) => c.type === "player");
+  const isPlayerTurn = combatState?.current_turn === playerCombatant?.id;
+
   return (
     <div className="combat-mode">
       <div className="combat-header">
@@ -169,7 +297,7 @@ export function CombatMode({ sessionId, apiUrl, buildSessionHeaders, refreshStat
           <div className="combat-meta">
             <span className="combat-round">第 {combatState.round_number} 轮</span>
             <span className="combat-turn">
-              当前回合: {" "}
+              当前回合:{" "}
               {combatState.current_turn
                 ? combatState.combatants.find((c) => c.id === combatState.current_turn)?.name || "未知"
                 : "—"}
@@ -227,13 +355,12 @@ export function CombatMode({ sessionId, apiUrl, buildSessionHeaders, refreshStat
       </div>
 
       <div className="combat-log">
-        {log.length === 0 && <div className="combat-log-empty">战斗日志将显示在这里…</div>}
-        {log.map((entry, idx) => (
-          <div key={idx} className="combat-log-entry">
-            {entry}
-          </div>
+        {logs.length === 0 && <div className="combat-log-empty">战斗日志将显示在这里…</div>}
+        {logs.map((entry, idx) => (
+          <LogItem key={entry.id} entry={entry} isLatest={idx === logs.length - 1} />
         ))}
         {error && <div className="combat-log-error">错误: {error}</div>}
+        <div ref={logEndRef} />
       </div>
 
       <div className="combat-actions">
@@ -243,23 +370,32 @@ export function CombatMode({ sessionId, apiUrl, buildSessionHeaders, refreshStat
           </div>
         ) : (
           <>
-            <button
-              className="combat-btn attack"
-              onClick={() => doAction("attack")}
-              disabled={pending || combatState?.current_turn !== orderedCombatants.find((c) => c.type === "player")?.id}
-            >
-              {pending ? "裁定中…" : "⚔️ 攻击"}
-            </button>
-            <button
-              className="combat-btn skill"
-              onClick={() => doAction("skill_check")}
-              disabled={pending || combatState?.current_turn !== orderedCombatants.find((c) => c.type === "player")?.id}
-            >
-              {pending ? "裁定中…" : "🎲 技能检定"}
-            </button>
-            <button className="combat-btn end" onClick={endCombat} disabled={pending}>
-              🏳️ 结束战斗
-            </button>
+            <div className="combat-turn-hint">
+              {isPlayerTurn ? (
+                <span className="turn-badge player-turn">你的回合</span>
+              ) : (
+                <span className="turn-badge enemy-turn">敌方回合</span>
+              )}
+            </div>
+            <div className="combat-action-buttons">
+              <button
+                className="combat-btn attack"
+                onClick={() => doAction("attack")}
+                disabled={pending || !isPlayerTurn}
+              >
+                {pending ? "裁定中…" : "⚔️ 攻击"}
+              </button>
+              <button
+                className="combat-btn skill"
+                onClick={() => doAction("skill_check")}
+                disabled={pending || !isPlayerTurn}
+              >
+                {pending ? "裁定中…" : "🎲 技能检定"}
+              </button>
+              <button className="combat-btn end" onClick={endCombat} disabled={pending}>
+                🏳️ 结束战斗
+              </button>
+            </div>
           </>
         )}
       </div>

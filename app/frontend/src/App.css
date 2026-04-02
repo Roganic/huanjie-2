@@ -4061,3 +4061,92 @@
 .equipped-name {
   font-weight: 500;
 }
+
+/* Rest System Styles */
+.hit-dice-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #d4a574;
+}
+
+.hit-dice-icon {
+  font-size: 1rem;
+}
+
+.hit-dice-value {
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.hit-dice-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(212, 165, 116, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(212, 165, 116, 0.2);
+}
+
+.hit-dice-panel .hit-dice-display {
+  font-size: 1.1rem;
+  justify-content: center;
+}
+
+.hit-dice-hint {
+  font-size: 0.75rem;
+  color: #888;
+  text-align: center;
+}
+
+/* Rest buttons in input bar */
+.rest-btn {
+  padding: 8px 12px;
+  border: 1px solid rgba(212, 165, 116, 0.3);
+  border-radius: 6px;
+  background: rgba(212, 165, 116, 0.1);
+  color: #d4a574;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.rest-btn:hover:not(:disabled) {
+  background: rgba(212, 165, 116, 0.2);
+  border-color: rgba(212, 165, 116, 0.5);
+}
+
+.rest-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.rest-btn.short-rest {
+  background: rgba(76, 175, 80, 0.1);
+  border-color: rgba(76, 175, 80, 0.3);
+  color: #81c784;
+}
+
+.rest-btn.short-rest:hover:not(:disabled) {
+  background: rgba(76, 175, 80, 0.2);
+  border-color: rgba(76, 175, 80, 0.5);
+}
+
+.rest-btn.long-rest {
+  background: rgba(100, 181, 246, 0.1);
+  border-color: rgba(100, 181, 246, 0.3);
+  color: #64b5f6;
+}
+
+.rest-btn.long-rest:hover:not(:disabled) {
+  background: rgba(100, 181, 246, 0.2);
+  border-color: rgba(100, 181, 246, 0.5);
+}
+
+/* Mini character card hit dice */
+.mini-char-stats .hit-dice-display {
+  font-size: 0.75rem;
+}

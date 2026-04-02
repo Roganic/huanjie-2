@@ -10,42 +10,30 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from ..actions.scene_interaction import (
-    find_interactive_element,
-    handle_scene_interaction,
-    is_scene_interaction_action,
-)
 from ..agent.orchestrator import resolve_action_with_agent
-from ..items import resolve_item_use
-from ..models.action import ActionRequest, ActionResponse, Effect, Outcome, ResolutionType
+from ..models.action import ActionRequest, ActionResponse
 from ..models.state import AdventurePhase
 from ..scene import get_scene_transition, build_scene_context_for_prompt, get_scene_by_id
-from ..scenes import (
-    is_movement_action,
-    handle_movement,
-    get_available_exits,
-    MOVEMENT_VERBS as _MOVEMENT_KEYWORDS,
-)
-
-# Backward-compatible aliases for tests
-_is_movement_action = is_movement_action
 from ..state import (
-    apply_effects,
     append_action_history,
-    get_actor,
     has_character,
     require_bootstrap_state,
     reset_current_session,
     set_combat_scene,
     set_current_session,
     switch_scene,
-    update_combatant_hp,
     _get_session,
     _resolve_session_id,
     _save_session,
 )
 
 router = APIRouter(tags=["game"])
+
+# Movement keywords - if these appear, treat as scene navigation (no combat trigger)
+_MOVEMENT_KEYWORDS = [
+    "go", "move", "walk", "head", "enter", "leave", "exit", "return", "back",
+    "前往", "去", "走", "进入", "离开", "返回", "回", "到", "向",
+]
 
 # Combat trigger keywords - if these appear in action intent, auto-trigger combat
 _COMBAT_TRIGGER_KEYWORDS = [
@@ -54,60 +42,49 @@ _COMBAT_TRIGGER_KEYWORDS = [
     "攻击", "战斗", "打", "杀", "砍", "刺", "射击", "开战",
 ]
 
+# Rest action keywords
+_SHORT_REST_KEYWORDS = ["短休", "short rest", "休息", "休整"]
+_LONG_REST_KEYWORDS = ["长休", "long rest", "睡眠", "睡觉", "宿营", "露营"]
+
+
+def _is_movement_action(intent: str, approach: str) -> bool:
+    """Check if an action is a movement/navigation action."""
+    text = f"{intent} {approach}".lower()
+    # Use word boundary matching to avoid partial matches (e.g., "go" in "goblin")
+    import re
+    for keyword in _MOVEMENT_KEYWORDS:
+        # Create a pattern that matches the keyword as a whole word/phrase
+        # For Chinese keywords, we don't need word boundaries
+        # For English keywords, we use word boundaries
+        if keyword.isascii():
+            pattern = r'\b' + re.escape(keyword) + r'\b'
+            if re.search(pattern, text):
+                return True
+        else:
+            if keyword in text:
+                return True
+    return False
+
 
 def _should_trigger_combat(intent: str, approach: str) -> bool:
     """Check if an action should trigger combat based on keywords."""
     text = f"{intent} {approach}".lower()
     # Don't trigger combat for movement actions
-    if is_movement_action(intent, approach):
+    if _is_movement_action(intent, approach):
         return False
     return any(keyword in text for keyword in _COMBAT_TRIGGER_KEYWORDS)
 
 
-# Item use keywords
-_ITEM_USE_PREFIXES = [
-    "使用", "用", "use", "consume", "drink", "喝",
-]
+def _is_short_rest_action(intent: str, approach: str) -> bool:
+    """Check if action is a short rest."""
+    text = f"{intent} {approach}".lower()
+    return any(keyword in text for keyword in _SHORT_REST_KEYWORDS)
 
 
-def _is_item_use_action(intent: str, approach: str) -> bool:
-    """Check if an action is an item use action."""
-    text = f"{intent} {approach}".lower().strip()
-    for prefix in _ITEM_USE_PREFIXES:
-        if prefix.isascii():
-            # English prefixes: require word boundary or space
-            if text.startswith(prefix.lower()) or f" {prefix.lower()}" in text:
-                return True
-        else:
-            # Chinese prefixes
-            if text.startswith(prefix) or text.startswith(f"{prefix}"):
-                return True
-    return False
-
-
-def _parse_item_name(intent: str, approach: str) -> str:
-    """Parse item name from an item use action text."""
-    text = f"{intent} {approach}".strip()
-    
-    # Try Chinese "使用X"
-    if text.startswith("使用"):
-        return text[2:].strip()
-    if text.startswith("用"):
-        return text[1:].strip()
-    if text.startswith("喝"):
-        return text[1:].strip()
-    
-    # Try English "use X", "consume X", "drink X"
-    lower = text.lower()
-    for prefix in ("use ", "consume ", "drink "):
-        if lower.startswith(prefix):
-            return text[len(prefix):].strip()
-    
-    # Fallback: remove the first word/prefix and return the rest
-    parts = text.split(None, 1)
-    if len(parts) > 1:
-        return parts[1].strip()
-    return text
+def _is_long_rest_action(intent: str, approach: str) -> bool:
+    """Check if action is a long rest."""
+    text = f"{intent} {approach}".lower()
+    return any(keyword in text for keyword in _LONG_REST_KEYWORDS)
 
 
 def _sse_event(event: str, data: dict) -> str:
@@ -170,55 +147,90 @@ async def submit_action(req: ActionRequest, request: Request):
                 session_id=session_id,
             )
 
-        # Check for item use actions before routing to agent
-        if _is_item_use_action(req.intent, req.approach):
-            actor = get_actor(session_id=session_id)
-            if actor is None:
-                raise HTTPException(status_code=400, detail="No character found.")
+        # Check for rest actions first (before agent resolution)
+        session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+        
+        # Handle short rest
+        if _is_short_rest_action(req.intent, req.approach):
+            from ..state import perform_short_rest
+            success, rest_result = perform_short_rest(session_id)
             
-            item_name = _parse_item_name(req.intent, req.approach)
-            item_result = resolve_item_use(actor, item_name)
+            if not success:
+                # Return error response for rest failure
+                error_response = ActionResponse(
+                    action_summary="短休",
+                    resolution_type="auto_success",
+                    outcome="failure",
+                    narration=rest_result.get("error", rest_result.get("message", "短休失败")),
+                    scene_progression="无法在当前状态下短休。",
+                    gm_prompt="短休未能执行。",
+                )
+                return error_response
             
-            if not item_result.success:
-                raise HTTPException(status_code=400, detail=item_result.error_message)
-            
-            # Apply effects (HP change and inventory removal)
-            apply_effects(item_result.effects or [], session_id=session_id)
-            
-            # Refresh actor to get updated HP
-            actor = get_actor(session_id=session_id) or actor
-            
-            # Update combat state HP if in combat
-            session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-            if session.game_phase == AdventurePhase.COMBAT:
-                update_combatant_hp(actor.id, actor.hp)
-            
-            result = ActionResponse(
-                action_summary=item_result.action_summary,
-                resolution_type=ResolutionType.AUTO_SUCCESS,
-                outcome=Outcome.SUCCESS,
-                effects=item_result.effects or [],
-                item_use=item_result.item_use,
-                narration=item_result.narration,
-                scene_progression=item_result.scene_progression,
-                gm_prompt=item_result.gm_prompt,
+            # Return success response for short rest
+            success_response = ActionResponse(
+                action_summary="短休",
+                resolution_type="auto_success",
+                outcome="success",
+                narration=rest_result["message"],
+                scene_progression=f"角色进行了短休，恢复了 {rest_result.get('hp_gained', 0)} 点HP。",
+                gm_prompt="短休完成，角色可以继续探索。",
             )
             
+            # Persist to history
             append_action_history(
-                {
-                    "action": result.action_summary,
-                    "result": result.outcome.value,
-                    "narrative_summary": (result.narration or "")[:400],
-                },
+                {"action": "短休", "result": "success", "narrative_summary": rest_result["message"]},
                 session_id=session_id,
             )
             
             accepts_stream = "text/event-stream" in request.headers.get("accept", "")
             if not accepts_stream:
-                return result
-            
+                return success_response
             return StreamingResponse(
-                _stream_action_response(result),
+                _stream_action_response(success_response),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+        
+        # Handle long rest
+        if _is_long_rest_action(req.intent, req.approach):
+            from ..state import perform_long_rest
+            success, rest_result = perform_long_rest(session_id)
+            
+            if not success:
+                error_response = ActionResponse(
+                    action_summary="长休",
+                    resolution_type="auto_success",
+                    outcome="failure",
+                    narration=rest_result.get("error", rest_result.get("message", "长休失败")),
+                    scene_progression="无法在当前状态下长休。",
+                    gm_prompt="长休未能执行。",
+                )
+                return error_response
+            
+            success_response = ActionResponse(
+                action_summary="长休",
+                resolution_type="auto_success",
+                outcome="success",
+                narration=rest_result["message"],
+                scene_progression="角色进行了长休，完全恢复了HP和所有资源。",
+                gm_prompt="长休完成，角色已经完全恢复，可以继续冒险。",
+            )
+            
+            append_action_history(
+                {"action": "长休", "result": "success", "narrative_summary": rest_result["message"]},
+                session_id=session_id,
+            )
+            
+            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
+            if not accepts_stream:
+                return success_response
+            return StreamingResponse(
+                _stream_action_response(success_response),
                 media_type="text/event-stream",
                 headers={
                     "Cache-Control": "no-cache",
@@ -228,16 +240,7 @@ async def submit_action(req: ActionRequest, request: Request):
             )
 
         try:
-            # Check if this is a scene interaction action
-            session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-            element = find_interactive_element(req.intent, session.scene.id)
-            
-            if element is not None:
-                # Handle scene interaction with skill check
-                result, _ = handle_scene_interaction(req, element)
-            else:
-                # Use agent orchestrator for non-scene interactions
-                result = await asyncio.to_thread(resolve_action_with_agent, req)
+            result = await asyncio.to_thread(resolve_action_with_agent, req)
         except Exception as exc:  # pragma: no cover - surfaced to client as SSE error
             error_message = str(exc)
 
@@ -259,35 +262,23 @@ async def submit_action(req: ActionRequest, request: Request):
         # Check for scene transitions based on action intent
         session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
         if session.game_phase == AdventurePhase.EXPLORATION:
-            # Check if this is a movement action
-            if is_movement_action(req.intent, req.approach):
-                # Use the new movement handler
-                movement_result = handle_movement(req.intent, req.approach, session_id)
-                
-                if movement_result.success:
-                    # Movement successful - refresh session state
-                    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-                    
-                    # Append movement to action history
-                    append_action_history(
-                        {
-                            "action": f"移动: {req.intent}",
-                            "result": "success",
-                            "narrative_summary": movement_result.message,
-                        },
-                        session_id=session_id,
-                    )
-                else:
-                    # Movement failed - still record it
-                    append_action_history(
-                        {
-                            "action": f"尝试移动: {req.intent}",
-                            "result": "failure",
-                            "narrative_summary": movement_result.message,
-                        },
-                        session_id=session_id,
-                    )
-                    # Don't return error - let the agent provide narrative context
+            # Check for scene transition keywords first
+            target_scene_id = get_scene_transition(req.intent)
+            
+            # If no transition keyword found but it's a movement action,
+            # check against current scene exits
+            if not target_scene_id and _is_movement_action(req.intent, req.approach):
+                intent_lower = req.intent.lower()
+                for exit in session.scene.exits:
+                    if exit.direction.lower() in intent_lower:
+                        target_scene_id = exit.target_scene_id
+                        break
+            
+            if target_scene_id and target_scene_id != session.scene.id:
+                # Switch to new scene (movement doesn't trigger combat)
+                switch_scene(target_scene_id, session_id)
+                # Re-fetch session to get updated state
+                session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
             # Check if this action should trigger combat (only if not a movement action)
             elif _should_trigger_combat(req.intent, req.approach):
                 # Transition to combat

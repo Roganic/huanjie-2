@@ -40,6 +40,8 @@ def _resolve_session(request: Request, create_if_missing: bool) -> tuple[str, ob
 @router.get("/state")
 async def state(request: Request):
     """Return the current game state for clients, including action_history."""
+    from ..state import get_character_rest_status
+    
     session_id, bootstrap = _resolve_session(request, create_if_missing=True)
     result = bootstrap.model_dump(mode="json")
     # Include action_history from session storage
@@ -47,21 +49,17 @@ async def state(request: Request):
     resolved_id = provided_session_id or session_id
     result["action_history"] = get_action_history(resolved_id)
     
-    # Include interactive_elements for the current scene
-    from ..scenes.data import get_scene_by_id
-    scene_data = get_scene_by_id(bootstrap.scene.id)
-    if scene_data and scene_data.interactive_elements:
-        result["current_scene"] = result.get("scene", {})
-        result["current_scene"]["interactive_elements"] = [
-            {
-                "id": elem.id,
-                "name": elem.name,
-                "description": elem.description,
-                "hint": elem.hint,
-                "action_name": elem.action_name,
-            }
-            for elem in scene_data.interactive_elements
-        ]
+    # Include character rest status (hit_dice_remaining, spell_slots)
+    if bootstrap.actor is not None:
+        rest_status = get_character_rest_status(resolved_id)
+        if rest_status:
+            # Add to character object in response
+            if "actor" in result and result["actor"] is not None:
+                result["actor"]["hit_dice_remaining"] = rest_status["hit_dice_remaining"]
+                result["actor"]["hit_dice_total"] = rest_status["hit_dice_total"]
+                result["actor"]["spell_slots"] = rest_status["spell_slots"]
+                result["actor"]["spell_slots_max"] = rest_status["spell_slots_max"]
+    
     return result
 
 

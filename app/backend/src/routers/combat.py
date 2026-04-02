@@ -18,6 +18,7 @@ from combat import (
     start_combat,
 )
 from src.state import (
+    add_items_to_inventory,
     get_actor,
     get_bootstrap_state,
     get_enemy,
@@ -30,6 +31,11 @@ from src.state import (
     _save_session,
     _ADVENTURE_SCENE_INIT,
     Scene,
+)
+from src.loot import (
+    generate_loot_for_enemy,
+    format_loot_for_narrative,
+    get_loot_item_names,
 )
 
 router = APIRouter(prefix="/combat", tags=["combat"])
@@ -308,6 +314,46 @@ async def combat_action(request: Request):
 
         # Sync HP back to session
         _sync_hp_to_session(combat_state, session_id)
+        
+        # Generate loot if combat ended with victory
+        loot_gained = []
+        loot_narrative = ""
+        if combat_state.outcome == CombatOutcome.VICTORY:
+            # Get defeated enemies (all enemies in combat)
+            defeated_enemies = [
+                (c.id, c.name) for c in combat_state.get_enemies() if not c.is_alive()
+            ]
+            
+            # Generate loot for defeated enemies
+            for enemy_id, enemy_name in defeated_enemies:
+                loot = generate_loot_for_enemy(enemy_id, enemy_name)
+                if loot.items:
+                    # Add items to inventory
+                    items_to_add = [(item.item_id, item.name, item.quantity) for item in loot.items]
+                    add_items_to_inventory(items_to_add, session_id=session_id)
+                    
+                    # Build loot response
+                    loot_gained.append({
+                        "enemy_id": enemy_id,
+                        "enemy_name": enemy_name,
+                        "items": [
+                            {
+                                "item_id": item.item_id,
+                                "name": item.name,
+                                "quantity": item.quantity,
+                            }
+                            for item in loot.items
+                        ]
+                    })
+            
+            # Add loot narrative if items were gained
+            if loot_gained:
+                loot_parts = []
+                for entry in loot_gained:
+                    item_names = [f"{item['name']} x{item['quantity']}" if item['quantity'] > 1 else item['name'] for item in entry['items']]
+                    loot_parts.append(f"从{entry['enemy_name']}身上搜到了：{', '.join(item_names)}")
+                loot_narrative = "；".join(loot_parts)
+        
         save_combat_state(combat_state)
 
         response["round_number"] = combat_state.round_number
@@ -316,6 +362,11 @@ async def combat_action(request: Request):
         response["enemy_actions"] = enemy_actions
         response["combat_ended"] = combat_state.outcome != CombatOutcome.ONGOING
         response["victory"] = combat_state.outcome == CombatOutcome.VICTORY
+        response["loot_gained"] = loot_gained
+        
+        # Enhance narrative with loot information if combat ended
+        if combat_state.outcome == CombatOutcome.VICTORY and loot_narrative:
+            response["narrative"] += f" {loot_narrative}"
 
         return response
     finally:

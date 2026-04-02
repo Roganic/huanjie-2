@@ -3668,3 +3668,75 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+
+/* ---------------------------------------------------------------------------
+   Combat Loot Display Styles
+   --------------------------------------------------------------------------- */
+
+.combat-loot-section {
+  margin: 20px 0;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), rgba(212, 175, 55, 0.05));
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 12px;
+  animation: loot-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes loot-glow {
+  from {
+    box-shadow: 0 0 5px rgba(212, 175, 55, 0.2);
+  }
+  to {
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+  }
+}
+
+.combat-loot-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #d4af37;
+  text-align: center;
+}
+
+.combat-loot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.combat-loot-entry {
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  border-left: 3px solid #d4af37;
+}
+
+.loot-enemy-name {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.loot-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.loot-item {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: rgba(212, 175, 55, 0.15);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 16px;
+  font-size: 13px;
+  color: #d4af37;
+  font-weight: 500;
+}
+
+.loot-item::before {
+  content: "✨";
+  margin-right: 4px;
+}

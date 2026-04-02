@@ -142,6 +142,24 @@
 
 **里程碑二最终状态**：✅ 完整游戏循环验收通过，9/9 专项测试通过
 
+## 2026-04-02 — 法师职业完整施法体验验收
+
+**验收状态：通过**
+
+完成法师职业完整施法体验的端到端集成审查与修复：
+
+- ✅ 后端 `Actor` 模型补全 `hit_dice_total`、`hit_dice_remaining`、`spell_slots_max` 字段
+- ✅ `rest_system.py` 中法术槽数据格式统一为 `list[SpellSlot]`，消除与模型定义的不一致
+- ✅ 角色创建时正确初始化法师的 `spell_slots` 和 `spell_slots_max`
+- ✅ 端到端测试覆盖：创建法师 → 施放魔法飞弹 → 法术槽消耗 → 长休恢复
+- ✅ 法术槽耗尽后施法返回明确错误提示，状态不变
+- ✅ 前端 `App.tsx` 的 `SpellSlotsPanel` 已在 `CharacterCard` 中针对法师职业正确渲染
+- ✅ `test_spell_slot_system.py` 20/20 通过
+- ✅ `test_rest_system.py` 14/14 通过（修复了此前的 6 个失败）
+- ✅ 核心战斗/职业特性测试 86/86 通过
+
+**详细审查报告**：`docs/sessions/2026-04-02-mage-spell-slots-integration-acceptance.md`
+
 ---
 
 ## 当前共识

@@ -108,6 +108,9 @@ def _build_hard_constraints(
     effects: Optional[list[Effect]] = None,
     actor: Optional[Actor] = None,
     target: Optional[Actor] = None,
+    combat_round: Optional[int] = None,
+    is_combat_ended: Optional[bool] = None,
+    combat_outcome: Optional[str] = None,
 ) -> list[str]:
     """Backward-compatible wrapper around centralized constraint mapping."""
     return build_hard_constraints(
@@ -119,6 +122,9 @@ def _build_hard_constraints(
             effects=effects,
             actor=actor,
             target=target,
+            combat_round=combat_round,
+            is_combat_ended=is_combat_ended,
+            combat_outcome=combat_outcome,
         )
     )
 
@@ -134,6 +140,9 @@ def _build_narrative_prompt(
     effects: Optional[list[Effect]] = None,
     target: Optional[Actor] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
+    combat_round: Optional[int] = None,
+    is_combat_ended: Optional[bool] = None,
+    combat_outcome: Optional[str] = None,
 ) -> str:
     """Backward-compatible wrapper around centralized prompt building."""
     return build_narrative_prompt(
@@ -148,6 +157,9 @@ def _build_narrative_prompt(
             effects=effects,
             actor=actor,
             target=target,
+            combat_round=combat_round,
+            is_combat_ended=is_combat_ended,
+            combat_outcome=combat_outcome,
         ),
         narrative_history=narrative_history,
     )
@@ -163,6 +175,8 @@ def _fallback_action_result(
     scene: Scene,
     outcome: Outcome,
     attack_result: Optional[dict] = None,
+    is_combat_ended: Optional[bool] = None,
+    combat_round: Optional[int] = None,
 ) -> str:
     """Generate a template fallback narrative when API is unavailable."""
     
@@ -170,9 +184,19 @@ def _fallback_action_result(
         # Combat fallback
         weapon = attack_result.get("weapon", "weapon")
         target = attack_result.get("target", "enemy")
+        hit = attack_result.get("hit", outcome == Outcome.SUCCESS)
+        damage = attack_result.get("damage")
         
-        if outcome == Outcome.SUCCESS:
-            damage = attack_result.get("damage")
+        # Check for combat ended (target defeated)
+        if is_combat_ended:
+            return (
+                f"{actor.name} delivers a decisive strike with the {weapon}, "
+                f"and the {target} collapses to the ground, defeated. "
+                f"The combat concludes as the battlefield falls silent."
+            )
+        
+        if hit:
+            # Hit - include "hits" for test compatibility
             if damage:
                 return (
                     f"{actor.name} lunges forward with {weapon} in hand and hits the {target}. "
@@ -209,6 +233,7 @@ def _fallback_scene_progression(
     scene: Scene,
     outcome: Outcome,
     attack_result: Optional[dict] = None,
+    is_combat_ended: Optional[bool] = None,
 ) -> str:
     """Return a deterministic scene progression when AI is unavailable."""
     if attack_result:
@@ -257,6 +282,7 @@ def _fallback_gm_prompt(
     outcome: Outcome,
     attack_result: Optional[dict] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
+    is_combat_ended: Optional[bool] = None,
 ) -> str:
     history_callback = _build_history_callback(narrative_history)
     time_pressure = (
@@ -296,11 +322,14 @@ def _fallback_narration_bundle(
     outcome: Outcome,
     attack_result: Optional[dict] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
+    combat_round: Optional[int] = None,
+    is_combat_ended: Optional[bool] = None,
+    combat_outcome: Optional[str] = None,
 ) -> NarrationBundle:
     return NarrationBundle(
-        action_result=_fallback_action_result(req, actor, scene, outcome, attack_result),
-        scene_progression=_fallback_scene_progression(req, actor, scene, outcome, attack_result),
-        gm_prompt=_fallback_gm_prompt(req, actor, scene, outcome, attack_result, narrative_history),
+        action_result=_fallback_action_result(req, actor, scene, outcome, attack_result, is_combat_ended, combat_round),
+        scene_progression=_fallback_scene_progression(req, actor, scene, outcome, attack_result, is_combat_ended),
+        gm_prompt=_fallback_gm_prompt(req, actor, scene, outcome, attack_result, narrative_history, is_combat_ended),
     )
 
 
@@ -387,6 +416,9 @@ def generate_narration(
     effects: Optional[list[Effect]] = None,
     target: Optional[Actor] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
+    combat_round: Optional[int] = None,
+    is_combat_ended: Optional[bool] = None,
+    combat_outcome: Optional[str] = None,
 ) -> NarrationBundle:
     """Generate structured narrative text for an action resolution.
     
@@ -405,6 +437,9 @@ def generate_narration(
         attack_result: Optional attack details
         effects: Optional list of state change effects
         target: Optional target actor (for combat context)
+        combat_round: Optional combat round number
+        is_combat_ended: Whether combat has ended
+        combat_outcome: Combat outcome if ended ('victory', 'defeat')
         
     Returns:
         Narration bundle for action result and scene progression
@@ -417,6 +452,9 @@ def generate_narration(
         effects=effects,
         actor=actor,
         target=target,
+        combat_round=combat_round,
+        is_combat_ended=is_combat_ended,
+        combat_outcome=combat_outcome,
     )
     prompt = _build_narrative_prompt(
         req=req,
@@ -429,6 +467,9 @@ def generate_narration(
         effects=effects,
         target=target,
         narrative_history=narrative_history,
+        combat_round=combat_round,
+        is_combat_ended=is_combat_ended,
+        combat_outcome=combat_outcome,
     )
 
     def _run_provider(current_prompt: str) -> Optional[NarrationBundle]:
@@ -506,4 +547,7 @@ def generate_narration(
         outcome,
         attack_result,
         narrative_history,
+        combat_round=combat_round,
+        is_combat_ended=is_combat_ended,
+        combat_outcome=combat_outcome,
     )

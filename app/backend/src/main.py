@@ -76,6 +76,7 @@ async def list_saves():
         - save_name: Display name
         - character_name: Character name if exists
         - class: Character class if exists
+        - character_level: Character level if exists
         - hp: Current HP if exists
         - hp_max: Max HP if exists
         - scene_name: Current scene name if exists
@@ -91,6 +92,7 @@ async def list_saves():
                 "save_name": save.save_name,
                 "character_name": save.character_name,
                 "class": save.character_class,
+                "character_level": save.character_level,
                 "hp": save.hp,
                 "hp_max": save.hp_max,
                 "scene_name": save.scene_name,

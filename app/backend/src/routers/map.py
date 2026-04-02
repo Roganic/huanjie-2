@@ -33,7 +33,8 @@ def _build_map_topology() -> tuple[list[MapNode], list[MapConnection]]:
             id=scene_id,
             name=node.name,
             description=node.description[:100] + "..." if len(node.description) > 100 else node.description,
-            exits=[{"direction": e.direction, "target_scene_id": e.target_scene_id} for e in node.exits]
+            exits=[{"direction": e.direction, "target_scene_id": e.target_scene_id} for e in node.exits],
+            connections=[e.target_scene_id for e in node.exits],
         )
         nodes.append(map_node)
         

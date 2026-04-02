@@ -94,7 +94,8 @@ VILLAGE_SQUARE_NODE = SceneMapNode(
     ),
     exits=[
         SceneExitInfo(direction="north", target_scene_id="tavern-01", description="通往酒馆的小路"),
-        SceneExitInfo(direction="east", target_scene_id="dungeon-entrance-01", description="通向森林的小路"),
+        SceneExitInfo(direction="east", target_scene_id="dungeon-entrance-01", description="通向地下城的小路"),
+        SceneExitInfo(direction="south", target_scene_id="forest-path-01", description="通往幽暗森林的小径"),
     ],
     encounter_config=EncounterConfig(
         encounter_rate=0.1,  # 10% chance
@@ -167,11 +168,13 @@ DUNGEON_ENTRANCE_NODE = SceneMapNode(
         "一座古老的石门半埋在藤蔓之中，门上刻满了风化的符文。"
         "入口旁躺着一具石像守卫的残骸，似乎经历过激烈的战斗。"
         "不远处，一个受伤的矮人靠在树干上，神情惊恐地看着地下城的方向。"
-        "向西可以返回村庄，向下则进入危险的地下宝库。"
+        "向西可以返回村庄，向下则进入危险的地下宝库，向南通往古庙废墟。"
     ),
     exits=[
         SceneExitInfo(direction="west", target_scene_id="village-square-01", description="返回村庄广场"),
         SceneExitInfo(direction="down", target_scene_id="vault-01", description="进入地下城宝库"),
+        SceneExitInfo(direction="south", target_scene_id="ancient-temple-01", description="前往古庙废墟"),
+        SceneExitInfo(direction="north", target_scene_id="combat-encounter-01", description="进入地下城通道"),
     ],
     encounter_config=EncounterConfig(
         encounter_rate=0.3,  # 30% chance - dangerous area
@@ -192,20 +195,134 @@ DUNGEON_ENTRANCE_NODE = SceneMapNode(
         "检查石门上的符文",
         "向西返回村庄",
         "向下进入宝库",
+        "向南前往古庙废墟",
+        "向北进入地下城通道",
     ],
 )
 
-# Scene 4: The Vault (treasure room)
+# Scene 4: Combat Encounter (goblin patrol in dungeon corridor)
+COMBAT_ENCOUNTER_NODE = SceneMapNode(
+    scene_id="combat-encounter-01",
+    name="地下城通道",
+    description=(
+        "狭窄的地下通道，墙壁上长满了发光的苔藓，提供微弱的照明。"
+        "前方传来沙沙声和低沉的念诵声。"
+        "几只哥布林从阴影中窜出，挡住了去路，其中一只头戴骨饰，似乎是个施法者。"
+    ),
+    exits=[
+        SceneExitInfo(direction="south", target_scene_id="dungeon-entrance-01", description="返回地下城入口"),
+    ],
+    encounter_config=EncounterConfig(
+        encounter_rate=0.8,  # 80% chance - combat zone
+        possible_encounters=["goblin-01", "goblin-shaman-01", "wolf-01"],
+        encounter_description="哥布林们发现了你！"
+    ),
+    npcs=[
+        NPC(id="goblin-01", name="哥布林斥候", type=NPCType.HOSTILE,
+            description="一只瘦小的哥布林，手持锈迹斑斑的匕首，眼中闪烁着贪婪的光芒。",
+            race="哥布林", occupation="斥候"),
+        NPC(id="goblin-shaman-01", name="哥布林萨满", type=NPCType.HOSTILE,
+            description="头戴骨饰的哥布林施法者，正在低声念诵某种咒语。",
+            race="哥布林", occupation="萨满"),
+        NPC(id="wolf-01", name="座狼", type=NPCType.HOSTILE,
+            description="一只体型巨大的灰狼，獠牙外露，口水滴落在地上。",
+            race="野兽", occupation="战斗伙伴"),
+    ],
+    available_actions=[
+        "与哥布林战斗",
+        "尝试与哥布林谈判",
+        "悄悄后退，返回入口",
+        "利用通道的狭窄地形",
+    ],
+)
+
+# Scene 5: Forest Path (branch path from village square)
+FOREST_PATH_NODE = SceneMapNode(
+    scene_id="forest-path-01",
+    name="幽暗森林小径",
+    description=(
+        "一条蜿蜒穿过古老森林的小径，参天大树遮蔽了大部分阳光，只有零星的光束穿透树冠。"
+        "空气中弥漫着潮湿泥土和松针的气息，远处偶尔传来不明生物的叫声。"
+        "小径两侧长满了各种草药植物，一个经验丰富的采集者也许能找到有价值的东西。"
+    ),
+    exits=[
+        SceneExitInfo(direction="north", target_scene_id="village-square-01", description="返回村庄广场"),
+        SceneExitInfo(direction="east", target_scene_id="ancient-temple-01", description="前往古庙废墟"),
+    ],
+    encounter_config=EncounterConfig(
+        encounter_rate=0.2,  # 20% chance - light danger
+        possible_encounters=["wolf-01"],
+        encounter_description="一只野狼从树丛中冲出！"
+    ),
+    npcs=[
+        NPC(id="forest-hermit-01", name="隐士阿德里安", type=NPCType.FRIENDLY,
+            description="住在森林中的老隐士，精通草药知识，对森林中的秘密了如指掌。",
+            race="人类", occupation="隐士"),
+        NPC(id="forest-wolf-01", name="野狼", type=NPCType.HOSTILE,
+            description="一只在森林中游荡的野狼，正在警惕地打量着入侵者。",
+            race="野兽", occupation="野生动物"),
+    ],
+    available_actions=[
+        "与隐士阿德里安交谈",
+        "搜索草药",
+        "观察野狼的动向",
+        "向北返回村庄广场",
+        "向东前往古庙废墟",
+    ],
+)
+
+# Scene 6: Ancient Temple Ruins (with skeleton combat and altar interaction)
+ANCIENT_TEMPLE_NODE = SceneMapNode(
+    scene_id="ancient-temple-01",
+    name="古庙废墟",
+    description=(
+        "一座被岁月侵蚀的古老神庙，大部分屋顶已经坍塌，只剩下几根粗大的石柱矗立着。"
+        "地面上散落着破碎的祭坛碎片和风化的石像。"
+        "神庙深处隐约可见一个发光的祭坛，散发出神秘的蓝色光芒。"
+    ),
+    exits=[
+        SceneExitInfo(direction="west", target_scene_id="forest-path-01", description="返回森林小径"),
+        SceneExitInfo(direction="north", target_scene_id="dungeon-entrance-01", description="前往地下城入口"),
+        SceneExitInfo(direction="down", target_scene_id="vault-01", description="进入地下宝库"),
+    ],
+    encounter_config=EncounterConfig(
+        encounter_rate=0.6,  # 60% chance - undead patrol
+        possible_encounters=["skeleton-warrior-01", "skeleton-archer-01"],
+        encounter_description="骷髅守卫向你发起攻击！"
+    ),
+    npcs=[
+        NPC(id="skeleton-warrior-01", name="骷髅战士", type=NPCType.HOSTILE,
+            description="一具披着锈蚀铠甲的骷髅，手持断剑，眼眶中燃烧着幽蓝色的鬼火。",
+            race="亡灵", occupation="守卫"),
+        NPC(id="skeleton-archer-01", name="骷髅弓手", type=NPCType.HOSTILE,
+            description="一具骷髅弓手，手持腐朽的弓，正在废墟高处巡逻。",
+            race="亡灵", occupation="弓手"),
+        NPC(id="ghost-priest-01", name="幽灵祭司", type=NPCType.NEUTRAL,
+            description="一个半透明的幽灵，穿着古代祭司的服装，神情悲伤地飘荡在神庙中。",
+            race="亡灵", occupation="祭司"),
+    ],
+    available_actions=[
+        "与骷髅战士战斗",
+        "尝试与幽灵祭司交谈",
+        "检查发光的祭坛",
+        "向西返回森林小径",
+        "向北前往地下城入口",
+        "向下进入地下宝库",
+    ],
+)
+
+# Scene 7: The Vault (treasure room - with chest event)
 VAULT_NODE = SceneMapNode(
     scene_id="vault-01",
     name="古老宝库",
     description=(
-        "地下深处的一间石室，墙壁上镶嵌着发出微光的水晶。"
-        "中央的石台上放着一个古老的宝箱，周围散落着一些金币和珠宝。"
+        "地下深处的一间石室，墙壁上镶嵌着发出微光的水晶，照亮了整个空间。"
+        "中央的石台上放着一个古老的宝箱，铁锁已经锈迹斑斑，周围散落着一些金币和珠宝碎片。"
         "空气中弥漫着古老魔法的气息，让人既兴奋又警惕。"
     ),
     exits=[
         SceneExitInfo(direction="up", target_scene_id="dungeon-entrance-01", description="返回地下城入口"),
+        SceneExitInfo(direction="north", target_scene_id="ancient-temple-01", description="返回古庙废墟"),
     ],
     encounter_config=EncounterConfig(
         encounter_rate=0.5,  # 50% chance - very dangerous
@@ -213,15 +330,17 @@ VAULT_NODE = SceneMapNode(
         encounter_description="守护宝库的敌人出现了！"
     ),
     npcs=[
-        NPC(id="treasure-guardian-01", name="宝箱守护者", type=NPCType.HOSTILE,
+        NPC(id="treasure-guardian-01", name="宝库守护傀儡", type=NPCType.HOSTILE,
             description="守护着宝箱的魔法构造体，虽然已经残破但仍然危险。",
             race="构造体", occupation="守护者"),
     ],
     available_actions=[
-        "打开宝箱",
-        "搜索周围的金币",
-        "检查墙壁上的水晶",
+        "搜索宝箱",
+        "检查骷髅手中的钥匙",
+        "搜索散落的金币",
+        "与宝库守护傀儡战斗",
         "向上返回地下城入口",
+        "向北返回古庙废墟",
     ],
 )
 
@@ -230,6 +349,9 @@ SCENE_MAP: dict[str, SceneMapNode] = {
     VILLAGE_SQUARE_NODE.scene_id: VILLAGE_SQUARE_NODE,
     TAVERN_NODE.scene_id: TAVERN_NODE,
     DUNGEON_ENTRANCE_NODE.scene_id: DUNGEON_ENTRANCE_NODE,
+    COMBAT_ENCOUNTER_NODE.scene_id: COMBAT_ENCOUNTER_NODE,
+    FOREST_PATH_NODE.scene_id: FOREST_PATH_NODE,
+    ANCIENT_TEMPLE_NODE.scene_id: ANCIENT_TEMPLE_NODE,
     VAULT_NODE.scene_id: VAULT_NODE,
 }
 
@@ -269,9 +391,30 @@ SCENE_NAME_ALIASES: dict[str, str] = {
     
     # Vault aliases
     "宝库": "vault-01",
-    "地下城": "vault-01",
+    "地下宝库": "vault-01",
+    "古老宝库": "vault-01",
     "vault": "vault-01",
     "treasure room": "vault-01",
+
+    # Combat encounter aliases
+    "地下城通道": "combat-encounter-01",
+    "通道": "combat-encounter-01",
+    "combat encounter": "combat-encounter-01",
+
+    # Forest path aliases
+    "幽暗森林小径": "forest-path-01",
+    "森林小径": "forest-path-01",
+    "幽暗森林": "forest-path-01",
+    "小径": "forest-path-01",
+    "forest path": "forest-path-01",
+
+    # Ancient temple aliases
+    "古庙废墟": "ancient-temple-01",
+    "古庙": "ancient-temple-01",
+    "神庙": "ancient-temple-01",
+    "废墟": "ancient-temple-01",
+    "ancient temple": "ancient-temple-01",
+    "temple": "ancient-temple-01",
 }
 
 

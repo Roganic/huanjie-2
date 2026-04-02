@@ -343,7 +343,10 @@ async def submit_action(req: ActionRequest, request: Request):
             
             if element is not None:
                 # Handle scene interaction with skill check
-                result, _ = handle_scene_interaction(req, element)
+                result, interaction_result = handle_scene_interaction(req, element)
+                # Apply effects (inventory_add, hp changes, etc.)
+                if result.effects:
+                    apply_effects(result.effects, session_id=session_id)
             else:
                 # Use agent orchestrator for non-scene interactions
                 result = await asyncio.to_thread(resolve_action_with_agent, req)

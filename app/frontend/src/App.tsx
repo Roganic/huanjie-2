@@ -125,6 +125,29 @@ interface CharacterDraft {
   abilityGeneration: "standard_array" | "random_4d6" | "manual";
 }
 
+interface AttributeWithModifier {
+  score: number;
+  modifier: number;
+}
+
+interface CharacterSkillFromAPI {
+  name: string;
+  ability: string;
+  proficient: boolean;
+  modifier: number;
+}
+
+interface CharacterCardFromAPI {
+  name: string;
+  class: CharacterClass;
+  level: number;
+  proficiency_bonus: number;
+  attributes: Record<string, AttributeWithModifier>;
+  hp: { current: number; max: number };
+  ac: number;
+  skills: CharacterSkillFromAPI[];
+}
+
 type Skill = {
   name: string;
   ability: keyof AbilityScores;
@@ -168,6 +191,28 @@ const ABILITY_LABELS: Record<string, string> = {
   int: "智力",
   wis: "感知",
   cha: "魅力",
+};
+
+// Skill name mapping from backend (English) to display (Chinese)
+const SKILL_NAME_MAP: Record<string, string> = {
+  athletics: "运动",
+  acrobatics: "杂技",
+  sleight_of_hand: "巧手",
+  stealth: "隐匿",
+  arcana: "奥秘",
+  history: "历史",
+  investigation: "调查",
+  nature: "自然",
+  religion: "宗教",
+  animal_handling: "驯兽",
+  insight: "洞察",
+  medicine: "医药",
+  perception: "察觉",
+  survival: "生存",
+  deception: "欺骗",
+  intimidation: "威吓",
+  performance: "表演",
+  persuasion: "说服",
 };
 
 const ABILITY_KEYS: (keyof AbilityScores)[] = ["str", "dex", "con", "int", "wis", "cha"];
@@ -475,49 +520,35 @@ function StatusEffect({ name, isNew }: { name: string; isNew?: boolean }) {
   );
 }
 
-function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolean }) {
-  const profBonus = actor.proficiency_bonus;
-  const classProfSkills = CLASS_SKILLS[actor.character_class ?? "warrior"] ?? [];
+function SkillsList({ actor, compact = false, characterCard }: { actor: Actor; compact?: boolean; characterCard?: CharacterCardFromAPI | null }) {
+  // Use skills from character card API if available, otherwise fall back to actor.skills
+  const skills = characterCard?.skills ?? actor.skills ?? [];
   
-  // Merge standard skills with extra skills (e.g., Arcana for mages)
-  const allSkills = [...SKILLS, ...EXTRA_SKILLS];
-
   if (compact) {
-    // Show only proficient skills (class proficiencies)
-    const proficientSkills = allSkills.filter(
-      (s) => classProfSkills.includes(s.name)
-    );
+    // Show only proficient skills
+    const proficientSkills = skills.filter((s) => s.proficient);
     return (
       <div className="skills-list-compact">
-        {proficientSkills.map((skill) => {
-          const abilityMod = getModifier(actor.abilities[skill.ability]);
-          const total = abilityMod + profBonus;
-          return (
-            <div key={skill.name} className="skill-item-compact proficient">
-              <span className="skill-name">{skill.name}</span>
-              <span className="skill-bonus">{formatModifier(total)}</span>
-            </div>
-          );
-        })}
+        {proficientSkills.map((skill) => (
+          <div key={skill.name} className="skill-item-compact proficient">
+            <span className="skill-name">{SKILL_NAME_MAP[skill.name] ?? skill.name}</span>
+            <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
+          </div>
+        ))}
       </div>
     );
   }
 
   return (
     <div className="skills-list">
-      {allSkills.map((skill) => {
-        const abilityMod = getModifier(actor.abilities[skill.ability]);
-        const isProficient = classProfSkills.includes(skill.name);
-        const total = abilityMod + (isProficient ? profBonus : 0);
-        return (
-          <div key={skill.name} className={`skill-item ${isProficient ? "proficient" : ""}`}>
-            <span className="skill-dot">{isProficient ? "●" : "○"}</span>
-            <span className="skill-name">{skill.name}</span>
-            <span className="skill-ability">({ABILITY_LABELS[skill.ability]})</span>
-            <span className="skill-bonus">{formatModifier(total)}</span>
-          </div>
-        );
-      })}
+      {skills.map((skill) => (
+        <div key={skill.name} className={`skill-item ${skill.proficient ? "proficient" : ""}`}>
+          <span className="skill-dot">{skill.proficient ? "●" : "○"}</span>
+          <span className="skill-name">{SKILL_NAME_MAP[skill.name] ?? skill.name}</span>
+          <span className="skill-ability">({ABILITY_LABELS[skill.ability] ?? skill.ability})</span>
+          <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1105,6 +1136,25 @@ function restoreTimelineFromHistory(history: NarrativeHistoryEntry[]): TimelineE
     .sort((left, right) => right.timestamp - left.timestamp);
 }
 
+async function fetchCharacter(sessionId: string | null): Promise<CharacterCardFromAPI | null> {
+  if (!sessionId) return null;
+  try {
+    const response = await fetch(apiUrl("/character"), {
+      headers: buildSessionHeaders(sessionId),
+    });
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`Failed to fetch character: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching character:", error);
+    return null;
+  }
+}
+
 function App() {
   const [sessionId, setSessionId] = useState<string | null>(() => getStoredSessionId());
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1125,12 +1175,24 @@ function App() {
     abilityGeneration: "standard_array",
   });
   const [creationError, setCreationError] = useState<string | null>(null);
+  const [characterCard, setCharacterCard] = useState<CharacterCardFromAPI | null>(null);
   const messagesEnd = useRef<HTMLDivElement>(null);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
   const newConditions = useMemo(() => stateDiff.newConditions, [stateDiff]);
   const inAdventure = bootstrap?.phase === "adventure" && bootstrap.actor !== null;
+
+  // Fetch character card when entering adventure mode
+  useEffect(() => {
+    if (inAdventure && sessionId) {
+      fetchCharacter(sessionId).then((card) => {
+        setCharacterCard(card);
+      });
+    } else if (!inAdventure) {
+      setCharacterCard(null);
+    }
+  }, [inAdventure, sessionId]);
 
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
@@ -1808,7 +1870,7 @@ function App() {
 
             <section>
               <h2>技能</h2>
-              <SkillsList actor={bootstrap.actor} compact />
+              <SkillsList actor={bootstrap.actor} compact characterCard={characterCard} />
             </section>
 
             {bootstrap.actor.conditions && bootstrap.actor.conditions.length > 0 && (

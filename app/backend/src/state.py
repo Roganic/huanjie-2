@@ -27,6 +27,7 @@ from .models.state import (
     CharacterCreateRequest,
     CharacterSkill,
     DEFAULT_ARMORS,
+    DEFAULT_CONSUMABLES,
     DEFAULT_WEAPONS,
     EquippedItems,
     GamePhase,
@@ -598,7 +599,9 @@ def create_character(
 
         # Get starting equipment for the class
         weapon, armor = _get_starting_equipment(req.character_class)
-        inventory = [weapon, armor]
+        # Give every character a healing potion to start with
+        potion = InventoryItem.from_consumable(DEFAULT_CONSUMABLES["healing_potion"])
+        inventory = [weapon, armor, potion]
         equipped = EquippedItems(weapon=weapon, armor=armor)
 
         # Calculate AC based on equipped armor
@@ -780,6 +783,16 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
         elif eff.field == "spell_slot_consumed" and isinstance(eff.delta, int):
             # Spell slot already consumed by spell resolver, this is just for tracking
             pass
+        elif eff.field == "inventory_remove" and isinstance(eff.delta, str):
+            # Remove consumed item from inventory
+            if session.actor is not None:
+                new_inventory = [
+                    item for item in actor.inventory
+                    if item.name.lower() != eff.delta.lower()
+                ]
+                session.actor = actor.model_copy(
+                    update={"inventory": new_inventory}
+                )
         elif eff.field == "spell_slots_restored":
             # Spell slots already restored by rest resolver, this is just for tracking
             pass
@@ -863,7 +876,8 @@ def _create_fresh_session(session_id: str) -> SessionData:
 
         # Get starting equipment for warrior
         weapon, armor = _get_starting_equipment(CharacterClass.WARRIOR)
-        inventory = [weapon, armor]
+        potion = InventoryItem.from_consumable(DEFAULT_CONSUMABLES["healing_potion"])
+        inventory = [weapon, armor, potion]
         equipped = EquippedItems(weapon=weapon, armor=armor)
 
         # Calculate AC based on equipped armor
@@ -964,6 +978,38 @@ def _persist_session(session: SessionData) -> None:
 def _delete_session(session_id: str) -> None:
     _sessions.pop(session_id, None)
     _session_file(session_id).unlink(missing_ok=True)
+
+
+def add_items_to_inventory(items: list[InventoryItem], session_id: str | None = None) -> None:
+    """Add items to the actor's inventory."""
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.actor is not None:
+            new_inventory = [*session.actor.inventory, *items]
+            session.actor = session.actor.model_copy(update={"inventory": new_inventory})
+        _save_session(session)
+
+
+def remove_item_from_inventory(item_name: str, session_id: str | None = None) -> bool:
+    """Remove an item from the actor's inventory by name.
+    
+    Returns True if an item was removed, False otherwise.
+    """
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.actor is None:
+            _save_session(session)
+            return False
+        new_inventory = [
+            item for item in session.actor.inventory
+            if item.name.lower() != item_name.lower()
+        ]
+        removed = len(new_inventory) < len(session.actor.inventory)
+        session.actor = session.actor.model_copy(update={"inventory": new_inventory})
+        _save_session(session)
+        return removed
 
 
 def _is_expired(session: SessionData) -> bool:

@@ -17,6 +17,12 @@ from combat import (
     save_combat_state,
     start_combat,
 )
+from src.rules.calculations import CLASS_HIT_DICE, proficiency_bonus
+from src.rules.experience import (
+    get_enemy_xp_reward,
+    calculate_level_up,
+    get_xp_progress,
+)
 from src.state import (
     get_actor,
     get_bootstrap_state,
@@ -214,6 +220,87 @@ async def combat_state_endpoint(request: Request):
     }
 
 
+def _award_xp_on_victory(session_id: str, combat_state) -> dict | None:
+    """Award XP when enemy is defeated. Returns level_up info if applicable."""
+    from src.rules.experience import get_enemy_xp_reward, calculate_level_up
+    
+    with _SESSION_LOCK:
+        session = _get_session(session_id, create_if_missing=False)
+        if session.actor is None:
+            return None
+        
+        actor = session.actor
+        
+        # Check if enemy was defeated (HP <= 0 or has 'defeated' condition)
+        enemy_defeated = False
+        enemy_name = ""
+        for combatant in combat_state.combatants:
+            if combatant.type == CombatantType.ENEMY:
+                if combatant.hp <= 0 or combatant.status.value == "defeated":
+                    enemy_defeated = True
+                    enemy_name = combatant.name
+                    break
+        
+        # Also check session enemy
+        if not enemy_defeated and session.enemy.hp <= 0:
+            enemy_defeated = True
+            enemy_name = session.enemy.name
+        
+        if not enemy_defeated:
+            return None
+        
+        # Get XP reward
+        xp_gained = get_enemy_xp_reward(enemy_name)
+        
+        # Calculate level-up
+        con_modifier = actor.abilities.modifier("con")
+        new_xp, level_up_result = calculate_level_up(
+            current_level=actor.level,
+            current_xp=actor.experience_points,
+            xp_gained=xp_gained,
+            con_modifier=con_modifier,
+            character_class=actor.character_class,
+        )
+        
+        # Update actor
+        updates = {"experience_points": new_xp}
+        
+        if level_up_result and level_up_result.leveled_up:
+            updates["level"] = level_up_result.new_level
+            updates["proficiency_bonus"] = level_up_result.new_proficiency_bonus
+            # Recalculate HP max based on new level
+            hit_die = CLASS_HIT_DICE[actor.character_class]
+            # Calculate new HP max: base at level 1 + increases per level
+            # Simple formula: (hit_die + con_mod) at level 1 + avg per additional level
+            base_hp = hit_die + con_modifier
+            if level_up_result.new_level > 1:
+                hp_per_level = (hit_die // 2) + 1 + con_modifier
+                new_hp_max = base_hp + hp_per_level * (level_up_result.new_level - 1)
+            else:
+                new_hp_max = base_hp
+            updates["hp_max"] = new_hp_max
+            # Also heal to full on level up
+            updates["hp"] = new_hp_max
+        
+        session.actor = actor.model_copy(update=updates)
+        _save_session(session)
+        
+        result = {
+            "xp_gained": xp_gained,
+            "total_xp": new_xp,
+        }
+        
+        if level_up_result and level_up_result.leveled_up:
+            result["level_up"] = {
+                "old_level": level_up_result.old_level,
+                "new_level": level_up_result.new_level,
+                "hp_increase": level_up_result.hp_increase,
+                "new_proficiency_bonus": level_up_result.new_proficiency_bonus,
+            }
+        
+        return result
+
+
 @router.post("/action")
 async def combat_action(request: Request):
     """Execute a combat action (attack or skill check)."""
@@ -306,6 +393,11 @@ async def combat_action(request: Request):
                 # Could not execute turn, skip to next
                 next_turn(combat_state)
 
+        # Award XP if victory
+        xp_result = None
+        if combat_state.outcome == CombatOutcome.VICTORY:
+            xp_result = _award_xp_on_victory(session_id, combat_state)
+
         # Sync HP back to session
         _sync_hp_to_session(combat_state, session_id)
         save_combat_state(combat_state)
@@ -316,6 +408,12 @@ async def combat_action(request: Request):
         response["enemy_actions"] = enemy_actions
         response["combat_ended"] = combat_state.outcome != CombatOutcome.ONGOING
         response["victory"] = combat_state.outcome == CombatOutcome.VICTORY
+        
+        # Add XP and level-up info to response
+        if xp_result:
+            response["xp_gained"] = xp_result.get("xp_gained", 0)
+            if "level_up" in xp_result:
+                response["level_up"] = xp_result["level_up"]
 
         return response
     finally:

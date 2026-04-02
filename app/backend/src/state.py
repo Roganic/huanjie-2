@@ -679,6 +679,7 @@ def get_character_card(session_id: str | None = None) -> CharacterCard | None:
         ],
         inventory=[_inventory_item_to_dict(item) for item in actor.inventory],
         equipped=equipped_dict,
+        experience_points=actor.experience_points,
     )
 
 

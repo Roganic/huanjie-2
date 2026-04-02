@@ -23,7 +23,7 @@ from ..models.action import (
     Effect,
     Outcome,
 )
-from ..models.state import Actor, NarrativeHistoryEntry, Scene
+from ..models.state import Actor, NarrativeHistoryEntry, NPC, Scene
 from ..config import get_llm_config
 from ..llm_client import OpenAICompatibleClient
 from .resolution_constraints import (
@@ -112,6 +112,7 @@ def _build_hard_constraints(
     combat_round: Optional[int] = None,
     is_combat_ended: Optional[bool] = None,
     combat_outcome: Optional[str] = None,
+    npc_target: Optional[NPC] = None,
 ) -> list[str]:
     """Backward-compatible wrapper around centralized constraint mapping."""
     return build_hard_constraints(
@@ -126,6 +127,7 @@ def _build_hard_constraints(
             combat_round=combat_round,
             is_combat_ended=is_combat_ended,
             combat_outcome=combat_outcome,
+            npc_target=npc_target,
         )
     )
 
@@ -144,6 +146,7 @@ def _build_narrative_prompt(
     combat_round: Optional[int] = None,
     is_combat_ended: Optional[bool] = None,
     combat_outcome: Optional[str] = None,
+    npc_target: Optional[NPC] = None,
 ) -> str:
     """Backward-compatible wrapper around centralized prompt building."""
     return build_narrative_prompt(
@@ -161,6 +164,7 @@ def _build_narrative_prompt(
             combat_round=combat_round,
             is_combat_ended=is_combat_ended,
             combat_outcome=combat_outcome,
+            npc_target=npc_target,
         ),
         narrative_history=narrative_history,
     )
@@ -178,6 +182,7 @@ def _fallback_action_result(
     attack_result: Optional[dict] = None,
     is_combat_ended: Optional[bool] = None,
     combat_round: Optional[int] = None,
+    npc_target: Optional[NPC] = None,
 ) -> str:
     """Generate a template fallback narrative when API is unavailable."""
     
@@ -215,6 +220,13 @@ def _fallback_action_result(
                 f"but misses as the {target} dances aside at the last moment."
             )
     
+    # NPC interaction fallback
+    if npc_target:
+        return (
+            f"{actor.name} approaches {npc_target.name} and tries to {req.intent}. "
+            f"The interaction proceeds as expected, with {npc_target.name} responding in kind."
+        )
+
     # General action fallback
     if outcome == Outcome.SUCCESS:
         return (
@@ -235,6 +247,7 @@ def _fallback_scene_progression(
     outcome: Outcome,
     attack_result: Optional[dict] = None,
     is_combat_ended: Optional[bool] = None,
+    npc_target: Optional[NPC] = None,
 ) -> str:
     """Return a deterministic scene progression when AI is unavailable."""
     if attack_result:
@@ -247,6 +260,12 @@ def _fallback_scene_progression(
         return (
             f"The {target} regains footing as the fight resets for a heartbeat, and nearby movement grows tense. "
             f"You can reposition, watch for a counterattack, or call out to control the next exchange."
+        )
+
+    if npc_target:
+        return (
+            f"The conversation with {npc_target.name} settles into the atmosphere of {scene.name}. "
+            f"Others nearby continue their business, though some may be listening."
         )
 
     if outcome == Outcome.SUCCESS:
@@ -284,6 +303,7 @@ def _fallback_gm_prompt(
     attack_result: Optional[dict] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
     is_combat_ended: Optional[bool] = None,
+    npc_target: Optional[NPC] = None,
 ) -> str:
     history_callback = _build_history_callback(narrative_history)
     time_pressure = (
@@ -302,6 +322,12 @@ def _fallback_gm_prompt(
         return (
             f"{target} has seen your line now and the fight threatens to turn back on you."
             f"{history_callback}{time_pressure} What do you do before the counterpressure lands?"
+        )
+
+    if npc_target:
+        return (
+            f"{npc_target.name} seems to be waiting for your next words or action."
+            f"{history_callback}{time_pressure} Do you continue the conversation, change the subject, or move on?"
         )
 
     if outcome == Outcome.SUCCESS:
@@ -326,11 +352,12 @@ def _fallback_narration_bundle(
     combat_round: Optional[int] = None,
     is_combat_ended: Optional[bool] = None,
     combat_outcome: Optional[str] = None,
+    npc_target: Optional[NPC] = None,
 ) -> NarrationBundle:
     return NarrationBundle(
-        action_result=_fallback_action_result(req, actor, scene, outcome, attack_result, is_combat_ended, combat_round),
-        scene_progression=_fallback_scene_progression(req, actor, scene, outcome, attack_result, is_combat_ended),
-        gm_prompt=_fallback_gm_prompt(req, actor, scene, outcome, attack_result, narrative_history, is_combat_ended),
+        action_result=_fallback_action_result(req, actor, scene, outcome, attack_result, is_combat_ended, combat_round, npc_target),
+        scene_progression=_fallback_scene_progression(req, actor, scene, outcome, attack_result, is_combat_ended, npc_target),
+        gm_prompt=_fallback_gm_prompt(req, actor, scene, outcome, attack_result, narrative_history, is_combat_ended, npc_target),
     )
 
 
@@ -422,6 +449,7 @@ def generate_narration(
     combat_round: Optional[int] = None,
     is_combat_ended: Optional[bool] = None,
     combat_outcome: Optional[str] = None,
+    npc_target: Optional[NPC] = None,
 ) -> NarrationBundle:
     """Generate structured narrative text for an action resolution.
     
@@ -458,6 +486,7 @@ def generate_narration(
         combat_round=combat_round,
         is_combat_ended=is_combat_ended,
         combat_outcome=combat_outcome,
+        npc_target=npc_target,
     )
     prompt = _build_narrative_prompt(
         req=req,
@@ -473,6 +502,7 @@ def generate_narration(
         combat_round=combat_round,
         is_combat_ended=is_combat_ended,
         combat_outcome=combat_outcome,
+        npc_target=npc_target,
     )
 
     # Log combat narrative prompts for observability
@@ -565,4 +595,5 @@ def generate_narration(
         combat_round=combat_round,
         is_combat_ended=is_combat_ended,
         combat_outcome=combat_outcome,
+        npc_target=npc_target,
     )

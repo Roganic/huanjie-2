@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..models.action import ActionRequest, Effect, Outcome
-from ..models.state import Actor, NarrativeHistoryEntry, Scene
+from ..models.state import Actor, NarrativeHistoryEntry, NPC, Scene
 from ..state import get_combat_state
 
 logger = logging.getLogger(__name__)
@@ -193,6 +193,8 @@ class NarrationConstraintContext:
     combat_round: Optional[int] = None
     is_combat_ended: Optional[bool] = None
     combat_outcome: Optional[str] = None
+    # NPC interaction context
+    npc_target: Optional[NPC] = None
 
 
 @dataclass
@@ -357,8 +359,16 @@ def build_narrative_prompt(
             lines.append(f"熟练技能 / Proficient Skills: {', '.join(proficient_skills)}")
     lines.append("")
 
+    if context.npc_target:
+        lines.append(f"互动目标NPC / NPC Target: {context.npc_target.name}")
+        if context.npc_target.role:
+            lines.append(f"NPC角色类型 / NPC Role: {context.npc_target.role}")
+        if context.npc_target.description:
+            lines.append(f"NPC描述 / NPC Description: {context.npc_target.description}")
+        lines.append("")
+
     if context.target:
-        lines.append(f"目标 / Target: {context.target.name}")
+        lines.append(f"战斗目标 / Combat Target: {context.target.name}")
         lines.append(
             f"目标状态 / Target Status: HP {context.target.hp}/{context.target.hp_max}, Conditions={context.target.conditions or []}"
         )

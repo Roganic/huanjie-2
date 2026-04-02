@@ -71,6 +71,21 @@ interface AbilityScores {
   cha: number;
 }
 
+interface InventoryItem {
+  id: string;
+  name: string;
+  type: "weapon" | "armor";
+  description?: string;
+  damage_dice?: string;
+  attack_ability?: string;
+  base_ac?: number;
+}
+
+interface EquippedItems {
+  weapon: InventoryItem | null;
+  armor: InventoryItem | null;
+}
+
 interface Actor {
   id: string;
   name: string;
@@ -85,6 +100,7 @@ interface Actor {
   conditions?: string[];
   skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
   experience_points?: number;
+  equipped?: EquippedItems;
 }
 
 interface NPC {
@@ -665,6 +681,27 @@ function CharacterCard({
           {actor.conditions.map((condition, index) => (
             <StatusEffect key={index} name={condition} isNew={newConditions?.includes(condition)} />
           ))}
+        </div>
+      )}
+      
+      {/* Equipped Items */}
+      {(actor.equipped?.weapon || actor.equipped?.armor) && (
+        <div className="equipped-items">
+          <div className="equipped-label">已装备</div>
+          <div className="equipped-list">
+            {actor.equipped.weapon && (
+              <div className="equipped-item" title={`武器: ${actor.equipped.weapon.name}`}>
+                <span className="equipped-icon">⚔️</span>
+                <span className="equipped-name">{actor.equipped.weapon.name}</span>
+              </div>
+            )}
+            {actor.equipped.armor && (
+              <div className="equipped-item" title={`护甲: ${actor.equipped.armor.name}`}>
+                <span className="equipped-icon">🛡️</span>
+                <span className="equipped-name">{actor.equipped.armor.name}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

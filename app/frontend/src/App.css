@@ -3818,3 +3818,51 @@
 .xp-gained-badge::before {
   content: '✨';
 }
+
+/* ---- Equipped Items Display ---- */
+
+.equipped-items {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.equipped-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.equipped-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.equipped-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.equipped-item:hover {
+  border-color: var(--border-light);
+  background: var(--bg-panel-hover);
+}
+
+.equipped-icon {
+  font-size: 12px;
+}
+
+.equipped-name {
+  font-weight: 500;
+}

@@ -15,15 +15,26 @@
 
 ## Next
 
-- 战斗系统完整闭环 `backend`
-- 角色系统数据持久化 `backend`
 - 记忆/RAG 初步探索 `backend`
+- 增加结构化规则数据格式
+- 增加试玩流程和样例战役
+
+## Completed (里程碑二功能完整性)
+
+- ✅ 战斗系统完整闭环 `backend`
+- ✅ 角色系统数据持久化 `backend`
+- ✅ 装备系统：装备武器/护甲后战斗和 AC 正确更新
+- ✅ 物品使用：治疗药水消耗和 HP 恢复
+- ✅ 角色成长：战斗获得 XP、达到阈值后升级
+- ✅ 职业特性：战士 second_wind/action_surge、盗贼偷袭
+- ✅ 战斗先攻：initiative_order 正确排序，current_turn 正确推进
+- ✅ 地图系统：场景切换后 current_node 和 explored_nodes 正确同步
+- ✅ 法师施法：法术槽消耗、伤害/治疗效果
 
 ## Later
 
-- 增加结构化规则数据格式
 - 增加提示词实验和模型对比
-- 增加试玩流程和样例战役
+- 扩展更多职业和法术
 
 ## Blocked
 

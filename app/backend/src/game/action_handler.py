@@ -181,9 +181,13 @@ def handle_spell_cast(
     except Exception:
         pass
 
+    # 确定效果类型
+    effect_type = "heal" if damage_total < 0 else "damage" if damage_total > 0 else "none"
+
     return {
         "spell_name": result.spell_name,
         "spell_level": result.slot_level,
+        "effect_type": effect_type,
         "slot_used": result.slot_level,
         "damage_roll": result.damage_rolls,
         "damage_total": damage_total,

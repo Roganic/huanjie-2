@@ -202,6 +202,40 @@
 
 ---
 
+## 2026-04-02 — 法术效果系统验收（spell-effects-system）
+
+**验收状态：通过**
+
+完成法术效果系统（spell-effects-system）的集成审查验收，验证伤害法术（魔法飞弹）和治疗法术的完整流程。
+
+**验收标准达成：**
+
+| 标准 | 状态 | 备注 |
+|-----|------|------|
+| 魔法飞弹造成伤害 | ✅ 通过 | POST /action 施放后目标 HP 减少，GET /state 返回更新后的战斗状态 |
+| 治疗术恢复 HP | ✅ 通过 | POST /action 施放后 character.hp 增加（不超过 hp_max） |
+| 法术槽消耗 | ✅ 通过 | spell_slots[1].current 正确减少 1 |
+| 法术裁定响应字段 | ✅ 通过 | 包含 spell_name、spell_level、effect_type、damage_roll、damage_total 字段 |
+| 无新增失败 | ✅ 通过 | 总测试数从 574 增加到 575，失败数保持 47 不变 |
+
+**审查发现与修正：**
+
+1. **补充 effect_type 字段**：`handle_spell_cast` 函数返回值中添加了 `effect_type` 字段，用于区分伤害法术（"damage"）和治疗法术（"heal"）
+2. **补充测试覆盖**：新增 `test_cure_wounds_effect_type_is_heal` 测试验证治疗法术的 effect_type 字段
+
+**关键测试覆盖：**
+
+- `test_mage_spell_casting_acceptance.py`：3个端到端测试
+  - `test_mage_complete_spell_casting_cycle`：完整施法循环（伤害+治疗+耗尽+恢复）
+  - `test_mage_spell_slots_state_consistency`：状态一致性验证
+  - `test_mage_cantrip_no_slot_consumption`：戏法不消耗槽位验证
+
+- `test_spell_slot_system.py`：单元测试和集成测试
+  - 验证法术裁定响应包含所有必需字段
+  - 验证伤害法术和治疗法术的 effect_type 正确
+
+---
+
 ## 当前共识
 
 - 前端先做本地 Web，不做 GitHub Pages，不急着做 App

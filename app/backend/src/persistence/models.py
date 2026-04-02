@@ -52,6 +52,7 @@ class SaveSummary(BaseModel):
     save_name: str
     character_name: str | None = None
     character_class: str | None = None
+    character_level: int | None = None
     hp: int | None = None
     hp_max: int | None = None
     scene_name: str | None = None

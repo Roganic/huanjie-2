@@ -84,6 +84,7 @@ interface Actor {
   description: string;
   conditions?: string[];
   skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
+  experience_points?: number;
 }
 
 interface NPC {
@@ -174,6 +175,13 @@ interface CombatState {
   log: CombatLogEntry[];
 }
 
+interface LevelUpInfo {
+  old_level: number;
+  new_level: number;
+  hp_increase: number;
+  new_proficiency_bonus: number;
+}
+
 interface CombatActionResult {
   action_type: CombatActionType;
   actor_id: string;
@@ -183,6 +191,8 @@ interface CombatActionResult {
   effects: Effect[];
   narrative: string;
   combat_state: CombatState;
+  xp_gained?: number;
+  level_up?: LevelUpInfo;
 }
 
 interface ProviderOption {
@@ -512,11 +522,38 @@ function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolea
   );
 }
 
+// XP thresholds matching the backend
+const XP_THRESHOLDS: Record<number, number> = {
+  1: 0,
+  2: 300,
+  3: 900,
+  4: 2700,
+  5: 6500,
+};
+
+function getXpProgress(currentXp: number, level: number): { current: number; needed: number } {
+  const currentThreshold = XP_THRESHOLDS[level] ?? 0;
+  const nextThreshold = XP_THRESHOLDS[level + 1];
+  
+  if (nextThreshold === undefined) {
+    return { current: currentXp - currentThreshold, needed: 0 };
+  }
+  
+  return {
+    current: currentXp - currentThreshold,
+    needed: nextThreshold - currentThreshold,
+  };
+}
+
 function MiniCharacterCard({ actor }: { actor: Actor }) {
   const hpPercent = Math.round((actor.hp / actor.hp_max) * 100);
   let hpStatus: "high" | "medium" | "low" = "high";
   if (hpPercent <= 30) hpStatus = "low";
   else if (hpPercent <= 60) hpStatus = "medium";
+
+  const xp = actor.experience_points ?? 0;
+  const level = actor.level ?? 1;
+  const xpProgress = getXpProgress(xp, level);
 
   return (
     <div className="mini-character-card">
@@ -524,7 +561,7 @@ function MiniCharacterCard({ actor }: { actor: Actor }) {
         <div className="mini-char-avatar">{actor.character_class === "warrior" ? "⚔️" : actor.character_class === "mage" ? "🔮" : "🗡️"}</div>
         <div className="mini-char-info">
           <div className="mini-char-name">{actor.name}</div>
-          <div className="mini-char-class">{actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"}</div>
+          <div className="mini-char-class">{actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"} · Lv.{level}</div>
         </div>
       </div>
       <div className="mini-char-stats">
@@ -540,6 +577,47 @@ function MiniCharacterCard({ actor }: { actor: Actor }) {
           <span className="mini-stat-icon">⭐</span>
           <span className="mini-stat-value">+{actor.proficiency_bonus}</span>
         </div>
+        <div className="mini-stat" title="经验值">
+          <span className="mini-xp-icon">✨</span>
+          <span className="mini-xp-stat">{xp}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function XpBar({ current, needed, level }: { current: number; needed: number; level: number }) {
+  if (needed === 0) {
+    return (
+      <div className="xp-section">
+        <div className="xp-header">
+          <span className="xp-label">经验值 (Max Level)</span>
+          <span className="xp-values">
+            <span className="xp-current">{current}</span>
+          </span>
+        </div>
+        <div className="xp-bar-container">
+          <div className="xp-bar" style={{ width: "100%" }} />
+        </div>
+      </div>
+    );
+  }
+
+  const percentage = Math.min(100, Math.max(0, (current / needed) * 100));
+
+  return (
+    <div className="xp-section">
+      <div className="xp-header">
+        <span className="xp-label">经验值</span>
+        <span className="xp-values">
+          <span className="xp-current">{current}</span>
+          <span className="xp-separator">/</span>
+          <span className="xp-needed">{needed}</span>
+          <span style={{ color: "var(--text-muted)", marginLeft: 4 }}>XP</span>
+        </span>
+      </div>
+      <div className="xp-bar-container">
+        <div className="xp-bar" style={{ width: `${percentage}%` }} />
       </div>
     </div>
   );
@@ -554,6 +632,10 @@ function CharacterCard({
   previousActor?: Actor | null;
   newConditions?: string[];
 }) {
+  const xp = actor.experience_points ?? 0;
+  const level = actor.level ?? 1;
+  const xpProgress = getXpProgress(xp, level);
+
   return (
     <div className="character-card">
       <div className="character-header">
@@ -563,7 +645,7 @@ function CharacterCard({
         <div className="character-info">
           <div className="character-name">{actor.name}</div>
           <div className="character-level">
-            {actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"} Lv.{actor.level ?? 1} · 熟练加值 +{actor.proficiency_bonus}
+            {actor.character_class ? CLASS_LABELS[actor.character_class] : "冒险者"} Lv.{level} · 熟练加值 +{actor.proficiency_bonus}
           </div>
         </div>
         {actor.ac !== undefined && (
@@ -575,6 +657,8 @@ function CharacterCard({
       </div>
 
       <HpBar hp={actor.hp} max={actor.hp_max} previousHp={previousActor?.hp} />
+      
+      <XpBar current={xpProgress.current} needed={xpProgress.needed} level={level} />
 
       {actor.conditions && actor.conditions.length > 0 && (
         <div className="status-effects">
@@ -1101,9 +1185,11 @@ function CombatScreen({
 interface CombatEndScreenProps {
   combat: CombatState;
   onReturn: () => void;
+  xpGained?: number;
+  levelUp?: LevelUpInfo | null;
 }
 
-function CombatEndScreen({ combat, onReturn }: CombatEndScreenProps) {
+function CombatEndScreen({ combat, onReturn, xpGained, levelUp }: CombatEndScreenProps) {
   const isVictory = combat.status === "victory";
   const isEscape = combat.status === "escaped";
 
@@ -1121,6 +1207,27 @@ function CombatEndScreen({ combat, onReturn }: CombatEndScreenProps) {
               ? "你成功逃离了战斗。" 
               : "你在战斗中倒下了…"}
         </p>
+        
+        {/* XP Gained */}
+        {isVictory && xpGained !== undefined && xpGained > 0 && (
+          <div className="xp-gained-badge" style={{ marginBottom: 16 }}>
+            获得 {xpGained} XP
+          </div>
+        )}
+        
+        {/* Level Up Notification */}
+        {levelUp && (
+          <div className="level-up-notification">
+            <span className="level-up-icon">🎊</span>
+            <div className="level-up-content">
+              <div className="level-up-title">升级！Lv.{levelUp.old_level} → Lv.{levelUp.new_level}</div>
+              <div className="level-up-details">
+                HP +{levelUp.hp_increase} · 熟练加值 +{levelUp.new_proficiency_bonus}
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="combat-result-stats">
           <div className="result-stat">
             <span className="result-stat-label">战斗轮数</span>
@@ -1606,6 +1713,8 @@ function App() {
   const [selectedWeapon, setSelectedWeapon] = useState<string>("longsword");
   const [combatNarrative, setCombatNarrative] = useState<string>("");
   const [isCombatNarrativeStreaming, setIsCombatNarrativeStreaming] = useState(false);
+  const [lastCombatXp, setLastCombatXp] = useState<number | undefined>(undefined);
+  const [lastCombatLevelUp, setLastCombatLevelUp] = useState<LevelUpInfo | null>(null);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
@@ -2396,6 +2505,13 @@ function App() {
       }
       if (finalResult) {
         setCombat(finalResult.combat_state);
+        // Capture XP and level-up info
+        if (finalResult.xp_gained !== undefined) {
+          setLastCombatXp(finalResult.xp_gained);
+        }
+        if (finalResult.level_up) {
+          setLastCombatLevelUp(finalResult.level_up);
+        }
         addToTimeline({
           type: "action",
           title: `战斗: ${actionType}`,
@@ -2424,7 +2540,9 @@ function App() {
                 {
                   id: Date.now(),
                   role: "system",
-                  text: "🎉 战斗胜利！你成功击败了所有敌人，继续你的冒险吧。",
+                  text: finalResult.level_up 
+                    ? `🎉 战斗胜利！你成功击败了所有敌人，升级到 Lv.${finalResult.level_up.new_level}！`
+                    : "🎉 战斗胜利！你成功击败了所有敌人，继续你的冒险吧。",
                   timestamp: Date.now(),
                 },
               ]);
@@ -2478,6 +2596,8 @@ function App() {
     setCombat(null);
     setCombatNarrative("");
     setSelectedTarget(null);
+    setLastCombatXp(undefined);
+    setLastCombatLevelUp(null);
     await refreshState();
   };
 
@@ -2599,6 +2719,8 @@ function App() {
           <CombatEndScreen
             combat={combat}
             onReturn={returnToAdventure}
+            xpGained={lastCombatXp}
+            levelUp={lastCombatLevelUp}
           />
         ) : inAdventure ? (
           <>

@@ -3,11 +3,14 @@
 from fastapi import APIRouter, HTTPException, Request
 
 from ..memory_manager import get_recent_event_memories
+from ..models.module import MODULE_REGISTRY, get_module
 from ..models.state import BootstrapState
+from ..module_engine import get_current_story_node
 from ..persistence import reset_session as persistence_reset_session
 from ..state import (
     create_session,
     get_action_history,
+    get_active_module,
     get_bootstrap_state,
     get_map_state,
     get_narrative_history,
@@ -225,4 +228,100 @@ async def get_memory(request: Request):
         "events": events,
         "total": len(events),
         "session_id": session_id,
+    }
+
+
+@router.get("/modules")
+async def list_modules(request: Request):
+    """Return all available modules and active module state for the Dashboard.
+
+    Response shape matches the frontend ``ModulesResponse`` type so
+    ``ModulePanel`` can consume it directly.
+    """
+    session_id = _request_session_id(request)
+    if session_id is None:
+        from ..state import DEFAULT_SESSION_ID
+        session_id = DEFAULT_SESSION_ID
+
+    # Build module list from registry
+    modules = []
+    active = get_active_module(session_id)
+    for mod in MODULE_REGISTRY.values():
+        # Determine status relative to this session
+        if active and active.module_id == mod.id:
+            status = "active"
+        else:
+            status = "inactive"
+
+        # Collect unique scenes, NPCs, and quests across all nodes
+        scenes = []
+        seen_scenes: set[str] = set()
+        npcs: list[dict] = []
+        seen_npcs: set[str] = set()
+        quests: list[dict] = []
+        seen_quests: set[str] = set()
+
+        for node in mod.nodes.values():
+            if node.scene_id not in seen_scenes:
+                seen_scenes.add(node.scene_id)
+                scenes.append({
+                    "id": node.scene_id,
+                    "name": node.name,
+                    "description": node.description,
+                })
+            for npc_id in node.visible_npcs:
+                if npc_id not in seen_npcs:
+                    seen_npcs.add(npc_id)
+                    npcs.append({
+                        "id": npc_id,
+                        "name": npc_id,
+                        "description": "",
+                        "type": "neutral",
+                    })
+            for quest in node.quests:
+                if quest.id not in seen_quests:
+                    seen_quests.add(quest.id)
+                    quests.append({
+                        "id": quest.id,
+                        "name": quest.name,
+                        "description": quest.description,
+                        "objectives": [o.description for o in quest.objectives],
+                        "is_main": True,
+                    })
+
+        modules.append({
+            "id": mod.id,
+            "name": mod.name,
+            "description": mod.description,
+            "status": status,
+            "scenes": scenes,
+            "npcs": npcs,
+            "quests": quests,
+        })
+
+    # Build active module state
+    active_module_state = None
+    if active:
+        node, mod_def = get_current_story_node(session_id)
+        if node and mod_def:
+            active_quests = []
+            for q in node.quests:
+                active_quests.append({
+                    "quest_id": q.id,
+                    "quest_name": q.name,
+                    "current_objective": q.objectives[0].description if q.objectives else "",
+                    "is_main": True,
+                })
+            active_module_state = {
+                "module_id": active.module_id,
+                "module_name": mod_def.name,
+                "current_story_node": node.name,
+                "current_story_description": node.description,
+                "active_quests": active_quests,
+                "completed_quests": active.completed_quests,
+            }
+
+    return {
+        "modules": modules,
+        "active_module": active_module_state,
     }

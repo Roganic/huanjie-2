@@ -1609,6 +1609,66 @@ function App() {
     }
   };
 
+  const restartGame = async () => {
+    if (resetting) return;
+
+    setResetting(true);
+    setCreationError(null);
+
+    try {
+      // Call /session/reset to clear persistence file and reset to initial state
+      const response = await fetch(apiUrl("/session/reset"), {
+        method: "POST",
+        headers: buildSessionHeaders(sessionId),
+      });
+      if (!response.ok) {
+        if (response.status === 404) {
+          storeSessionId(null);
+          setSessionId(null);
+          await recoverExpiredSession("会话已过期，已进入新的建角流程。");
+          return;
+        }
+        throw new Error(await response.text());
+      }
+      const state: BootstrapState = await response.json();
+      
+      // Reset all local state to initial values
+      setPreviousBootstrap(null);
+      setSessionId(state.session_id);
+      storeSessionId(state.session_id);
+      setBootstrap(state);
+      setMessages([]);
+      setTimeline([]);
+      setInput("");
+      setStreamingPreview(null);
+      // Clear combat state
+      setCombat(null);
+      setCombatNarrative("");
+      setSelectedTarget(null);
+      setIsCombatNarrativeStreaming(false);
+      // Reset character creation draft
+      setCreationDraft({
+        name: "",
+        characterClass: "warrior",
+        abilities: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 },
+        abilityGeneration: "standard_array",
+      });
+      
+      // Show message that game was restarted
+      setMessages([
+        { id: Date.now(), role: "system", text: "游戏已重新开始。请创建新角色。", timestamp: Date.now() },
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMessages((previous) => [
+        ...previous,
+        { id: Date.now(), role: "system", text: `重新开始失败: ${message}`, timestamp: Date.now() },
+      ]);
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const saveGame = async () => {
     if (saving) return;
 
@@ -2225,6 +2285,11 @@ function App() {
           <button className="header-button" onClick={resetSession} disabled={resetting || sending || creatingCharacter}>
             {resetting ? "重置中…" : "重置"}
           </button>
+          {inAdventure && (
+            <button className="header-button restart-btn" onClick={restartGame} disabled={resetting || sending || creatingCharacter}>
+              {resetting ? "重新开始中…" : "重新开始"}
+            </button>
+          )}
           {inCombat && <span className="combat-badge">⚔️ 战斗中</span>}
           <HealthDot status={health} />
           <span className="subtitle">

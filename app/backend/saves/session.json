@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "saved_at": "2026-04-02T11:25:58.576999",
-  "session_id": "62636f794eff43ca9836a1b904db6455",
+  "saved_at": "2026-04-02T11:49:06.983939",
+  "session_id": "b7ab291f037e498d8ec4deb0d57c2be7",
   "phase": "adventure",
   "game_phase": "exploration",
   "character": {
-    "id": "warrior-testhero",
-    "name": "TestHero",
+    "id": "warrior-tank",
+    "name": "Tank",
     "character_class": "warrior",
     "abilities": {
       "str": 15,
@@ -18,7 +18,7 @@
     },
     "proficiency_bonus": 2,
     "level": 1,
-    "hp": 11,
+    "hp": 7,
     "hp_max": 12,
     "ac": 16,
     "conditions": [],
@@ -213,7 +213,7 @@
     "name": "锈迹斑斑的灯笼酒馆",
     "description": "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒，角落里传来轻柔的竖琴声。酒保老马库斯在吧台后面擦拭着酒杯，不时用独眼打量着客人。",
     "actors": [
-      "warrior-testhero"
+      "warrior-tank"
     ],
     "npcs": [
       {
@@ -241,13 +241,13 @@
         "occupation": "商人"
       }
     ],
-    "time": 1,
+    "time": 5,
     "flags": []
   },
   "combat_state": null,
   "action_history": [
     {
-      "action_summary": "TestHero attempts to search the room by look under tables and behind barrels",
+      "action_summary": "Tank attempts to action 1: explore the area by proceed with caution",
       "resolution_summary": {
         "resolution_type": "check",
         "outcome": "failure",
@@ -255,8 +255,8 @@
           "ability": "str",
           "modifier": 2,
           "dc": 15,
-          "roll": 10,
-          "total": 12
+          "roll": 8,
+          "total": 10
         },
         "attack": null,
         "saving_throw": null,
@@ -268,18 +268,158 @@
             "description": "时间流逝。"
           },
           {
-            "target": "warrior-testhero",
+            "target": "warrior-tank",
             "field": "hp",
             "delta": -1,
             "description": "体力消耗造成轻微伤害。"
           }
         ]
       },
-      "narration_summary": "TestHero attempts to search the room, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around TestHero. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. Time ",
-      "narration": "TestHero attempts to search the room, but fortune does not favor them this time. The effort falls short of success.",
-      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around TestHero. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
+      "narration_summary": "Tank attempts to action 1: explore the area, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Tank. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. Ti",
+      "narration": "Tank attempts to action 1: explore the area, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Tank. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
       "gm_prompt": "The failed attempt gives the scene permission to push back. Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 1. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
-      "created_at": 1775100358574
+      "created_at": 1775101746958
+    },
+    {
+      "action_summary": "Tank attempts to action 2: explore the area by proceed with caution",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "failure",
+        "check": {
+          "ability": "str",
+          "modifier": 2,
+          "dc": 15,
+          "roll": 6,
+          "total": 8
+        },
+        "attack": null,
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "tavern-01",
+            "field": "time",
+            "delta": 1,
+            "description": "时间流逝。"
+          },
+          {
+            "target": "warrior-tank",
+            "field": "hp",
+            "delta": -1,
+            "description": "体力消耗造成轻微伤害。"
+          }
+        ]
+      },
+      "narration_summary": "Tank attempts to action 2: explore the area, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Tank. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. Th",
+      "narration": "Tank attempts to action 2: explore the area, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Tank. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
+      "gm_prompt": "The failed attempt gives the scene permission to push back. The room is still reacting to the last beat: Tank attempts to action 1: explore the area, but fortune does not favor them this time. The effort falls short of suc... Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 2. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
+      "created_at": 1775101746964
+    },
+    {
+      "action_summary": "Tank attempts to action 3: explore the area by proceed with caution",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "failure",
+        "check": {
+          "ability": "str",
+          "modifier": 2,
+          "dc": 15,
+          "roll": 3,
+          "total": 5
+        },
+        "attack": null,
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "tavern-01",
+            "field": "time",
+            "delta": 1,
+            "description": "时间流逝。"
+          },
+          {
+            "target": "warrior-tank",
+            "field": "hp",
+            "delta": -1,
+            "description": "体力消耗造成轻微伤害。"
+          }
+        ]
+      },
+      "narration_summary": "Tank attempts to action 3: explore the area, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Tank. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. Th",
+      "narration": "Tank attempts to action 3: explore the area, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Tank. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
+      "gm_prompt": "The failed attempt gives the scene permission to push back. The room is still reacting to the last beat: Tank attempts to action 2: explore the area, but fortune does not favor them this time. The effort falls short of suc... Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 3. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
+      "created_at": 1775101746970
+    },
+    {
+      "action_summary": "Tank attempts to action 4: explore the area by proceed with caution",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "failure",
+        "check": {
+          "ability": "str",
+          "modifier": 2,
+          "dc": 15,
+          "roll": 11,
+          "total": 13
+        },
+        "attack": null,
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "tavern-01",
+            "field": "time",
+            "delta": 1,
+            "description": "时间流逝。"
+          },
+          {
+            "target": "warrior-tank",
+            "field": "hp",
+            "delta": -1,
+            "description": "体力消耗造成轻微伤害。"
+          }
+        ]
+      },
+      "narration_summary": "Tank attempts to action 4: explore the area, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Tank. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. Th",
+      "narration": "Tank attempts to action 4: explore the area, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Tank. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
+      "gm_prompt": "The failed attempt gives the scene permission to push back. The room is still reacting to the last beat: Tank attempts to action 3: explore the area, but fortune does not favor them this time. The effort falls short of suc... Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 4. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
+      "created_at": 1775101746976
+    },
+    {
+      "action_summary": "Tank attempts to action 5: explore the area by proceed with caution",
+      "resolution_summary": {
+        "resolution_type": "check",
+        "outcome": "failure",
+        "check": {
+          "ability": "str",
+          "modifier": 2,
+          "dc": 15,
+          "roll": 6,
+          "total": 8
+        },
+        "attack": null,
+        "saving_throw": null,
+        "effects": [
+          {
+            "target": "tavern-01",
+            "field": "time",
+            "delta": 1,
+            "description": "时间流逝。"
+          },
+          {
+            "target": "warrior-tank",
+            "field": "hp",
+            "delta": -1,
+            "description": "体力消耗造成轻微伤害。"
+          }
+        ]
+      },
+      "narration_summary": "Tank attempts to action 5: explore the area, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Tank. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission to push back. Th",
+      "narration": "Tank attempts to action 5: explore the area, but fortune does not favor them this time. The effort falls short of success.",
+      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Tank. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
+      "gm_prompt": "The failed attempt gives the scene permission to push back. The room is still reacting to the last beat: Tank attempts to action 4: explore the area, but fortune does not favor them this time. The effort falls short of suc... Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 5. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
+      "created_at": 1775101746982
     }
   ],
   "scene_history": []

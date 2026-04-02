@@ -18,6 +18,7 @@ from typing import Optional
 
 from ..models.action import ActionRequest, Effect, Outcome
 from ..models.state import Actor, NarrativeHistoryEntry, NPC, Scene
+from ..module_engine import build_module_context_for_prompt
 from ..state import get_combat_state
 
 logger = logging.getLogger(__name__)
@@ -356,6 +357,13 @@ def build_narrative_prompt(
     lines.append("【叙事空间 / NARRATIVE SPACE】")
     lines.append("以下信息供叙事参考，你可以自由发挥：")
     lines.append("")
+    
+    # Inject module context into narrative prompt
+    module_context = build_module_context_for_prompt()
+    if module_context:
+        lines.append(module_context)
+        lines.append("")
+    
     lines.append(f"场景 / Scene: {scene.name}")
     lines.append(f"场景描述 / Scene Description: {scene.description}")
     if scene.flags:

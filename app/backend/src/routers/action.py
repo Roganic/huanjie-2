@@ -16,6 +16,7 @@ from ..actions.scene_interaction import (
     is_scene_interaction_action,
 )
 from ..agent.orchestrator import resolve_action_with_agent
+from ..module_engine import check_action_triggers, check_scene_entry_triggers
 from ..items import resolve_item_use
 from ..models.action import ActionRequest, ActionResponse, Effect, Outcome, ResolutionType
 from ..models.state import AdventurePhase
@@ -517,6 +518,22 @@ async def submit_action(req: ActionRequest, request: Request):
                 # Re-fetch session to get updated state
                 session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
 
+        # Evaluate module triggers and attach module_event if story advanced
+        module_result = check_action_triggers(req.intent, req.approach, session_id)
+        if not module_result.triggered:
+            # Also check scene entry triggers in case the scene itself drives progression
+            module_result = check_scene_entry_triggers(session_id)
+        
+        if module_result.triggered:
+            result_dict = result.model_dump(mode="json")
+            result_dict["module_event"] = {
+                "triggered_node": module_result.triggered_node_id,
+                "previous_node": module_result.previous_node_id,
+                "description": module_result.description,
+            }
+            # Re-build ActionResponse from dict for streaming compatibility
+            result = ActionResponse(**result_dict)
+        
         accepts_stream = "text/event-stream" in request.headers.get("accept", "")
         if not accepts_stream:
             return result

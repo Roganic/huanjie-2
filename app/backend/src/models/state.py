@@ -350,6 +350,7 @@ class BootstrapState(BaseModel):
     scene: Scene
     narrative_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
     scene_history: list[SceneHistoryEntry] = Field(default_factory=list)
+    active_module: dict[str, object] | None = Field(default=None, description="Active module state")
 
 
 class AttributeWithModifier(BaseModel):

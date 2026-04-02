@@ -196,6 +196,13 @@ class InventoryUpdate(BaseModel):
     inventory: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class ModuleEvent(BaseModel):
+    """Module story progression event attached to an action response."""
+    triggered_node: str
+    previous_node: Optional[str] = None
+    description: Optional[str] = None
+
+
 class ActionResponse(BaseModel):
     action_summary: str
     resolution_type: ResolutionType
@@ -208,6 +215,7 @@ class ActionResponse(BaseModel):
     effects: list[Effect] = Field(default_factory=list)
     combat_state: Optional[CombatState] = Field(default=None, description="Combat context if in combat")
     inventory_update: Optional[InventoryUpdate] = Field(default=None, description="Inventory changes from pickup/equip")
+    module_event: Optional[ModuleEvent] = Field(default=None, description="Module story progression event")
     narration: str
     scene_progression: str
     gm_prompt: str

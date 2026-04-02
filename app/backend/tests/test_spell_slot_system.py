@@ -59,6 +59,7 @@ class TestSpellCastResult:
         assert result is not None, "施放魔法飞弹应返回结果"
         assert "spell_name" in result, "结果应包含 spell_name 字段"
         assert "spell_level" in result, "结果应包含 spell_level 字段"
+        assert "effect_type" in result, "结果应包含 effect_type 字段"
         assert "slot_used" in result, "结果应包含 slot_used 字段"
         assert "damage_roll" in result, "结果应包含 damage_roll 字段"
         assert "damage_total" in result, "结果应包含 damage_total 字段"
@@ -152,6 +153,18 @@ class TestSpellCastResult:
         assert result["success"] is False, "法术槽耗尽时施放应失败"
         assert result["error_message"] is not None, "失败时应有错误信息"
         assert result["slot_used"] == 0, "失败时不应消耗法术槽"
+
+    def test_cure_wounds_effect_type_is_heal(self):
+        """治疗法术的 effect_type 是 'heal'。"""
+        from src.game.action_handler import handle_spell_cast
+
+        actor = self._create_mock_actor()
+        result = handle_spell_cast("施放治疗之触", actor, session_id="test-unit-009")
+
+        assert result is not None, "施放治疗之触应返回结果"
+        assert "effect_type" in result, "结果应包含 effect_type 字段"
+        assert result["effect_type"] == "heal", f"治疗法术的 effect_type 应为 'heal'，实际为 {result['effect_type']}"
+        assert result["damage_total"] < 0, "治疗法术的 damage_total 应为负值（表示恢复）"
 
 
 # ---------------------------------------------------------------------------
@@ -349,7 +362,7 @@ class TestSpellSlotAcceptanceCriteria:
             )
 
     def test_ac5_spell_cast_result_has_required_fields(self):
-        """验收标准5: 法术裁定响应包含 spell_name、spell_level、slot_used、damage_roll、damage_total 字段。"""
+        """验收标准5: 法术裁定响应包含 spell_name、spell_level、effect_type、slot_used、damage_roll、damage_total 字段。"""
         from src.game.action_handler import handle_spell_cast
         from src.models.state import Actor, AbilityScores, CharacterClass, SpellSlot
 
@@ -374,6 +387,7 @@ class TestSpellSlotAcceptanceCriteria:
         assert result is not None, "施放结果不应为 None"
         assert "spell_name" in result, "结果应包含 spell_name 字段"
         assert "spell_level" in result, "结果应包含 spell_level 字段"
+        assert "effect_type" in result, "结果应包含 effect_type 字段"
         assert "slot_used" in result, "结果应包含 slot_used 字段"
         assert "damage_roll" in result, "结果应包含 damage_roll 字段"
         assert "damage_total" in result, "结果应包含 damage_total 字段"
@@ -381,6 +395,7 @@ class TestSpellSlotAcceptanceCriteria:
         # 验证字段值的合理性
         assert result["spell_name"] == "魔法飞弹"
         assert result["spell_level"] == 1
+        assert result["effect_type"] == "damage", f"伤害法术的 effect_type 应为 'damage'，实际为 {result['effect_type']}"
         assert result["slot_used"] == 1
         assert isinstance(result["damage_roll"], list)
         assert isinstance(result["damage_total"], int)

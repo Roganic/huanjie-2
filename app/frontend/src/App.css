@@ -1284,6 +1284,36 @@
 
 /* ---- Combat Participants (Sidebar) ---- */
 
+.combat-round-info {
+  background: linear-gradient(135deg, rgba(233, 69, 96, 0.15), rgba(233, 69, 96, 0.05));
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  text-align: center;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.combat-round-number {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent-light);
+  margin-bottom: 4px;
+}
+
+.combat-current-turn {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.combat-initiative-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
 .combat-participants {
   display: flex;
   flex-direction: column;
@@ -1307,6 +1337,11 @@
   box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.2);
 }
 
+.combat-participant.defeated {
+  opacity: 0.5;
+  filter: grayscale(0.6);
+}
+
 .combat-participant.player .combat-participant-initiative {
   background: var(--accent);
   color: #fff;
@@ -1315,6 +1350,10 @@
 .combat-participant.enemy .combat-participant-initiative {
   background: #8b4a4a;
   color: #fff;
+}
+
+.combat-participant.defeated .combat-participant-initiative {
+  background: var(--text-muted) !important;
 }
 
 .combat-participant-initiative {
@@ -1327,22 +1366,43 @@
   font-size: 12px;
   font-weight: 700;
   font-family: monospace;
+  flex-shrink: 0;
 }
 
 .combat-participant-info {
   flex: 1;
+  min-width: 0;
 }
 
 .combat-participant-name {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
+  margin-bottom: 6px;
+}
+
+.combat-participant-hp-bar {
+  height: 6px;
+  background: var(--hp-bg);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.combat-participant-hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4a9c4a, var(--hp-high));
+  border-radius: 3px;
+  transition: width var(--transition-normal);
+}
+
+.combat-participant.defeated .combat-participant-hp-fill {
+  background: var(--text-muted);
 }
 
 .combat-participant-hp {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
-  margin-top: 2px;
 }
 
 /* ---- Combat Screen ---- */

@@ -2218,32 +2218,51 @@ function App() {
           )}
         </section>
         <section>
-          <h2>{inCombat ? "战斗参与者" : inAdventure ? "角色" : "职业预览"}</h2>
+          <h2>{inCombat ? "战斗状态" : inAdventure ? "角色" : "职业预览"}</h2>
           {inCombat && combat ? (
-            <div className="combat-participants">
-              {combat.initiative_order.map((participantId) => {
-                const participant = combat.participants.find((p) => p.id === participantId);
-                if (!participant) return null;
-                const isCurrentTurn = participantId === combat.current_actor_id;
-                const isPlayer = participant.is_player;
-                return (
-                  <div
-                    key={participantId}
-                    className={`combat-participant ${isCurrentTurn ? "current" : ""} ${isPlayer ? "player" : "enemy"}`}
-                  >
-                    <div className="combat-participant-initiative">{participant.initiative}</div>
-                    <div className="combat-participant-info">
-                      <div className="combat-participant-name">
-                        {participant.name} {isCurrentTurn && "▶"}
-                      </div>
-                      <div className="combat-participant-hp">
-                        HP: {participant.hp}/{participant.hp_max}
+            <>
+              {/* Combat Round Info */}
+              <div className="combat-round-info">
+                <div className="combat-round-number">第 {combat.round_number} 轮</div>
+                <div className="combat-current-turn">
+                  当前: {combat.participants.find((p) => p.id === combat.current_actor_id)?.name}
+                </div>
+              </div>
+              {/* Initiative Order */}
+              <div className="combat-initiative-label">行动顺序</div>
+              <div className="combat-participants">
+                {combat.initiative_order.map((participantId) => {
+                  const participant = combat.participants.find((p) => p.id === participantId);
+                  if (!participant) return null;
+                  const isCurrentTurn = participantId === combat.current_actor_id;
+                  const isPlayer = participant.is_player;
+                  const isDefeated = participant.hp <= 0;
+                  return (
+                    <div
+                      key={participantId}
+                      className={`combat-participant ${isCurrentTurn ? "current" : ""} ${isPlayer ? "player" : "enemy"} ${isDefeated ? "defeated" : ""}`}
+                    >
+                      <div className="combat-participant-initiative">{participant.initiative}</div>
+                      <div className="combat-participant-info">
+                        <div className="combat-participant-name">
+                          {participant.name} {isCurrentTurn && "▶"}
+                          {isDefeated && " 💀"}
+                        </div>
+                        <div className="combat-participant-hp-bar">
+                          <div
+                            className="combat-participant-hp-fill"
+                            style={{ width: `${(participant.hp / participant.hp_max) * 100}%` }}
+                          />
+                        </div>
+                        <div className="combat-participant-hp">
+                          {participant.hp}/{participant.hp_max} HP
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </>
           ) : inAdventure && bootstrap?.actor ? (
             <ul>
               <li className="active">{bootstrap.actor.name}</li>

@@ -725,6 +725,126 @@ def apply_effects(effects: list[Effect], session_id: str | None = None) -> None:
         _save_session(session)
 
 
+def equip_item_for_actor(item_name: str, session_id: str | None = None) -> dict:
+    """Equip an item from the actor's inventory.
+    
+    Args:
+        item_name: The name of the item to equip
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        A dictionary with the result:
+        - success: True if equipped successfully
+        - item: The equipped item info (if success)
+        - previous_item: The previously equipped item (if any)
+        - ac: The new AC value
+        - error: Error message (if not success)
+    """
+    from .equipment import equip_item, ItemNotFoundError, InvalidItemTypeError
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.actor is None:
+            return {"success": False, "error": "No character found"}
+        
+        try:
+            updated_actor, equipped_item, previous_item = equip_item(session.actor, item_name)
+            session.actor = updated_actor
+            _save_session(session)
+            
+            # Persist to save file
+            try:
+                from . import game_state
+                game_state.save_current_game(session_id=resolved_session_id)
+            except Exception:
+                pass
+            
+            return {
+                "success": True,
+                "item": {
+                    "id": equipped_item.id,
+                    "name": equipped_item.name,
+                    "type": equipped_item.type.value,
+                },
+                "previous_item": {
+                    "id": previous_item.id,
+                    "name": previous_item.name,
+                    "type": previous_item.type.value,
+                } if previous_item else None,
+                "ac": updated_actor.ac,
+            }
+        except ItemNotFoundError as e:
+            return {"success": False, "error": str(e)}
+        except InvalidItemTypeError as e:
+            return {"success": False, "error": str(e)}
+
+
+def unequip_item_from_actor(slot: str, session_id: str | None = None) -> dict:
+    """Unequip an item from a specific slot.
+    
+    Args:
+        slot: The slot to unequip ("weapon" or "armor")
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        A dictionary with the result:
+        - success: True if unequipped successfully
+        - removed_item: The removed item info (if any)
+        - ac: The new AC value
+        - error: Error message (if not success)
+    """
+    from .equipment import unequip_item
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.actor is None:
+            return {"success": False, "error": "No character found"}
+        
+        try:
+            updated_actor, removed_item = unequip_item(session.actor, slot)
+            session.actor = updated_actor
+            _save_session(session)
+            
+            # Persist to save file
+            try:
+                from . import game_state
+                game_state.save_current_game(session_id=resolved_session_id)
+            except Exception:
+                pass
+            
+            return {
+                "success": True,
+                "removed_item": {
+                    "id": removed_item.id,
+                    "name": removed_item.name,
+                    "type": removed_item.type.value,
+                } if removed_item else None,
+                "ac": updated_actor.ac,
+            }
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+
+
+def get_actor_equipment(session_id: str | None = None) -> dict:
+    """Get the actor's current equipment information.
+    
+    Args:
+        session_id: The session ID (uses current session if None)
+        
+    Returns:
+        A dictionary with weapon and armor information
+    """
+    from .equipment import format_equipment_for_response
+    
+    actor = get_actor(session_id=session_id)
+    if actor is None:
+        return {"weapon": None, "armor": None}
+    
+    return format_equipment_for_response(actor)
+
+
 def reset_state(session_id: str | None = None) -> BootstrapState:
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:

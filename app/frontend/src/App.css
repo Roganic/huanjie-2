@@ -4163,3 +4163,159 @@
 .mini-char-stats .hit-dice-display {
   font-size: 0.75rem;
 }
+
+/* Module Panel Overlay */
+.module-panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.module-panel-overlay > div {
+  width: 420px;
+  max-width: 100%;
+  height: 100%;
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Module button in header */
+.module-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Story Node Display */
+.story-node-section {
+  background: linear-gradient(135deg, rgba(233, 69, 96, 0.1), rgba(233, 69, 96, 0.05));
+  border: 1px solid rgba(233, 69, 96, 0.2);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.story-node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.story-node-icon {
+  font-size: 14px;
+}
+
+.story-node-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.story-node-description {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* Active Quests Section */
+.active-quests-section {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.active-quests-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.active-quest-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--bg-panel);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+}
+
+.active-quest-item.main-quest {
+  border-left-color: var(--accent);
+}
+
+.active-quest-item.side-quest {
+  border-left-color: #5bc0de;
+}
+
+.active-quest-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quest-type-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(233, 69, 96, 0.2);
+  color: var(--accent-light);
+}
+
+.quest-type-badge.side {
+  background: rgba(91, 192, 222, 0.2);
+  color: #5bc0de;
+}
+
+.active-quest-objective {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.active-quest-objective::before {
+  content: "→";
+  color: var(--accent);
+}
+
+.no-active-quest {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 16px;
+  font-style: italic;
+}

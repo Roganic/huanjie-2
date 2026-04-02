@@ -1,0 +1,332 @@
+.narrative-history {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.narrative-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.narrative-history-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.5px;
+}
+
+.narrative-history-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.narrative-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 48px 16px;
+  font-size: 14px;
+  font-style: italic;
+}
+
+.narrative-card {
+  background: linear-gradient(135deg, rgba(26, 39, 64, 0.8), rgba(26, 26, 46, 0.9));
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 14px 16px;
+  animation: fadeIn var(--transition-normal);
+  position: relative;
+}
+
+.narrative-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent-dark), var(--accent), var(--accent-light));
+  border-radius: 12px 12px 0 0;
+}
+
+.narrative-card.loading {
+  background: linear-gradient(135deg, rgba(26, 39, 64, 0.5), rgba(26, 26, 46, 0.6));
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+.narrative-card.streaming {
+  background: linear-gradient(135deg, rgba(39, 26, 64, 0.8), rgba(30, 26, 46, 0.9));
+  border-color: rgba(180, 120, 220, 0.4);
+}
+
+.narrative-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.narrative-card-icon {
+  font-size: 14px;
+}
+
+.narrative-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--accent-light);
+  flex: 1;
+}
+
+.narrative-card-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.narrative-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.narrative-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+}
+
+.narrative-context-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-light);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.narrative-context-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.narrative-text {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text);
+  margin: 0;
+  text-align: justify;
+  white-space: pre-wrap;
+}
+
+.narrative-text:first-child::first-letter {
+  font-size: 1.2em;
+  font-weight: 600;
+  color: var(--accent-light);
+}
+
+.streaming-cursor {
+  animation: blink 1s step-end infinite;
+  color: var(--accent);
+  margin-left: 2px;
+}
+
+.narrative-resolution {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.resolution-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.resolution-badge.success {
+  background: var(--success-bg);
+  color: var(--success);
+  border: 1px solid var(--success);
+}
+
+.resolution-badge.failure {
+  background: var(--failure-bg);
+  color: var(--failure);
+  border: 1px solid var(--failure);
+}
+
+.resolution-badge.combat-hit {
+  background: rgba(231, 76, 60, 0.15);
+  color: #e74c3c;
+  border: 1px solid rgba(231, 76, 60, 0.35);
+}
+
+.resolution-badge.combat-miss {
+  background: rgba(149, 165, 166, 0.15);
+  color: #95a5a6;
+  border: 1px solid rgba(149, 165, 166, 0.35);
+}
+
+.combat-damage {
+  font-weight: 600;
+}
+
+.check-summary {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.narrative-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 100%;
+}
+
+.effect-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+}
+
+.effect-tag.positive {
+  background: var(--success-bg);
+  border-color: var(--success);
+  color: #7dd87d;
+}
+
+.effect-tag.negative {
+  background: var(--failure-bg);
+  border-color: var(--failure);
+  color: #e07d7a;
+}
+
+.narrative-section {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.narrative-section.progression {
+  background: linear-gradient(135deg, rgba(74, 54, 24, 0.4), rgba(32, 26, 18, 0.5));
+  border-color: rgba(199, 168, 109, 0.3);
+}
+
+.narrative-section.gm-prompt {
+  background: linear-gradient(135deg, rgba(20, 62, 54, 0.4), rgba(14, 30, 31, 0.5));
+  border-color: rgba(98, 190, 173, 0.3);
+}
+
+.section-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--accent-light);
+  margin-bottom: 6px;
+}
+
+.section-text {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.interrupted-notice {
+  font-size: 12px;
+  padding: 8px 12px;
+  background: var(--failure-bg);
+  border: 1px solid var(--failure);
+  color: #e07d7a;
+  border-radius: 6px;
+}
+
+.narrative-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton-line {
+  height: 14px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-input) 25%,
+    var(--bg-panel-hover) 50%,
+    var(--bg-input) 75%
+  );
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: shimmer 1.5s infinite;
+  width: 100%;
+}
+
+.skeleton-line.short {
+  width: 60%;
+}
+
+.skeleton-line.medium {
+  width: 80%;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Combat narrative area adjustments */
+.combat-narrative-panel {
+  flex: 1;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}

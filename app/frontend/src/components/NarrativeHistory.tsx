@@ -1,13 +1,7 @@
 import { useEffect, useRef } from "react";
+import "./NarrativeHistory.css";
 
-interface Effect {
-  target: string;
-  field: string;
-  delta: number | string;
-  description: string;
-}
-
-interface CheckDetail {
+export interface CheckDetail {
   ability: string;
   modifier: number;
   proficiency_bonus: number;
@@ -17,7 +11,14 @@ interface CheckDetail {
   dc: number;
 }
 
-interface ActionResponse {
+export interface Effect {
+  target: string;
+  field: string;
+  delta: number | string;
+  description: string;
+}
+
+export interface ActionResponse {
   action_summary: string;
   resolution_type: "auto_success" | "check";
   check: CheckDetail | null;
@@ -28,30 +29,33 @@ interface ActionResponse {
   gm_prompt: string;
 }
 
-interface Message {
+export interface StreamingPreview {
+  narration: string;
+  scene_progression: string;
+  gm_prompt: string;
+  interrupted?: boolean;
+}
+
+export interface CombatResultSummary {
+  hit?: boolean;
+  damage?: number;
+  effects: Effect[];
+}
+
+export interface NarrativeEntry {
   id: number;
-  role: "gm" | "player" | "system";
-  text: string;
+  narrative: string;
+  sceneProgression?: string;
+  gmPrompt?: string;
   resolution?: ActionResponse;
-  streamingPreview?: {
-    narration: string;
-    scene_progression: string;
-    gm_prompt: string;
-    interrupted?: boolean;
-  };
+  combatResult?: CombatResultSummary;
   timestamp: number;
 }
 
 interface NarrativeHistoryProps {
-  messages: Message[];
-  streamingPreview: {
-    narration: string;
-    scene_progression: string;
-    gm_prompt: string;
-    interrupted?: boolean;
-  } | null;
-  sending: boolean;
-  gamePhase?: "exploration" | "combat" | "ended";
+  entries: NarrativeEntry[];
+  loading?: boolean;
+  streamingPreview?: StreamingPreview | null;
 }
 
 const ABILITY_LABELS: Record<string, string> = {
@@ -63,42 +67,75 @@ const ABILITY_LABELS: Record<string, string> = {
   cha: "魅力",
 };
 
-function CompactResolutionSummary({ res }: { res: ActionResponse }) {
-  const isCheck = res.resolution_type === "check";
-  const outcomeClass = res.outcome === "success" ? "outcome-success" : "outcome-failure";
-  const outcomeLabel = res.outcome === "success" ? "成功" : "失败";
+function formatTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
-  return (
-    <div className="compact-resolution">
-      <div className="compact-resolution-header">
-        <span className={`outcome-badge-sm ${outcomeClass}`}>
-          {isCheck ? "检定" : "自动"} · {outcomeLabel}
-        </span>
-        {isCheck && res.check && (
-          <span className="check-summary-sm">
-            {ABILITY_LABELS[res.check.ability] ?? res.check.ability} d20={res.check.roll}
-            {res.check.modifier >= 0 ? "+" : ""}
-            {res.check.modifier}
-            {res.check.proficiency_bonus > 0 ? `+${res.check.proficiency_bonus}` : ""}
-            {" = "}
-            {res.check.total} / DC{res.check.dc}
+function ResolutionSummary({
+  resolution,
+  combatResult,
+}: {
+  resolution?: ActionResponse;
+  combatResult?: CombatResultSummary;
+}) {
+  if (combatResult) {
+    return (
+      <div className="narrative-resolution">
+        {combatResult.hit ? (
+          <span className="resolution-badge combat-hit">
+            命中
+            {combatResult.damage !== undefined && (
+              <span className="combat-damage">，造成 {combatResult.damage} 点伤害</span>
+            )}
           </span>
+        ) : (
+          <span className="resolution-badge combat-miss">未命中</span>
+        )}
+        {combatResult.effects.length > 0 && (
+          <div className="narrative-effects">
+            {combatResult.effects.map((effect, idx) => (
+              <span key={idx} className="effect-tag">{effect.description}</span>
+            ))}
+          </div>
         )}
       </div>
-      {res.effects.length > 0 && (
-        <div className="effects-sm">
-          {res.effects.map((eff, index) => (
+    );
+  }
+
+  if (!resolution) return null;
+
+  const isCheck = resolution.resolution_type === "check";
+  const outcomeClass = resolution.outcome === "success" ? "success" : "failure";
+
+  return (
+    <div className="narrative-resolution">
+      <span className={`resolution-badge ${outcomeClass}`}>
+        {isCheck ? "检定" : "自动成功"} - {resolution.outcome === "success" ? "成功" : "失败"}
+      </span>
+      {isCheck && resolution.check && (
+        <span className="check-summary">
+          {ABILITY_LABELS[resolution.check.ability] ?? resolution.check.ability}
+          {" "}d20={resolution.check.roll} / 总计 {resolution.check.total} / DC {resolution.check.dc}
+        </span>
+      )}
+      {resolution.effects.length > 0 && (
+        <div className="narrative-effects">
+          {resolution.effects.map((effect, idx) => (
             <span
-              key={index}
-              className={`effect-tag-sm ${
-                typeof eff.delta === "number" && eff.delta > 0
-                  ? "positive"
-                  : typeof eff.delta === "number" && eff.delta < 0
-                    ? "negative"
+              key={idx}
+              className={`effect-tag ${
+                typeof effect.delta === "number" && effect.delta < 0
+                  ? "negative"
+                  : typeof effect.delta === "number" && effect.delta > 0
+                    ? "positive"
                     : ""
               }`}
             >
-              {eff.description}
+              {effect.description}
             </span>
           ))}
         </div>
@@ -107,61 +144,126 @@ function CompactResolutionSummary({ res }: { res: ActionResponse }) {
   );
 }
 
-export function NarrativeHistory({ messages, streamingPreview, sending, gamePhase }: NarrativeHistoryProps) {
-  const gmMessages = messages.filter((m) => m.role === "gm");
-  // Show only the most recent 5 narrative entries
-  const recentMessages = gmMessages.slice(-5);
-  const hasMoreMessages = gmMessages.length > 5;
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+function NarrativeCard({ entry }: { entry: NarrativeEntry }) {
+  return (
+    <div className="narrative-card">
+      <div className="narrative-card-header">
+        <span className="narrative-card-icon">📖</span>
+        <span className="narrative-card-label">叙事</span>
+        <span className="narrative-card-time">{formatTime(entry.timestamp)}</span>
+      </div>
+      <div className="narrative-card-body">
+        {entry.resolution?.action_summary && (
+          <div className="narrative-context">
+            <span className="narrative-context-label">🎭 行动</span>
+            <span className="narrative-context-text">{entry.resolution.action_summary}</span>
+          </div>
+        )}
+        <p className="narrative-text">{entry.narrative}</p>
+        <ResolutionSummary resolution={entry.resolution} combatResult={entry.combatResult} />
+        {entry.sceneProgression && (
+          <div className="narrative-section progression">
+            <span className="section-label">🕯️ 场景推进</span>
+            <p className="section-text">{entry.sceneProgression}</p>
+          </div>
+        )}
+        {entry.gmPrompt && (
+          <div className="narrative-section gm-prompt">
+            <span className="section-label">🎯 GM 提示</span>
+            <p className="section-text">{entry.gmPrompt}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending, streamingPreview]);
+function LoadingNarration() {
+  return (
+    <div className="narrative-card loading">
+      <div className="narrative-card-header">
+        <span className="narrative-card-icon">🎲</span>
+        <span className="narrative-card-label">GM 正在叙述</span>
+      </div>
+      <div className="narrative-skeleton">
+        <div className="skeleton-line" />
+        <div className="skeleton-line short" />
+        <div className="skeleton-line medium" />
+      </div>
+    </div>
+  );
+}
 
-  const isCombat = gamePhase === "combat";
+function StreamingNarrativeCard({ preview }: { preview: StreamingPreview }) {
+  const hasNarration = preview.narration.trim().length > 0;
+  const hasProgression = preview.scene_progression.trim().length > 0;
+  const hasPrompt = preview.gm_prompt.trim().length > 0;
+
+  if (!hasNarration && !hasProgression && !hasPrompt) {
+    return <LoadingNarration />;
+  }
 
   return (
-    <div className={`narrative-history ${isCombat ? "narrative-combat" : "narrative-exploration"}`}>
+    <div className="narrative-card streaming">
+      <div className="narrative-card-header">
+        <span className="narrative-card-icon">✨</span>
+        <span className="narrative-card-label">叙事生成中</span>
+      </div>
+      <div className="narrative-card-body">
+        {hasNarration && (
+          <p className="narrative-text">
+            {preview.narration}
+            <span className="streaming-cursor">▌</span>
+          </p>
+        )}
+        {hasProgression && (
+          <div className="narrative-section progression">
+            <span className="section-label">🕯️ 场景推进</span>
+            <p className="section-text">{preview.scene_progression}</p>
+          </div>
+        )}
+        {hasPrompt && (
+          <div className="narrative-section gm-prompt">
+            <span className="section-label">🎯 GM 提示</span>
+            <p className="section-text">{preview.gm_prompt}</p>
+          </div>
+        )}
+        {preview.interrupted && (
+          <div className="interrupted-notice">叙事流已中断，已保留收到的片段。</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function NarrativeHistory({
+  entries,
+  loading,
+  streamingPreview,
+}: NarrativeHistoryProps) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [entries, loading, streamingPreview]);
+
+  const visibleEntries = entries.slice(-10);
+
+  return (
+    <div className="narrative-history">
       <div className="narrative-history-header">
-        <span className="narrative-history-icon">{isCombat ? "⚔️" : "📜"}</span>
-        <span className="narrative-history-title">{isCombat ? "战斗叙事" : "探索叙事"}</span>
-        {hasMoreMessages && (
-          <span className="narrative-history-count">显示最近 5 条，共 {gmMessages.length} 条</span>
-        )}
+        <span className="narrative-history-title">📜 叙事历史</span>
+        <span className="narrative-history-count">最近 {visibleEntries.length} 条</span>
       </div>
-      <div className="narrative-list">
-        {recentMessages.length === 0 && !sending && (
-          <div className="narrative-empty">{isCombat ? "战斗进行中…" : "输入一个行动开始冒险…"}</div>
-        )}
-        {recentMessages.map((message) => (
-          <div key={message.id} className={`narrative-item ${isCombat ? "narrative-combat-item" : ""}`}>
-            <div className="narrative-text">
-              {(message.resolution?.narration || message.text)
-                .split("\n")
-                .map((line, i) =>
-                  line.trim() ? <p key={i}>{line}</p> : null
-                )}
-            </div>
-            {message.resolution && <CompactResolutionSummary res={message.resolution} />}
-          </div>
-        ))}
-        {sending && streamingPreview && (
-          <div className={`narrative-item streaming ${isCombat ? "narrative-combat-item" : ""}`}>
-            <div className="narrative-text">
-              {streamingPreview.narration
-                .split("\n")
-                .map((line, i) =>
-                  line.trim() ? <p key={i}>{line}</p> : null
-                )}
-            </div>
-            <div className="streaming-indicator">
-              <span className={`streaming-dot ${isCombat ? "combat-dot" : ""}`} />
-              GM 正在叙述…
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+      {visibleEntries.length === 0 && !loading && !streamingPreview && (
+        <div className="narrative-empty">输入一个行动开始冒险…</div>
+      )}
+      {visibleEntries.map((entry) => (
+        <NarrativeCard key={entry.id} entry={entry} />
+      ))}
+      {streamingPreview && <StreamingNarrativeCard preview={streamingPreview} />}
+      {loading && !streamingPreview && <LoadingNarration />}
+      <div ref={bottomRef} />
     </div>
   );
 }

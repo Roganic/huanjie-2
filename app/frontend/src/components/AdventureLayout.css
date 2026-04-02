@@ -1,0 +1,26 @@
+/* Scene header bar displayed at the top of the main chat area */
+.scene-header-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.scene-header-icon {
+  font-size: 12px;
+}
+
+.scene-header-name {
+  color: var(--text);
+}
+
+/* Give the combat narrative panel more room so history is readable */
+.combat-screen .combat-narrative-panel {
+  flex: 2;
+  min-height: 240px;
+}

@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import "./components/AdventureLayout.css";
+import { NarrativeHistory, type NarrativeEntry } from "./components/NarrativeHistory";
 
 interface Message {
   id: number;
@@ -23,17 +25,6 @@ interface CheckDetail {
   roll: number;
   total: number;
   dc: number;
-  skill_name?: string | null;
-}
-
-interface SkillCheckDetail {
-  skill: string | null;
-  ability?: string;
-  roll: number;
-  modifier: number;
-  total: number;
-  dc: number;
-  success: boolean;
 }
 
 interface Effect {
@@ -47,7 +38,6 @@ interface ActionResponse {
   action_summary: string;
   resolution_type: "auto_success" | "check";
   check: CheckDetail | null;
-  skill_check: SkillCheckDetail | null;
   outcome: "success" | "failure";
   effects: Effect[];
   narration: string;
@@ -84,25 +74,6 @@ interface Actor {
   description: string;
   conditions?: string[];
   skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
-  // Rest system fields
-  hit_dice_remaining?: number;
-  hit_dice_total?: number;
-  spell_slots?: Record<string, number>;
-  spell_slots_max?: Record<string, number>;
-}
-
-interface NPC {
-  id: string;
-  name: string;
-  type: "friendly" | "neutral" | "hostile";
-  description: string;
-  race?: string;
-  occupation?: string;
-}
-
-interface SceneExit {
-  direction: string;
-  target_scene_id: string;
 }
 
 interface Scene {
@@ -110,9 +81,7 @@ interface Scene {
   name: string;
   description: string;
   actors: string[];
-  npcs: NPC[];
   time?: number;
-  exits?: SceneExit[];
 }
 
 interface NarrativeHistoryEntry {
@@ -136,7 +105,6 @@ interface BootstrapState {
   actor: Actor | null;
   scene: Scene;
   narrative_history: NarrativeHistoryEntry[];
-  action_history: { action: string; result: string; narrative_summary: string }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -179,18 +147,6 @@ interface CombatState {
   log: CombatLogEntry[];
 }
 
-interface LootItem {
-  item_id: string;
-  name: string;
-  quantity: number;
-}
-
-interface LootGained {
-  enemy_id: string;
-  enemy_name: string;
-  items: LootItem[];
-}
-
 interface CombatActionResult {
   action_type: CombatActionType;
   actor_id: string;
@@ -200,7 +156,6 @@ interface CombatActionResult {
   effects: Effect[];
   narrative: string;
   combat_state: CombatState;
-  loot_gained?: LootGained[];
 }
 
 interface ProviderOption {
@@ -223,17 +178,6 @@ interface CharacterDraft {
   characterClass: CharacterClass;
   abilities: AbilityScores;
   abilityGeneration: "standard_array" | "random_4d6" | "manual";
-}
-
-interface SaveFile {
-  save_id: string;
-  save_name: string;
-  character_name: string | null;
-  class: string | null;
-  hp: number | null;
-  hp_max: number | null;
-  scene_name: string | null;
-  saved_at: string;
 }
 
 type Skill = {
@@ -530,25 +474,6 @@ function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolea
   );
 }
 
-function HitDiceDisplay({ actor }: { actor: Actor }) {
-  const hitDiceRemaining = actor.hit_dice_remaining ?? 0;
-  const hitDiceTotal = actor.hit_dice_total ?? 0;
-  
-  if (hitDiceTotal <= 0) return null;
-  
-  // Get hit die size based on class
-  const hitDieSize = actor.character_class === "warrior" ? 10 : actor.character_class === "mage" ? 6 : 8;
-  
-  return (
-    <div className="hit-dice-display" title="剩余生命骰（短休可用）">
-      <span className="hit-dice-icon">🎲</span>
-      <span className="hit-dice-value">
-        {hitDiceRemaining}/{hitDiceTotal}d{hitDieSize}
-      </span>
-    </div>
-  );
-}
-
 function MiniCharacterCard({ actor }: { actor: Actor }) {
   const hpPercent = Math.round((actor.hp / actor.hp_max) * 100);
   let hpStatus: "high" | "medium" | "low" = "high";
@@ -576,9 +501,6 @@ function MiniCharacterCard({ actor }: { actor: Actor }) {
         <div className="mini-stat" title="熟练加值">
           <span className="mini-stat-icon">⭐</span>
           <span className="mini-stat-value">+{actor.proficiency_bonus}</span>
-        </div>
-        <div className="mini-stat" title="生命骰">
-          <HitDiceDisplay actor={actor} />
         </div>
       </div>
     </div>
@@ -627,20 +549,8 @@ function CharacterCard({
   );
 }
 
-function SceneCard({ scene, playerName, previousScene, onExitClick }: { scene: Scene; playerName?: string; previousScene?: Scene | null; onExitClick?: (direction: string) => void }) {
+function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerName?: string; previousScene?: Scene | null }) {
   const timeChanged = previousScene !== undefined && previousScene !== null && previousScene.time !== scene.time;
-
-  const npcTypeClass = (type: string) => {
-    if (type === "friendly") return "npc-friendly";
-    if (type === "hostile") return "npc-hostile";
-    return "npc-neutral";
-  };
-
-  const npcTypeLabel = (type: string) => {
-    if (type === "friendly") return "友好";
-    if (type === "hostile") return "敌对";
-    return "中立";
-  };
 
   return (
     <div className="scene-card">
@@ -651,24 +561,6 @@ function SceneCard({ scene, playerName, previousScene, onExitClick }: { scene: S
         <div className={`scene-time ${timeChanged ? "changed" : ""}`}>
           <span className="scene-time-label">⏱️ 场景时间</span>
           <span className="scene-time-value">{scene.time}</span>
-        </div>
-      )}
-
-      {scene.exits && scene.exits.length > 0 && (
-        <div className="scene-exits">
-          <div className="scene-exits-label">可用出口</div>
-          <div className="exit-buttons">
-            {scene.exits.map((exit, index) => (
-              <button
-                key={index}
-                className="exit-button"
-                onClick={() => onExitClick?.(exit.direction)}
-                title={`前往 ${exit.direction}`}
-              >
-                → {exit.direction}
-              </button>
-            ))}
-          </div>
         </div>
       )}
 
@@ -684,21 +576,15 @@ function SceneCard({ scene, playerName, previousScene, onExitClick }: { scene: S
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {scene.npcs && scene.npcs.length > 0 && (
-        <div className="scene-npcs">
-          <div className="scene-npcs-label">场景 NPC</div>
-          <div className="npc-list">
-            {scene.npcs.map((npc) => (
-              <div key={npc.id} className={`npc-item ${npcTypeClass(npc.type)}`}>
-                <span className="npc-name">{npc.name}</span>
-                <span className="npc-type">{npcTypeLabel(npc.type)}</span>
-                <p className="npc-desc">{npc.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+function SceneHeader({ scene }: { scene: Scene }) {
+  return (
+    <div className="scene-header-bar">
+      <span className="scene-header-icon">📍</span>
+      <span className="scene-header-name">{scene.name}</span>
     </div>
   );
 }
@@ -819,112 +705,6 @@ function Timeline({
 }
 
 // ---------------------------------------------------------------------------
-// Scrollable Narrative History (shows all records, auto-scrolls)
-// ---------------------------------------------------------------------------
-
-function ScrollableNarrativeHistory({
-  messages,
-  streamingPreview,
-  sending,
-  gamePhase,
-}: {
-  messages: Message[];
-  streamingPreview: StreamingPreview | null;
-  sending: boolean;
-  gamePhase?: "exploration" | "combat" | "ended";
-}) {
-  const gmMessages = messages.filter((m) => m.role === "gm");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending, streamingPreview]);
-
-  const isCombat = gamePhase === "combat";
-
-  return (
-    <div className={`narrative-history ${isCombat ? "narrative-combat" : "narrative-exploration"}`}>
-      <div className="narrative-history-header">
-        <span className="narrative-history-icon">{isCombat ? "⚔️" : "📜"}</span>
-        <span className="narrative-history-title">{isCombat ? "战斗叙事" : "探索叙事"}</span>
-        {gmMessages.length > 0 && (
-          <span className="narrative-history-count">共 {gmMessages.length} 条记录</span>
-        )}
-      </div>
-      <div className="narrative-list">
-        {gmMessages.length === 0 && !sending && (
-          <div className="narrative-empty">{isCombat ? "战斗进行中…" : "输入一个行动开始冒险…"}</div>
-        )}
-        {gmMessages.map((message) => (
-          <div key={message.id} className={`narrative-item ${isCombat ? "narrative-combat-item" : ""}`}>
-            <div className="narrative-text">
-              {(message.resolution?.narration || message.text)
-                .split("\n")
-                .map((line, i) =>
-                  line.trim() ? <p key={i}>{line}</p> : null
-                )}
-            </div>
-            {message.resolution && (
-              <div className="compact-resolution">
-                <div className="compact-resolution-header">
-                  <span className={`outcome-badge-sm ${message.resolution.outcome === "success" ? "outcome-success" : "outcome-failure"}`}>
-                    {message.resolution.resolution_type === "check" ? "检定" : "自动"} · {message.resolution.outcome === "success" ? "成功" : "失败"}
-                  </span>
-                  {message.resolution.resolution_type === "check" && message.resolution.check && (
-                    <span className="check-summary-sm">
-                      {ABILITY_LABELS[message.resolution.check.ability] ?? message.resolution.check.ability} d20={message.resolution.check.roll}
-                      {message.resolution.check.modifier >= 0 ? "+" : ""}
-                      {message.resolution.check.modifier}
-                      {message.resolution.check.proficiency_bonus > 0 ? `+${message.resolution.check.proficiency_bonus}` : ""}
-                      {" = "}
-                      {message.resolution.check.total} / DC{message.resolution.check.dc}
-                    </span>
-                  )}
-                </div>
-                {message.resolution.effects.length > 0 && (
-                  <div className="effects-sm">
-                    {message.resolution.effects.map((eff, index) => (
-                      <span
-                        key={index}
-                        className={`effect-tag-sm ${
-                          typeof eff.delta === "number" && eff.delta > 0
-                            ? "positive"
-                            : typeof eff.delta === "number" && eff.delta < 0
-                              ? "negative"
-                              : ""
-                        }`}
-                      >
-                        {eff.description}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-        {sending && streamingPreview && (
-          <div className={`narrative-item streaming ${isCombat ? "narrative-combat-item" : ""}`}>
-            <div className="narrative-text">
-              {streamingPreview.narration
-                .split("\n")
-                .map((line, i) =>
-                  line.trim() ? <p key={i}>{line}</p> : null
-                )}
-            </div>
-            <div className="streaming-indicator">
-              <span className={`streaming-dot ${isCombat ? "combat-dot" : ""}`} />
-              GM 正在叙述…
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Combat Screen Components
 // ---------------------------------------------------------------------------
 
@@ -932,6 +712,7 @@ interface CombatScreenProps {
   combat: CombatState;
   combatNarrative: string;
   isNarrativeStreaming: boolean;
+  narrativeHistory: NarrativeEntry[];
   selectedTarget: string | null;
   onTargetChange: (targetId: string) => void;
   selectedWeapon: string;
@@ -945,6 +726,7 @@ function CombatScreen({
   combat,
   combatNarrative,
   isNarrativeStreaming,
+  narrativeHistory,
   selectedTarget,
   onTargetChange,
   selectedWeapon,
@@ -955,75 +737,18 @@ function CombatScreen({
 }: CombatScreenProps) {
   const currentParticipant = combat.participants.find((p) => p.id === combat.current_actor_id);
   const isPlayerTurn = currentParticipant?.is_player ?? false;
-  const enemies = combat.participants.filter((p) => !p.is_player && p.hp > 0);
+  const enemies = combat.participants.filter((p) => !p.is_player);
   const weapons = ["longsword", "shortsword", "dagger", "shortbow"];
-
-  // Sort participants by initiative for initiative order display
-  const sortedParticipants = [...combat.participants].sort((a, b) => b.initiative - a.initiative);
-
-  const getHpStatus = (hp: number, max: number): "high" | "medium" | "low" => {
-    const ratio = hp / max;
-    if (ratio > 0.6) return "high";
-    if (ratio > 0.3) return "medium";
-    return "low";
-  };
 
   return (
     <div className="combat-screen">
-      {/* Combat Header with Round Info */}
       <div className="combat-header">
-        <div className="combat-round">⚔️ 第 {combat.round_number} 轮</div>
-        <div className={`combat-turn ${isPlayerTurn ? "player-turn" : "enemy-turn"}`}>
-          {isPlayerTurn ? "▶ 你的回合" : `⏳ ${currentParticipant?.name} 的回合`}
+        <div className="combat-round">第 {combat.round_number} 轮</div>
+        <div className="combat-turn">
+          {isPlayerTurn ? "你的回合" : `${currentParticipant?.name} 的回合`}
         </div>
       </div>
 
-      {/* Initiative Order - Clear Turn Order Display */}
-      <div className="initiative-order-panel">
-        <div className="initiative-order-header">
-          <span className="initiative-order-title">先攻顺序</span>
-          <span className="initiative-order-hint">按先攻值排序</span>
-        </div>
-        <div className="initiative-order-list">
-          {sortedParticipants.map((participant, index) => {
-            const isCurrent = participant.id === combat.current_actor_id;
-            const isDefeated = participant.hp <= 0;
-            return (
-              <div
-                key={participant.id}
-                className={`initiative-item ${isCurrent ? "current" : ""} ${
-                  participant.is_player ? "player" : "enemy"
-                } ${isDefeated ? "defeated" : ""}`}
-              >
-                <div className="initiative-rank">{index + 1}</div>
-                <div className="initiative-avatar">{participant.is_player ? "🧙" : "👹"}</div>
-                <div className="initiative-info">
-                  <div className="initiative-name">
-                    {participant.name}
-                    {isCurrent && <span className="turn-indicator">▶</span>}
-                  </div>
-                  <div className="initiative-hp-bar">
-                    <div
-                      className={`initiative-hp-fill ${getHpStatus(participant.hp, participant.hp_max)}`}
-                      style={{ width: `${Math.max(0, (participant.hp / participant.hp_max) * 100)}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="initiative-stats">
-                  <div className="initiative-value" title="先攻值">
-                    {participant.initiative}
-                  </div>
-                  <div className={`initiative-hp-text ${getHpStatus(participant.hp, participant.hp_max)}`}>
-                    {participant.hp}/{participant.hp_max}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Combat Arena - Current Actors */}
       <div className="combat-arena">
         {combat.participants.map((participant) => (
           <div
@@ -1034,23 +759,15 @@ function CombatScreen({
           >
             <div className="combat-actor-avatar">{participant.is_player ? "🧙" : "👹"}</div>
             <div className="combat-actor-info">
-              <div className="combat-actor-name">
-                {participant.name}
-                {participant.id === combat.current_actor_id && (
-                  <span className="current-turn-badge">当前</span>
-                )}
-              </div>
-              <div className="combat-actor-stats">
-                <span className="combat-actor-ac" title="护甲等级">🛡️ {participant.ac}</span>
-              </div>
+              <div className="combat-actor-name">{participant.name}</div>
               <div className="combat-actor-hp-bar">
                 <div
-                  className={`combat-actor-hp-fill ${getHpStatus(participant.hp, participant.hp_max)}`}
-                  style={{ width: `${Math.max(0, (participant.hp / participant.hp_max) * 100)}%` }}
+                  className="combat-actor-hp-fill"
+                  style={{ width: `${(participant.hp / participant.hp_max) * 100}%` }}
                 />
               </div>
-              <div className={`combat-actor-hp-text ${getHpStatus(participant.hp, participant.hp_max)}`}>
-                HP: {participant.hp}/{participant.hp_max}
+              <div className="combat-actor-hp-text">
+                {participant.hp}/{participant.hp_max} HP
               </div>
             </div>
             {participant.conditions.length > 0 && (
@@ -1066,21 +783,16 @@ function CombatScreen({
         ))}
       </div>
 
-      <div className="combat-narrative">
-        {isNarrativeStreaming || combatNarrative ? (
-          <div className="narration-block">
-            <div className="narration-header">
-              <span className="narration-icon">⚔️</span>
-              <span className="narration-label">战斗叙事</span>
-            </div>
-            <div className="narration-content">
-              <p className="narration-paragraph">{combatNarrative}</p>
-              {isNarrativeStreaming && <span className="streaming-cursor">▌</span>}
-            </div>
-          </div>
-        ) : (
-          <div className="combat-hint">选择行动并点击执行</div>
-        )}
+      <div className="combat-narrative-panel">
+        <NarrativeHistory
+          entries={narrativeHistory}
+          loading={loading && !isNarrativeStreaming}
+          streamingPreview={
+            isNarrativeStreaming
+              ? { narration: combatNarrative, scene_progression: "", gm_prompt: "" }
+              : undefined
+          }
+        />
       </div>
 
       {isPlayerTurn && (
@@ -1140,96 +852,35 @@ function CombatScreen({
 
 interface CombatEndScreenProps {
   combat: CombatState;
-  lootGained?: LootGained[];
   onReturn: () => void;
 }
 
-function CombatEndScreen({ combat, lootGained, onReturn }: CombatEndScreenProps) {
+function CombatEndScreen({ combat, onReturn }: CombatEndScreenProps) {
   const isVictory = combat.status === "victory";
   const isEscape = combat.status === "escaped";
-
-  // Format loot for display
-  const hasLoot = lootGained && lootGained.length > 0 && lootGained.some(entry => entry.items.length > 0);
 
   return (
     <div className="combat-end-screen">
       <div className={`combat-result ${combat.status}`}>
         <div className="combat-result-icon">{isVictory ? "🏆" : isEscape ? "🏃" : "💀"}</div>
         <h2>
-          {isVictory ? "🎉 战斗胜利！" : isEscape ? "🏃 成功逃脱" : "💀 战斗失败"}
+          {isVictory ? "战斗胜利！" : isEscape ? "成功逃脱" : "战斗失败"}
         </h2>
-        <p className="combat-result-description">
-          {isVictory 
-            ? "你成功击败了所有敌人！" 
-            : isEscape 
-              ? "你成功逃离了战斗。" 
-              : "你在战斗中倒下了…"}
+        <p>
+          战斗持续了 {combat.round_number} 轮
         </p>
-        
-        {/* Loot Display */}
-        {isVictory && hasLoot && (
-          <div className="combat-loot-section">
-            <h3>🎁 获得战利品</h3>
-            <div className="combat-loot-list">
-              {lootGained?.map((entry) => (
-                entry.items.length > 0 && (
-                  <div key={entry.enemy_id} className="combat-loot-entry">
-                    <div className="loot-enemy-name">从 {entry.enemy_name} 身上搜到：</div>
-                    <div className="loot-items">
-                      {entry.items.map((item, idx) => (
-                        <span key={idx} className="loot-item">
-                          {item.name} {item.quantity > 1 ? `x${item.quantity}` : ""}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )
-              ))}
-            </div>
-          </div>
-        )}
-        <div className="combat-result-stats">
-          <div className="result-stat">
-            <span className="result-stat-label">战斗轮数</span>
-            <span className="result-stat-value">{combat.round_number}</span>
-          </div>
-          <div className="result-stat">
-            <span className="result-stat-label">存活着</span>
-            <span className="result-stat-value">
-              {combat.participants.filter(p => p.hp > 0).length}/{combat.participants.length}
-            </span>
-          </div>
-        </div>
         <div className="combat-result-participants">
           {combat.participants.map((p) => (
             <div key={p.id} className={`result-participant ${p.is_player ? "player" : "enemy"}`}>
-              <div className="result-participant-info">
-                <span className="result-participant-avatar">{p.is_player ? "🧙" : "👹"}</span>
-                <span className="result-participant-name">{p.name}</span>
-              </div>
-              <div className={`result-participant-status ${p.hp <= 0 ? "defeated" : "survived"}`}>
-                {p.hp <= 0 ? (
-                  <>
-                    <span className="status-icon">💀</span>
-                    <span>倒下</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="status-icon">❤️</span>
-                    <span>{p.hp}/{p.hp_max} HP</span>
-                  </>
-                )}
-              </div>
+              <span>{p.name}</span>
+              <span className={p.hp <= 0 ? "defeated" : "survived"}>
+                {p.hp <= 0 ? "倒下" : `${p.hp}/${p.hp_max} HP`}
+              </span>
             </div>
           ))}
         </div>
-        {isVictory && (
-          <div className="auto-return-hint">
-            3秒后自动返回探索…
-          </div>
-        )}
         <button className="return-btn" onClick={onReturn}>
-          {isVictory ? "继续冒险 →" : "返回"}
+          返回冒险
         </button>
       </div>
     </div>
@@ -1588,32 +1239,14 @@ function restoreTimelineFromHistory(history: NarrativeHistoryEntry[]): TimelineE
 
       if (entry.resolution_summary.resolution_type === "check" && entry.resolution_summary.check) {
         const check = entry.resolution_summary.check;
-        const abilityName = ABILITY_LABELS[check.ability] ?? check.ability;
-        const skillName = check.skill_name;
-        const isSkillCheck = skillName !== null && skillName !== undefined;
-        
-        const title = isSkillCheck && skillName
-          ? `${SKILL_LABELS[skillName] ?? skillName}检定 DC${check.dc}`
-          : `${abilityName}检定 DC${check.dc}`;
-        
-        const totalModifier = check.modifier + check.proficiency_bonus;
-        const modifierText = totalModifier >= 0 ? `+${totalModifier}` : `${totalModifier}`;
-        
-        let rollIndicator = "";
-        if (check.roll === 20) {
-          rollIndicator = "【大成功!】";
-        } else if (check.roll === 1) {
-          rollIndicator = "【大失败!】";
-        }
-        
-        const details = `掷出 ${check.roll}${rollIndicator} ${modifierText} = ${check.total} vs DC ${check.dc} — ${entry.resolution_summary.outcome === "success" ? "成功" : "失败"}`;
-        
         items.push({
           id: baseId + 1,
           type: "check",
-          title,
+          title: `${ABILITY_LABELS[check.ability] ?? check.ability}检定 DC${check.dc}`,
           outcome: entry.resolution_summary.outcome,
-          details,
+          details: `掷骰: d20=${check.roll} 调整值:${check.modifier >= 0 ? "+" : ""}${check.modifier}${
+            check.proficiency_bonus > 0 ? `+${check.proficiency_bonus}` : ""
+          } = ${check.total}`,
           timestamp: baseId + 1,
         });
       }
@@ -1640,6 +1273,26 @@ function restoreTimelineFromHistory(history: NarrativeHistoryEntry[]): TimelineE
     .sort((left, right) => right.timestamp - left.timestamp);
 }
 
+function restoreNarrativeHistoryFromBackend(history: NarrativeHistoryEntry[]): NarrativeEntry[] {
+  return history.slice(-MAX_RESTORED_HISTORY).map((entry) => ({
+    id: entry.created_at || Date.now(),
+    narrative: entry.narration,
+    sceneProgression: entry.scene_progression,
+    gmPrompt: entry.gm_prompt,
+    resolution: {
+      action_summary: entry.action_summary,
+      resolution_type: entry.resolution_summary.resolution_type ?? "auto_success",
+      check: entry.resolution_summary.check ?? null,
+      outcome: entry.resolution_summary.outcome ?? "success",
+      effects: [],
+      narration: entry.narration,
+      scene_progression: entry.scene_progression,
+      gm_prompt: entry.gm_prompt,
+    },
+    timestamp: entry.created_at || Date.now(),
+  }));
+}
+
 function App() {
   const [sessionId, setSessionId] = useState<string | null>(() => getStoredSessionId());
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1663,17 +1316,12 @@ function App() {
   const [creationError, setCreationError] = useState<string | null>(null);
   // Combat state
   const [combat, setCombat] = useState<CombatState | null>(null);
-  // Save/Load state
-  const [showLoadDialog, setShowLoadDialog] = useState(false);
-  const [savesList, setSavesList] = useState<SaveFile[]>([]);
-  const [loadingSaves, setLoadingSaves] = useState(false);
-  const [loadingGame, setLoadingGame] = useState(false);
   const [combatLoading, setCombatLoading] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [selectedWeapon, setSelectedWeapon] = useState<string>("longsword");
   const [combatNarrative, setCombatNarrative] = useState<string>("");
   const [isCombatNarrativeStreaming, setIsCombatNarrativeStreaming] = useState(false);
-  const [combatLoot, setCombatLoot] = useState<LootGained[] | undefined>(undefined);
+  const [narrativeHistory, setNarrativeHistory] = useState<NarrativeEntry[]>([]);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
@@ -1682,8 +1330,6 @@ function App() {
   const gamePhase = bootstrap?.game_phase ?? "exploration";
   const inCombat = gamePhase === "combat";
   const combatEnded = gamePhase === "ended";
-
-
 
   useEffect(() => {
     let cancelled = false;
@@ -1740,6 +1386,7 @@ function App() {
           storeSessionId(data.session_id);
           setBootstrap(data);
           setMessages(restoreMessagesFromHistory(data.narrative_history));
+          setNarrativeHistory(restoreNarrativeHistoryFromBackend(data.narrative_history));
           setTimeline(restoreTimelineFromHistory(data.narrative_history));
         }
       } catch {
@@ -1779,6 +1426,7 @@ function App() {
     setTimeline([]);
     setInput("");
     setStreamingPreview(null);
+    setNarrativeHistory([]);
     setMessages(
       message
         ? [{ id: Date.now(), role: "system", text: message, timestamp: Date.now() }]
@@ -1805,6 +1453,7 @@ function App() {
     storeSessionId(state.session_id);
     setBootstrap(state);
     setMessages(restoreMessagesFromHistory(state.narrative_history));
+    setNarrativeHistory(restoreNarrativeHistoryFromBackend(state.narrative_history));
     setTimeline(restoreTimelineFromHistory(state.narrative_history));
     return state;
   };
@@ -1835,13 +1484,9 @@ function App() {
       storeSessionId(state.session_id);
       setBootstrap(state);
       setMessages([]);
+      setNarrativeHistory([]);
       setTimeline([]);
       setInput("");
-      // Clear combat state
-      setCombat(null);
-      setCombatNarrative("");
-      setSelectedTarget(null);
-      setIsCombatNarrativeStreaming(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setMessages((previous) => [
@@ -1889,85 +1534,6 @@ function App() {
       ]);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const fetchSavesList = async () => {
-    setLoadingSaves(true);
-    try {
-      const response = await fetch(apiUrl("/saves"));
-      if (!response.ok) {
-        throw new Error(`获取存档列表失败 (${response.status})`);
-      }
-      const data = await response.json();
-      setSavesList(data.saves || []);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMessages((previous) => [
-        ...previous,
-        { id: Date.now(), role: "system", text: `获取存档列表失败: ${message}`, timestamp: Date.now() },
-      ]);
-    } finally {
-      setLoadingSaves(false);
-    }
-  };
-
-  const openLoadDialog = async () => {
-    await fetchSavesList();
-    setShowLoadDialog(true);
-  };
-
-  const loadGame = async (saveId: string) => {
-    if (loadingGame) return;
-
-    setLoadingGame(true);
-    try {
-      const response = await fetch(apiUrl("/load"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ save_id: saveId }),
-      });
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("存档文件不存在");
-        } else if (response.status === 400) {
-          const errorText = await response.text();
-          throw new Error(`存档文件损坏: ${errorText}`);
-        }
-        throw new Error(`读档失败 (${response.status})`);
-      }
-      const data: BootstrapState = await response.json();
-      
-      // Update session and state
-      setSessionId(data.session_id);
-      storeSessionId(data.session_id);
-      setBootstrap(data);
-      setPreviousBootstrap(null);
-      setMessages(restoreMessagesFromHistory(data.narrative_history));
-      setTimeline(restoreTimelineFromHistory(data.narrative_history));
-      setCombat(null);
-      setCombatNarrative("");
-      setSelectedTarget(null);
-      setIsCombatNarrativeStreaming(false);
-      setShowLoadDialog(false);
-      
-      setMessages((previous) => [
-        ...previous,
-        { id: Date.now(), role: "system", text: `存档已加载，欢迎回来，${data.actor?.name || "冒险者"}！`, timestamp: Date.now() },
-      ]);
-      addToTimeline({
-        type: "system",
-        title: "读取存档",
-        details: `角色: ${data.actor?.name || "未知"}, 场景: ${data.scene.name}`,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMessages((previous) => [
-        ...previous,
-        { id: Date.now(), role: "system", text: `读档失败: ${message}`, timestamp: Date.now() },
-      ]);
-    } finally {
-      setLoadingGame(false);
     }
   };
 
@@ -2095,13 +1661,6 @@ function App() {
       ...prev,
       abilities: rollRandomAbilities(),
     }));
-  };
-
-  const handleExitClick = (direction: string) => {
-    // Auto-fill movement command to input
-    const movementCommands = ["前往", "去", "走向", "进入"];
-    const command = movementCommands[Math.floor(Math.random() * movementCommands.length)];
-    setInput(`${command}${direction}`);
   };
 
   const send = async () => {
@@ -2260,6 +1819,15 @@ function App() {
 
       const data = completedResponse;
       setStreamingPreview(null);
+      const narrativeEntry: NarrativeEntry = {
+        id: Date.now(),
+        narrative: data.narration,
+        sceneProgression: data.scene_progression,
+        gmPrompt: data.gm_prompt,
+        resolution: data,
+        timestamp: Date.now(),
+      };
+      setNarrativeHistory((previous) => [...previous.slice(-9), narrativeEntry]);
       setMessages((previous) => [
         ...previous,
         {
@@ -2274,41 +1842,13 @@ function App() {
       if (data.resolution_type === "check" && data.check) {
         const check = data.check;
         const abilityName = ABILITY_LABELS[check.ability] ?? check.ability;
-        
-        // Check for skill check (has skill_name or skill_check field)
-        const skillName = data.skill_check?.skill ?? check.skill_name;
-        const isSkillCheck = skillName !== null && skillName !== undefined;
-        
-        // Build skill check display text
-        let title: string;
-        let details: string;
-        
-        if (isSkillCheck && skillName) {
-          const skillLabel = SKILL_LABELS[skillName] ?? skillName;
-          title = `${skillLabel}检定 DC${check.dc}`;
-        } else {
-          title = `${abilityName}检定 DC${check.dc}`;
-        }
-        
-        // Calculate total modifier (ability + proficiency)
-        const totalModifier = check.modifier + check.proficiency_bonus;
-        const modifierText = totalModifier >= 0 ? `+${totalModifier}` : `${totalModifier}`;
-        
-        // Determine special roll (natural 20 or 1)
-        let rollIndicator = "";
-        if (check.roll === 20) {
-          rollIndicator = "【大成功!】";
-        } else if (check.roll === 1) {
-          rollIndicator = "【大失败!】";
-        }
-        
-        details = `掷出 ${check.roll}${rollIndicator} ${modifierText} = ${check.total} vs DC ${check.dc} — ${data.outcome === "success" ? "成功" : "失败"}`;
-        
         addToTimeline({
           type: "check",
-          title,
+          title: `${abilityName}检定 DC${check.dc}`,
           outcome: data.outcome,
-          details,
+          details: `掷骰: d20=${check.roll} 调整值:${check.modifier >= 0 ? "+" : ""}${check.modifier}${
+            check.proficiency_bonus > 0 ? `+${check.proficiency_bonus}` : ""
+          } = ${check.total}`,
         });
       } else {
         addToTimeline({
@@ -2464,6 +2004,17 @@ function App() {
       }
       if (finalResult) {
         setCombat(finalResult.combat_state);
+        const combatNarrativeEntry: NarrativeEntry = {
+          id: Date.now(),
+          narrative: finalResult.narrative,
+          combatResult: {
+            hit: finalResult.hit,
+            damage: finalResult.damage,
+            effects: finalResult.effects,
+          },
+          timestamp: Date.now(),
+        };
+        setNarrativeHistory((previous) => [...previous.slice(-9), combatNarrativeEntry]);
         addToTimeline({
           type: "action",
           title: `战斗: ${actionType}`,
@@ -2474,35 +2025,13 @@ function App() {
         });
         // Refresh bootstrap state to get updated game_phase
         await refreshState();
-        // Store loot gained from combat
-        if (finalResult.loot_gained && finalResult.loot_gained.length > 0) {
-          setCombatLoot(finalResult.loot_gained);
-        }
-        
-        // If combat ended, show result and auto-return to exploration after delay
+        // If combat ended, show result
         if (finalResult.combat_state.status !== "active") {
-          const isVictory = finalResult.combat_state.status === "victory";
           addToTimeline({
             type: "system",
-            title: isVictory ? "战斗胜利" : "战斗结束",
+            title: finalResult.combat_state.status === "victory" ? "战斗胜利" : "战斗结束",
             details: `战斗在 ${finalResult.combat_state.round_number} 轮后结束`,
           });
-          // Auto-return to exploration after showing victory/defeat screen for 3 seconds
-          if (isVictory) {
-            setTimeout(() => {
-              returnToAdventure();
-              // Add victory message to chat
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: Date.now(),
-                  role: "system",
-                  text: "🎉 战斗胜利！你成功击败了所有敌人，继续你的冒险吧。",
-                  timestamp: Date.now(),
-                },
-              ]);
-            }, 3000);
-          }
         }
       }
     } catch (error) {
@@ -2583,10 +2112,7 @@ function App() {
             </select>
           </div>
           <button className="header-button" onClick={saveGame} disabled={saving || sending || creatingCharacter}>
-            {saving ? "存档中…" : "保存游戏"}
-          </button>
-          <button className="header-button" onClick={openLoadDialog} disabled={loadingSaves || sending || creatingCharacter}>
-            {loadingSaves ? "加载中…" : "读取存档"}
+            {saving ? "存档中…" : "存档"}
           </button>
           <button className="header-button" onClick={resetSession} disabled={resetting || sending || creatingCharacter}>
             {resetting ? "重置中…" : "重置"}
@@ -2607,7 +2133,6 @@ function App() {
               scene={bootstrap.scene}
               playerName={bootstrap.actor?.id}
               previousScene={previousBootstrap?.scene ?? null}
-              onExitClick={handleExitClick}
             />
           ) : (
             <div className="sidebar-loading">加载中…</div>
@@ -2656,31 +2181,49 @@ function App() {
 
       <main className="chat">
         {inCombat && combat ? (
-          <CombatScreen
-            combat={combat}
-            combatNarrative={combatNarrative}
-            isNarrativeStreaming={isCombatNarrativeStreaming}
-            selectedTarget={selectedTarget}
-            onTargetChange={setSelectedTarget}
-            selectedWeapon={selectedWeapon}
-            onWeaponChange={setSelectedWeapon}
-            onAction={executeCombatAction}
-            onFlee={() => endCombat("flee")}
-            loading={combatLoading}
-          />
+          <>
+            {bootstrap?.scene && <SceneHeader scene={bootstrap.scene} />}
+            <CombatScreen
+              combat={combat}
+              combatNarrative={combatNarrative}
+              isNarrativeStreaming={isCombatNarrativeStreaming}
+              narrativeHistory={narrativeHistory}
+              selectedTarget={selectedTarget}
+              onTargetChange={setSelectedTarget}
+              selectedWeapon={selectedWeapon}
+              onWeaponChange={setSelectedWeapon}
+              onAction={executeCombatAction}
+              onFlee={() => endCombat("flee")}
+              loading={combatLoading}
+            />
+          </>
         ) : combatEnded && combat ? (
-          <CombatEndScreen
-            combat={combat}
-            lootGained={combatLoot}
-            onReturn={returnToAdventure}
-          />
+          <>
+            {bootstrap?.scene && <SceneHeader scene={bootstrap.scene} />}
+            <CombatEndScreen
+              combat={combat}
+              onReturn={returnToAdventure}
+            />
+          </>
         ) : inAdventure ? (
           <>
-            <ScrollableNarrativeHistory
-              messages={messages}
-              streamingPreview={streamingPreview}
-              sending={sending}
-              gamePhase={gamePhase}
+            {bootstrap?.scene && <SceneHeader scene={bootstrap.scene} />}
+            {messages.some((m) => m.role === "system") && (
+              <div className="system-notices">
+                {messages
+                  .filter((m) => m.role === "system")
+                  .slice(-2)
+                  .map((m) => (
+                    <div key={m.id} className="system-notice">
+                      {m.text}
+                    </div>
+                  ))}
+              </div>
+            )}
+            <NarrativeHistory
+              entries={narrativeHistory}
+              loading={sending}
+              streamingPreview={streamingPreview ?? undefined}
             />
             <div className="input-bar">
               <input
@@ -2692,22 +2235,6 @@ function App() {
               />
               <button onClick={send} disabled={sending}>
                 {sending ? "…" : "发送"}
-              </button>
-              <button
-                className="rest-btn short-rest"
-                onClick={() => setInput("短休")}
-                disabled={sending || (bootstrap?.actor?.hit_dice_remaining ?? 0) <= 0}
-                title="短休：消耗1个生命骰恢复HP"
-              >
-                🎲 短休
-              </button>
-              <button
-                className="rest-btn long-rest"
-                onClick={() => setInput("长休")}
-                disabled={sending}
-                title="长休：完全恢复HP和生命骰"
-              >
-                🛏️ 长休
               </button>
               <button
                 className="combat-start-btn"
@@ -2766,16 +2293,6 @@ function App() {
               <SkillsList actor={bootstrap.actor} compact />
             </section>
 
-            <section>
-              <h2>生命骰</h2>
-              <div className="hit-dice-panel">
-                <HitDiceDisplay actor={bootstrap.actor} />
-                <div className="hit-dice-hint">
-                  短休消耗1个生命骰恢复 HP
-                </div>
-              </div>
-            </section>
-
             {bootstrap.actor.conditions && bootstrap.actor.conditions.length > 0 && (
               <section>
                 <h2>状态效果</h2>
@@ -2823,59 +2340,6 @@ function App() {
           <Timeline entries={timeline} onToggle={toggleTimelineEntry} />
         </section>
       </aside>
-
-      {/* Load Game Dialog */}
-      {showLoadDialog && (
-        <div className="load-dialog-overlay" onClick={() => setShowLoadDialog(false)}>
-          <div className="load-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="load-dialog-header">
-              <h2>📂 读取存档</h2>
-              <button className="close-btn" onClick={() => setShowLoadDialog(false)}>✕</button>
-            </div>
-            <div className="load-dialog-content">
-              {loadingSaves ? (
-                <div className="loading-saves">加载存档列表中…</div>
-              ) : savesList.length === 0 ? (
-                <div className="no-saves">暂无存档</div>
-              ) : (
-                <div className="saves-list">
-                  {savesList.map((save) => (
-                    <div key={save.save_id} className="save-item">
-                      <div className="save-info">
-                        <div className="save-name">{save.save_name}</div>
-                        <div className="save-details">
-                          {save.character_name ? (
-                            <span className="save-character">
-                              {save.character_name}
-                              {save.class && ` · ${CLASS_LABELS[save.class as CharacterClass] || save.class}`}
-                              {save.hp !== null && save.hp_max !== null && ` · HP ${save.hp}/${save.hp_max}`}
-                            </span>
-                          ) : (
-                            <span className="save-no-character">未创建角色</span>
-                          )}
-                          {save.scene_name && (
-                            <span className="save-scene"> 📍 {save.scene_name}</span>
-                          )}
-                        </div>
-                        <div className="save-time">
-                          {new Date(save.saved_at).toLocaleString("zh-CN")}
-                        </div>
-                      </div>
-                      <button
-                        className="load-btn"
-                        onClick={() => loadGame(save.save_id)}
-                        disabled={loadingGame}
-                      >
-                        {loadingGame ? "加载中…" : "读取"}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

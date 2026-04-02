@@ -558,7 +558,17 @@ function CharacterCard({
   );
 }
 
-function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerName?: string; previousScene?: Scene | null }) {
+function SceneCard({
+  scene,
+  playerName,
+  previousScene,
+  onNPCClick,
+}: {
+  scene: Scene;
+  playerName?: string;
+  previousScene?: Scene | null;
+  onNPCClick?: (npc: NPC) => void;
+}) {
   const timeChanged = previousScene !== undefined && previousScene !== null && previousScene.time !== scene.time;
 
   const npcTypeClass = (type: string) => {
@@ -571,6 +581,12 @@ function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerN
     if (type === "friendly") return "友好";
     if (type === "hostile") return "敌对";
     return "中立";
+  };
+
+  const handleNPCClick = (npc: NPC) => {
+    if (onNPCClick && npc.type !== "hostile") {
+      onNPCClick(npc);
+    }
   };
 
   return (
@@ -603,9 +619,16 @@ function SceneCard({ scene, playerName, previousScene }: { scene: Scene; playerN
           <div className="scene-npcs-label">场景 NPC</div>
           <div className="npc-list">
             {scene.npcs.map((npc) => (
-              <div key={npc.id} className={`npc-item ${npcTypeClass(npc.type)}`}>
+              <div
+                key={npc.id}
+                className={`npc-item ${npcTypeClass(npc.type)} ${onNPCClick && npc.type !== "hostile" ? "npc-clickable" : ""}`}
+                onClick={() => handleNPCClick(npc)}
+                role={onNPCClick && npc.type !== "hostile" ? "button" : undefined}
+                tabIndex={onNPCClick && npc.type !== "hostile" ? 0 : undefined}
+              >
                 <span className="npc-name">{npc.name}</span>
                 <span className="npc-type">{npcTypeLabel(npc.type)}</span>
+                <span className="npc-role">{npc.occupation || npc.race || "居民"}</span>
                 <p className="npc-desc">{npc.description}</p>
               </div>
             ))}
@@ -2194,6 +2217,18 @@ function App() {
   // Combat state is now managed by backend via game_phase
   // Local combat state is only used for combat UI details when in combat
 
+  const handleNPCClick = (npc: NPC) => {
+    const actionText = `和${npc.name}说话`;
+    setInput(actionText);
+  };
+
+  const getInputPlaceholder = () => {
+    if (sending) return "裁定中…";
+    if (!inAdventure || !bootstrap?.scene) return "输入你的行动（或先创建角色）…";
+    const sceneName = bootstrap.scene.name;
+    return `你想在${sceneName}做什么？`;
+  };
+
   return (
     <div className="app">
       <header className="header">
@@ -2241,6 +2276,7 @@ function App() {
               scene={bootstrap.scene}
               playerName={bootstrap.actor?.id}
               previousScene={previousBootstrap?.scene ?? null}
+              onNPCClick={inAdventure ? handleNPCClick : undefined}
             />
           ) : (
             <div className="sidebar-loading">加载中…</div>
@@ -2312,13 +2348,14 @@ function App() {
               messages={messages}
               streamingPreview={streamingPreview}
               sending={sending}
+              gamePhase={gamePhase}
             />
             <div className="input-bar">
               <input
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && send()}
-                placeholder={sending ? "裁定中…" : "输入你的行动（或先创建角色）…"}
+                placeholder={getInputPlaceholder()}
                 disabled={sending}
               />
               <button onClick={send} disabled={sending}>

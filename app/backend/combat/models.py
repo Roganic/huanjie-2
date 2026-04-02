@@ -45,6 +45,7 @@ class Combatant(BaseModel):
     proficiency_bonus: int = 2
     conditions: list[str] = Field(default_factory=list)
     initiative: int = 0
+    initiative_roll: int = 0
     status: CombatantStatus = CombatantStatus.ACTIVE
     action_budget: ActionBudget = Field(default_factory=ActionBudget)
 

@@ -20,6 +20,13 @@ from .character import (
     Skill,
     SkillDefinition,
 )
+from .module import (
+    ActiveModuleState,
+    ModuleDefinition,
+    Quest,
+    StoryNode,
+    StoryTrigger,
+)
 from .state import (
     Actor,
     BootstrapState,
@@ -34,6 +41,12 @@ from .state import (
 )
 
 __all__ = [
+    # Module models
+    "ActiveModuleState",
+    "ModuleDefinition",
+    "Quest",
+    "StoryNode",
+    "StoryTrigger",
     # Action models
     "ActionRequest",
     "ActionResponse",

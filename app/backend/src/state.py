@@ -15,6 +15,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from .models.action import CombatState, Effect
+from .models.module import ActiveModuleState, get_default_module
 from .scene import SceneData, get_default_exploration_scene, get_scene_by_id
 from .models.state import (
     AbilityScores,
@@ -270,6 +271,10 @@ class SessionData(BaseModel):
         default_factory=list,
         description="List of scene IDs that have been explored by the player"
     )
+    active_module: ActiveModuleState | None = Field(
+        default=None,
+        description="Active module story progress"
+    )
     updated_at: float = Field(default_factory=time.time)
 
 
@@ -522,6 +527,27 @@ def get_game_phase(session_id: str | None = None) -> AdventurePhase:
     return session.game_phase
 
 
+def get_active_module(session_id: str | None = None) -> ActiveModuleState | None:
+    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+    return session.active_module
+
+
+def set_active_module_story_node(node_id: str, session_id: str | None = None) -> bool:
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=True)
+        if session.active_module is None:
+            return False
+        visited = list(session.active_module.visited_nodes)
+        if node_id not in visited:
+            visited = [*visited, node_id]
+        session.active_module = session.active_module.model_copy(
+            update={"current_story_node": node_id, "visited_nodes": visited}
+        )
+        _save_session(session)
+    return True
+
+
 def check_and_update_combat_status(session_id: str | None = None) -> bool:
     """Check if combat should end (all enemies defeated) and update phase accordingly.
     
@@ -703,6 +729,13 @@ def create_character(
         session.scene_history = []
         # Initialize explored nodes with current scene
         session.explored_nodes = [scene_data.id]
+        # Initialize active module
+        default_module = get_default_module()
+        session.active_module = ActiveModuleState(
+            module_id=default_module.id,
+            current_story_node=default_module.starting_node_id,
+            visited_nodes=[default_module.starting_node_id],
+        )
         _save_session(session)
         
         # Persist to save file for session restoration after restart
@@ -1065,6 +1098,7 @@ def _bootstrap_from_session(session: SessionData) -> BootstrapState:
         scene=scene_with_counts,
         narrative_history=list(session.narrative_history),
         scene_history=list(session.scene_history),
+        active_module=session.active_module.model_dump(mode="json") if session.active_module else None,
     )
 
 
@@ -1134,6 +1168,13 @@ def _create_fresh_session(session_id: str) -> SessionData:
         )
         # Initialize explored nodes for default session
         session.explored_nodes = [scene_data.id]
+        # Initialize active module for default session
+        default_module = get_default_module()
+        session.active_module = ActiveModuleState(
+            module_id=default_module.id,
+            current_story_node=default_module.starting_node_id,
+            visited_nodes=[default_module.starting_node_id],
+        )
 
     return session
 
@@ -1496,3 +1537,5 @@ def get_map_state(session_id: str | None = None) -> dict:
         if current_scene_id not in explored_nodes:
             explored_nodes = explored_nodes + [current_scene_id]
         return build_map_response(current_scene_id, explored_nodes)
+
+SessionData.model_rebuild(_types_namespace={"ActiveModuleState": ActiveModuleState})

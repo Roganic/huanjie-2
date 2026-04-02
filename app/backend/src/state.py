@@ -43,6 +43,7 @@ from .npc.dialogue_state import (
     get_all_npc_dialogue_states,
     reset_session_npc_states,
 )
+from .rest_system import initialize_actor_rest_resources
 
 _CHARACTER_CREATION_SCENE_INIT = dict(
     id="character-creation-01",
@@ -614,7 +615,8 @@ def create_character(
 
         skills = _build_skills(abilities, req.character_class, proficiency_bonus=2)
 
-        session.actor = Actor(
+        # Create actor with rest resources initialized
+        actor = Actor(
             id=actor_id,
             name=req.name.strip(),
             character_class=req.character_class,
@@ -629,6 +631,7 @@ def create_character(
             inventory=inventory,
             equipped=equipped,
         )
+        session.actor = initialize_actor_rest_resources(actor)
         session.phase = GamePhase.ADVENTURE
         # Initialize scene with NPCs from scene system
         scene_data = get_default_exploration_scene()
@@ -859,7 +862,8 @@ def _create_fresh_session(session_id: str) -> SessionData:
         # Build skills for warrior
         warrior_skills = _build_skills(abilities, CharacterClass.WARRIOR, proficiency_bonus=2)
 
-        session.actor = Actor(
+        # Create Aldric with rest resources initialized
+        aldric = Actor(
             id=actor_id,
             name="Aldric",
             character_class=CharacterClass.WARRIOR,
@@ -874,6 +878,7 @@ def _create_fresh_session(session_id: str) -> SessionData:
             inventory=inventory,
             equipped=equipped,
         )
+        session.actor = initialize_actor_rest_resources(aldric)
         session.phase = GamePhase.ADVENTURE
         # Scene with actor in actors list for backward compatibility
         scene_data = get_default_exploration_scene()
@@ -1185,3 +1190,121 @@ def _get_weapon_attack_ability(item_id: str) -> str:
             return "dex"
     
     return "str"
+
+
+# ---------------------------------------------------------------------------
+# Rest System Functions
+# ---------------------------------------------------------------------------
+
+def perform_short_rest(session_id: str | None = None) -> tuple[bool, dict]:
+    """执行短休，恢复HP并消耗生命骰
+    
+    Returns:
+        tuple: (是否成功, 结果信息)
+    """
+    from .rest_system import perform_short_rest as _do_short_rest, can_rest_in_current_phase
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=False)
+        
+        if session.actor is None:
+            return False, {"error": "没有角色"}
+        
+        # 检查是否在探索阶段
+        can_rest, error_msg = can_rest_in_current_phase(session.game_phase.value)
+        if not can_rest:
+            return False, {"error": error_msg}
+        
+        # 执行短休
+        updated_actor, result = _do_short_rest(session.actor)
+        
+        if result["success"]:
+            session.actor = updated_actor
+            _save_session(session)
+            
+            # 添加叙事历史记录
+            append_narrative_history(
+                NarrativeHistoryEntry(
+                    action_summary="短休",
+                    resolution_summary={
+                        "resolution_type": "auto_success",
+                        "outcome": "success",
+                        "rest_result": result,
+                    },
+                    narration_summary=f"短休恢复 {result.get('hp_gained', 0)} 点HP",
+                    narration=result["message"],
+                    scene_progression="角色进行了短休，恢复了一些体力。",
+                    gm_prompt="短休结束，角色可以继续探索。",
+                    created_at=int(time.time() * 1000),
+                ),
+                session_id=resolved_session_id,
+            )
+        
+        return result["success"], result
+
+
+def perform_long_rest(session_id: str | None = None) -> tuple[bool, dict]:
+    """执行长休，完全恢复HP、法术位和生命骰
+    
+    Returns:
+        tuple: (是否成功, 结果信息)
+    """
+    from .rest_system import perform_long_rest as _do_long_rest, can_rest_in_current_phase
+    
+    resolved_session_id = _resolve_session_id(session_id)
+    with _SESSION_LOCK:
+        session = _get_session(resolved_session_id, create_if_missing=False)
+        
+        if session.actor is None:
+            return False, {"error": "没有角色"}
+        
+        # 检查是否在探索阶段
+        can_rest, error_msg = can_rest_in_current_phase(session.game_phase.value)
+        if not can_rest:
+            return False, {"error": error_msg}
+        
+        # 执行长休
+        updated_actor, result = _do_long_rest(session.actor)
+        
+        if result["success"]:
+            session.actor = updated_actor
+            _save_session(session)
+            
+            # 添加叙事历史记录
+            append_narrative_history(
+                NarrativeHistoryEntry(
+                    action_summary="长休",
+                    resolution_summary={
+                        "resolution_type": "auto_success",
+                        "outcome": "success",
+                        "rest_result": result,
+                    },
+                    narration_summary=f"长休完全恢复HP和生命骰",
+                    narration=result["message"],
+                    scene_progression="角色进行了长休，完全恢复了体力。",
+                    gm_prompt="长休结束，角色已经完全恢复，可以继续冒险。",
+                    created_at=int(time.time() * 1000),
+                ),
+                session_id=resolved_session_id,
+            )
+        
+        return result["success"], result
+
+
+def get_character_rest_status(session_id: str | None = None) -> dict | None:
+    """获取角色的休息状态信息
+    
+    Returns:
+        包含 hit_dice_remaining, hit_dice_total, spell_slots 的字典，如果没有角色则返回None
+    """
+    actor = get_actor(session_id=session_id)
+    if actor is None:
+        return None
+    
+    return {
+        "hit_dice_remaining": actor.hit_dice_remaining,
+        "hit_dice_total": actor.hit_dice_total,
+        "spell_slots": actor.spell_slots,
+        "spell_slots_max": actor.spell_slots_max,
+    }

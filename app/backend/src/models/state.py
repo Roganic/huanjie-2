@@ -219,6 +219,22 @@ class Actor(BaseModel):
     # Inventory and equipment
     inventory: list[InventoryItem] = Field(default_factory=list)
     equipped: EquippedItems = Field(default_factory=EquippedItems)
+    # Rest system: hit dice for short rest recovery
+    hit_dice_remaining: int = Field(default=1, description="Remaining hit dice for short rest")
+    hit_dice_total: int = Field(default=1, description="Total hit dice (equals level)")
+    # Spell slots for mages (use default dict to handle migration from old data)
+    spell_slots: dict[str, int] = Field(default_factory=dict, description="Available spell slots by level")
+    spell_slots_max: dict[str, int] = Field(default_factory=dict, description="Maximum spell slots by level")
+    
+    @field_validator("spell_slots", "spell_slots_max", mode="before")
+    @classmethod
+    def _ensure_dict(cls, v: Any) -> dict[str, int]:
+        """Ensure spell_slots is always a dict (handles migration from old list data)."""
+        if isinstance(v, list):
+            return {}
+        if v is None:
+            return {}
+        return v
 
 
 class NPCType(str, Enum):

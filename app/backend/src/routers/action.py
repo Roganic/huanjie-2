@@ -42,6 +42,10 @@ _COMBAT_TRIGGER_KEYWORDS = [
     "攻击", "战斗", "打", "杀", "砍", "刺", "射击", "开战",
 ]
 
+# Rest action keywords
+_SHORT_REST_KEYWORDS = ["短休", "short rest", "休息", "休整"]
+_LONG_REST_KEYWORDS = ["长休", "long rest", "睡眠", "睡觉", "宿营", "露营"]
+
 
 def _is_movement_action(intent: str, approach: str) -> bool:
     """Check if an action is a movement/navigation action."""
@@ -69,6 +73,18 @@ def _should_trigger_combat(intent: str, approach: str) -> bool:
     if _is_movement_action(intent, approach):
         return False
     return any(keyword in text for keyword in _COMBAT_TRIGGER_KEYWORDS)
+
+
+def _is_short_rest_action(intent: str, approach: str) -> bool:
+    """Check if action is a short rest."""
+    text = f"{intent} {approach}".lower()
+    return any(keyword in text for keyword in _SHORT_REST_KEYWORDS)
+
+
+def _is_long_rest_action(intent: str, approach: str) -> bool:
+    """Check if action is a long rest."""
+    text = f"{intent} {approach}".lower()
+    return any(keyword in text for keyword in _LONG_REST_KEYWORDS)
 
 
 def _sse_event(event: str, data: dict) -> str:
@@ -129,6 +145,98 @@ async def submit_action(req: ActionRequest, request: Request):
             create_character(
                 CharacterCreateRequest(name="Aldric", character_class="warrior"),
                 session_id=session_id,
+            )
+
+        # Check for rest actions first (before agent resolution)
+        session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
+        
+        # Handle short rest
+        if _is_short_rest_action(req.intent, req.approach):
+            from ..state import perform_short_rest
+            success, rest_result = perform_short_rest(session_id)
+            
+            if not success:
+                # Return error response for rest failure
+                error_response = ActionResponse(
+                    action_summary="短休",
+                    resolution_type="auto_success",
+                    outcome="failure",
+                    narration=rest_result.get("error", rest_result.get("message", "短休失败")),
+                    scene_progression="无法在当前状态下短休。",
+                    gm_prompt="短休未能执行。",
+                )
+                return error_response
+            
+            # Return success response for short rest
+            success_response = ActionResponse(
+                action_summary="短休",
+                resolution_type="auto_success",
+                outcome="success",
+                narration=rest_result["message"],
+                scene_progression=f"角色进行了短休，恢复了 {rest_result.get('hp_gained', 0)} 点HP。",
+                gm_prompt="短休完成，角色可以继续探索。",
+            )
+            
+            # Persist to history
+            append_action_history(
+                {"action": "短休", "result": "success", "narrative_summary": rest_result["message"]},
+                session_id=session_id,
+            )
+            
+            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
+            if not accepts_stream:
+                return success_response
+            return StreamingResponse(
+                _stream_action_response(success_response),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+        
+        # Handle long rest
+        if _is_long_rest_action(req.intent, req.approach):
+            from ..state import perform_long_rest
+            success, rest_result = perform_long_rest(session_id)
+            
+            if not success:
+                error_response = ActionResponse(
+                    action_summary="长休",
+                    resolution_type="auto_success",
+                    outcome="failure",
+                    narration=rest_result.get("error", rest_result.get("message", "长休失败")),
+                    scene_progression="无法在当前状态下长休。",
+                    gm_prompt="长休未能执行。",
+                )
+                return error_response
+            
+            success_response = ActionResponse(
+                action_summary="长休",
+                resolution_type="auto_success",
+                outcome="success",
+                narration=rest_result["message"],
+                scene_progression="角色进行了长休，完全恢复了HP和所有资源。",
+                gm_prompt="长休完成，角色已经完全恢复，可以继续冒险。",
+            )
+            
+            append_action_history(
+                {"action": "长休", "result": "success", "narrative_summary": rest_result["message"]},
+                session_id=session_id,
+            )
+            
+            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
+            if not accepts_stream:
+                return success_response
+            return StreamingResponse(
+                _stream_action_response(success_response),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
             )
 
         try:

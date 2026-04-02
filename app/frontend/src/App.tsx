@@ -84,6 +84,11 @@ interface Actor {
   description: string;
   conditions?: string[];
   skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
+  // Rest system fields
+  hit_dice_remaining?: number;
+  hit_dice_total?: number;
+  spell_slots?: Record<string, number>;
+  spell_slots_max?: Record<string, number>;
 }
 
 interface NPC {
@@ -525,6 +530,25 @@ function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolea
   );
 }
 
+function HitDiceDisplay({ actor }: { actor: Actor }) {
+  const hitDiceRemaining = actor.hit_dice_remaining ?? 0;
+  const hitDiceTotal = actor.hit_dice_total ?? 0;
+  
+  if (hitDiceTotal <= 0) return null;
+  
+  // Get hit die size based on class
+  const hitDieSize = actor.character_class === "warrior" ? 10 : actor.character_class === "mage" ? 6 : 8;
+  
+  return (
+    <div className="hit-dice-display" title="剩余生命骰（短休可用）">
+      <span className="hit-dice-icon">🎲</span>
+      <span className="hit-dice-value">
+        {hitDiceRemaining}/{hitDiceTotal}d{hitDieSize}
+      </span>
+    </div>
+  );
+}
+
 function MiniCharacterCard({ actor }: { actor: Actor }) {
   const hpPercent = Math.round((actor.hp / actor.hp_max) * 100);
   let hpStatus: "high" | "medium" | "low" = "high";
@@ -552,6 +576,9 @@ function MiniCharacterCard({ actor }: { actor: Actor }) {
         <div className="mini-stat" title="熟练加值">
           <span className="mini-stat-icon">⭐</span>
           <span className="mini-stat-value">+{actor.proficiency_bonus}</span>
+        </div>
+        <div className="mini-stat" title="生命骰">
+          <HitDiceDisplay actor={actor} />
         </div>
       </div>
     </div>
@@ -2667,6 +2694,22 @@ function App() {
                 {sending ? "…" : "发送"}
               </button>
               <button
+                className="rest-btn short-rest"
+                onClick={() => setInput("短休")}
+                disabled={sending || (bootstrap?.actor?.hit_dice_remaining ?? 0) <= 0}
+                title="短休：消耗1个生命骰恢复HP"
+              >
+                🎲 短休
+              </button>
+              <button
+                className="rest-btn long-rest"
+                onClick={() => setInput("长休")}
+                disabled={sending}
+                title="长休：完全恢复HP和生命骰"
+              >
+                🛏️ 长休
+              </button>
+              <button
                 className="combat-start-btn"
                 onClick={startCombat}
                 disabled={combatLoading || sending}
@@ -2721,6 +2764,16 @@ function App() {
             <section>
               <h2>技能</h2>
               <SkillsList actor={bootstrap.actor} compact />
+            </section>
+
+            <section>
+              <h2>生命骰</h2>
+              <div className="hit-dice-panel">
+                <HitDiceDisplay actor={bootstrap.actor} />
+                <div className="hit-dice-hint">
+                  短休消耗1个生命骰恢复 HP
+                </div>
+              </div>
             </section>
 
             {bootstrap.actor.conditions && bootstrap.actor.conditions.length > 0 && (

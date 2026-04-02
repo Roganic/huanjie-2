@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import { CombatMode } from "./CombatMode";
 
 interface Message {
   id: number;
@@ -11,8 +12,7 @@ interface Message {
 }
 
 type HealthStatus = "loading" | "ok" | "error";
-type GamePhase = "character_creation" | "adventure";
-type AdventurePhase = "exploration" | "combat" | "ended";
+type GamePhase = "character_creation" | "adventure" | "combat";
 type CharacterClass = "warrior" | "mage" | "rogue";
 
 interface CheckDetail {
@@ -59,21 +59,6 @@ interface AbilityScores {
   cha: number;
 }
 
-interface InventoryItem {
-  id: string;
-  name: string;
-  type: "weapon" | "armor";
-  damage_dice?: string;
-  attack_ability?: string;
-  base_ac?: number;
-  description?: string;
-}
-
-interface EquippedItems {
-  weapon: InventoryItem | null;
-  armor: InventoryItem | null;
-}
-
 interface Actor {
   id: string;
   name: string;
@@ -87,8 +72,6 @@ interface Actor {
   description: string;
   conditions?: string[];
   skills?: { name: string; ability: string; proficient: boolean; modifier: number }[];
-  inventory?: InventoryItem[];
-  equipped?: EquippedItems;
 }
 
 interface Scene {
@@ -116,61 +99,9 @@ interface NarrativeHistoryEntry {
 interface BootstrapState {
   session_id: string;
   phase: GamePhase;
-  game_phase: AdventurePhase;
   actor: Actor | null;
   scene: Scene;
   narrative_history: NarrativeHistoryEntry[];
-}
-
-// ---------------------------------------------------------------------------
-// Combat Types
-// ---------------------------------------------------------------------------
-
-type CombatStatus = "active" | "victory" | "defeat" | "escaped";
-type CombatActionType = "attack" | "defend" | "skill" | "flee";
-
-interface CombatParticipant {
-  id: string;
-  name: string;
-  hp: number;
-  hp_max: number;
-  ac: number;
-  initiative: number;
-  is_player: boolean;
-  conditions: string[];
-}
-
-interface CombatLogEntry {
-  actor_id: string;
-  action_type: string;
-  target_id?: string;
-  hit?: boolean;
-  damage?: number;
-  narrative: string;
-  timestamp: number;
-}
-
-interface CombatState {
-  combat_id: string;
-  round_number: number;
-  turn_index: number;
-  participants: CombatParticipant[];
-  initiative_order: string[];
-  current_actor_id: string;
-  scene: Scene;
-  status: CombatStatus;
-  log: CombatLogEntry[];
-}
-
-interface CombatActionResult {
-  action_type: CombatActionType;
-  actor_id: string;
-  target_id?: string;
-  hit?: boolean;
-  damage?: number;
-  effects: Effect[];
-  narrative: string;
-  combat_state: CombatState;
 }
 
 interface ProviderOption {
@@ -201,7 +132,38 @@ type Skill = {
   proficient: boolean;
 };
 
-const SKILL_LABELS: Record<string, string> = {
+const SKILLS: Skill[] = [
+  { name: "杂技", ability: "dex", proficient: false },
+  { name: "运动", ability: "str", proficient: false },
+  { name: "欺骗", ability: "cha", proficient: false },
+  { name: "历史", ability: "int", proficient: false },
+  { name: "威吓", ability: "cha", proficient: false },
+  { name: "洞察", ability: "wis", proficient: true },
+  { name: "调查", ability: "int", proficient: false },
+  { name: "医药", ability: "wis", proficient: false },
+  { name: "自然", ability: "int", proficient: false },
+  { name: "察觉", ability: "wis", proficient: true },
+  { name: "表演", ability: "cha", proficient: false },
+  { name: "说服", ability: "cha", proficient: false },
+  { name: "宗教", ability: "int", proficient: false },
+  { name: "巧手", ability: "dex", proficient: true },
+  { name: "隐匿", ability: "dex", proficient: true },
+  { name: "生存", ability: "wis", proficient: false },
+];
+
+const CLASS_SKILLS: Record<CharacterClass, string[]> = {
+  warrior: ["运动", "威吓", "察觉", "生存"],
+  mage: ["历史", "调查", "奥秘", "宗教"],
+  rogue: ["杂技", "欺骗", "洞察", "巧手", "隐匿"],
+};
+
+// Arcana skill for mage class proficiency
+const EXTRA_SKILLS: Skill[] = [
+  { name: "奥秘", ability: "int", proficient: false },
+];
+
+// Skill name mapping from English (backend) to Chinese (frontend display)
+const SKILL_NAME_MAP: Record<string, string> = {
   athletics: "运动",
   acrobatics: "杂技",
   sleight_of_hand: "巧手",
@@ -222,35 +184,7 @@ const SKILL_LABELS: Record<string, string> = {
   persuasion: "说服",
 };
 
-const SKILLS: Skill[] = [
-  { name: "acrobatics", ability: "dex", proficient: false },
-  { name: "animal_handling", ability: "wis", proficient: false },
-  { name: "athletics", ability: "str", proficient: false },
-  { name: "deception", ability: "cha", proficient: false },
-  { name: "history", ability: "int", proficient: false },
-  { name: "insight", ability: "wis", proficient: false },
-  { name: "intimidation", ability: "cha", proficient: false },
-  { name: "investigation", ability: "int", proficient: false },
-  { name: "medicine", ability: "wis", proficient: false },
-  { name: "nature", ability: "int", proficient: false },
-  { name: "perception", ability: "wis", proficient: false },
-  { name: "performance", ability: "cha", proficient: false },
-  { name: "persuasion", ability: "cha", proficient: false },
-  { name: "religion", ability: "int", proficient: false },
-  { name: "sleight_of_hand", ability: "dex", proficient: false },
-  { name: "stealth", ability: "dex", proficient: false },
-  { name: "survival", ability: "wis", proficient: false },
-];
 
-const CLASS_SKILLS: Record<CharacterClass, string[]> = {
-  warrior: ["athletics", "intimidation", "perception", "survival"],
-  mage: ["arcana", "history", "investigation", "insight"],
-  rogue: ["acrobatics", "sleight_of_hand", "stealth", "deception", "persuasion"],
-};
-
-const EXTRA_SKILLS: Skill[] = [
-  { name: "arcana", ability: "int", proficient: false },
-];
 
 const ABILITY_LABELS: Record<string, string> = {
   str: "力量",
@@ -567,32 +501,32 @@ function StatusEffect({ name, isNew }: { name: string; isNew?: boolean }) {
 }
 
 function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolean }) {
-  // Prefer backend-provided skills when available; fallback to frontend computation
-  const skills = actor.skills && actor.skills.length > 0
-    ? actor.skills
-    : (() => {
-        const profBonus = actor.proficiency_bonus;
-        const classProfSkills = CLASS_SKILLS[actor.character_class ?? "warrior"] ?? [];
-        const allSkills = [...SKILLS, ...EXTRA_SKILLS];
-        return allSkills.map((skill) => {
-          const abilityMod = getModifier(actor.abilities[skill.ability]);
-          const isProficient = classProfSkills.includes(skill.name);
-          return {
-            name: skill.name,
-            ability: skill.ability,
-            proficient: isProficient,
-            modifier: abilityMod + (isProficient ? profBonus : 0),
-          };
-        });
-      })();
+  // Use skills from backend if available, otherwise fall back to local calculation
+  const backendSkills = actor.skills ?? [];
+  
+  if (backendSkills.length > 0) {
+    // Use backend skills data
+    if (compact) {
+      const proficientSkills = backendSkills.filter((s) => s.proficient);
+      return (
+        <div className="skills-list-compact">
+          {proficientSkills.map((skill) => (
+            <div key={skill.name} className="skill-item-compact proficient">
+              <span className="skill-name">{SKILL_NAME_MAP[skill.name] ?? skill.name}</span>
+              <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
 
-  if (compact) {
-    const proficientSkills = skills.filter((s) => s.proficient);
     return (
-      <div className="skills-list-compact">
-        {proficientSkills.map((skill) => (
-          <div key={skill.name} className="skill-item-compact proficient">
-            <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
+      <div className="skills-list">
+        {backendSkills.map((skill) => (
+          <div key={skill.name} className={`skill-item ${skill.proficient ? "proficient" : ""}`}>
+            <span className="skill-dot">{skill.proficient ? "●" : "○"}</span>
+            <span className="skill-name">{SKILL_NAME_MAP[skill.name] ?? skill.name}</span>
+            <span className="skill-ability">({ABILITY_LABELS[skill.ability] ?? skill.ability})</span>
             <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
           </div>
         ))}
@@ -600,51 +534,46 @@ function SkillsList({ actor, compact = false }: { actor: Actor; compact?: boolea
     );
   }
 
-  return (
-    <div className="skills-list">
-      {skills.map((skill) => (
-        <div key={skill.name} className={`skill-item ${skill.proficient ? "proficient" : ""}`}>
-          <span className="skill-dot">{skill.proficient ? "●" : "○"}</span>
-          <span className="skill-name">{SKILL_LABELS[skill.name] ?? skill.name}</span>
-          <span className="skill-ability">({ABILITY_LABELS[skill.ability]})</span>
-          <span className="skill-bonus">{formatModifier(skill.modifier)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+  // Fallback: calculate skills locally using CLASS_SKILLS (for preview before character creation)
+  const profBonus = actor.proficiency_bonus;
+  const classProfSkills = CLASS_SKILLS[actor.character_class ?? "warrior"] ?? [];
+  const allSkills = [...SKILLS, ...EXTRA_SKILLS];
 
-function EquipmentDisplay({ equipped }: { equipped?: EquippedItems }) {
-  if (!equipped || (!equipped.weapon && !equipped.armor)) {
-    return <div className="equipment-empty">未装备任何物品</div>;
+  if (compact) {
+    const proficientSkills = allSkills.filter(
+      (s) => classProfSkills.includes(s.name)
+    );
+    return (
+      <div className="skills-list-compact">
+        {proficientSkills.map((skill) => {
+          const abilityMod = getModifier(actor.abilities[skill.ability]);
+          const total = abilityMod + profBonus;
+          return (
+            <div key={skill.name} className="skill-item-compact proficient">
+              <span className="skill-name">{skill.name}</span>
+              <span className="skill-bonus">{formatModifier(total)}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
   }
 
   return (
-    <div className="equipment-display">
-      {equipped.weapon && (
-        <div className="equipment-item">
-          <span className="equipment-icon">⚔️</span>
-          <div className="equipment-info">
-            <span className="equipment-label">武器</span>
-            <span className="equipment-name">{equipped.weapon.name}</span>
-            {equipped.weapon.damage_dice && (
-              <span className="equipment-stat">{equipped.weapon.damage_dice}</span>
-            )}
+    <div className="skills-list">
+      {allSkills.map((skill) => {
+        const abilityMod = getModifier(actor.abilities[skill.ability]);
+        const isProficient = classProfSkills.includes(skill.name);
+        const total = abilityMod + (isProficient ? profBonus : 0);
+        return (
+          <div key={skill.name} className={`skill-item ${isProficient ? "proficient" : ""}`}>
+            <span className="skill-dot">{isProficient ? "●" : "○"}</span>
+            <span className="skill-name">{skill.name}</span>
+            <span className="skill-ability">({ABILITY_LABELS[skill.ability]})</span>
+            <span className="skill-bonus">{formatModifier(total)}</span>
           </div>
-        </div>
-      )}
-      {equipped.armor && (
-        <div className="equipment-item">
-          <span className="equipment-icon">🛡️</span>
-          <div className="equipment-info">
-            <span className="equipment-label">防具</span>
-            <span className="equipment-name">{equipped.armor.name}</span>
-            {equipped.armor.base_ac !== undefined && (
-              <span className="equipment-stat">AC {equipped.armor.base_ac}</span>
-            )}
-          </div>
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -870,192 +799,6 @@ function Timeline({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Combat Screen Components
-// ---------------------------------------------------------------------------
-
-interface CombatScreenProps {
-  combat: CombatState;
-  combatNarrative: string;
-  isNarrativeStreaming: boolean;
-  selectedTarget: string | null;
-  onTargetChange: (targetId: string) => void;
-  selectedWeapon: string;
-  onWeaponChange: (weapon: string) => void;
-  onAction: (actionType: CombatActionType) => void;
-  onFlee: () => void;
-  loading: boolean;
-}
-
-function CombatScreen({
-  combat,
-  combatNarrative,
-  isNarrativeStreaming,
-  selectedTarget,
-  onTargetChange,
-  selectedWeapon,
-  onWeaponChange,
-  onAction,
-  onFlee,
-  loading,
-}: CombatScreenProps) {
-  const currentParticipant = combat.participants.find((p) => p.id === combat.current_actor_id);
-  const isPlayerTurn = currentParticipant?.is_player ?? false;
-  const enemies = combat.participants.filter((p) => !p.is_player);
-  const weapons = ["longsword", "shortsword", "dagger", "shortbow"];
-
-  return (
-    <div className="combat-screen">
-      <div className="combat-header">
-        <div className="combat-round">第 {combat.round_number} 轮</div>
-        <div className="combat-turn">
-          {isPlayerTurn ? "你的回合" : `${currentParticipant?.name} 的回合`}
-        </div>
-      </div>
-
-      <div className="combat-arena">
-        {combat.participants.map((participant) => (
-          <div
-            key={participant.id}
-            className={`combat-actor ${participant.is_player ? "player" : "enemy"} ${
-              participant.id === combat.current_actor_id ? "current" : ""
-            } ${participant.hp <= 0 ? "defeated" : ""}`}
-          >
-            <div className="combat-actor-avatar">{participant.is_player ? "🧙" : "👹"}</div>
-            <div className="combat-actor-info">
-              <div className="combat-actor-name">{participant.name}</div>
-              <div className="combat-actor-hp-bar">
-                <div
-                  className="combat-actor-hp-fill"
-                  style={{ width: `${(participant.hp / participant.hp_max) * 100}%` }}
-                />
-              </div>
-              <div className="combat-actor-hp-text">
-                {participant.hp}/{participant.hp_max} HP
-              </div>
-            </div>
-            {participant.conditions.length > 0 && (
-              <div className="combat-actor-conditions">
-                {participant.conditions.map((c) => (
-                  <span key={c} className="condition-tag">
-                    {c}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="combat-narrative">
-        {isNarrativeStreaming || combatNarrative ? (
-          <div className="narration-block">
-            <div className="narration-header">
-              <span className="narration-icon">⚔️</span>
-              <span className="narration-label">战斗叙事</span>
-            </div>
-            <div className="narration-content">
-              <p className="narration-paragraph">{combatNarrative}</p>
-              {isNarrativeStreaming && <span className="streaming-cursor">▌</span>}
-            </div>
-          </div>
-        ) : (
-          <div className="combat-hint">选择行动并点击执行</div>
-        )}
-      </div>
-
-      {isPlayerTurn && (
-        <div className="combat-actions">
-          <div className="combat-action-row">
-            <label>目标:</label>
-            <select
-              value={selectedTarget || ""}
-              onChange={(e) => onTargetChange(e.target.value)}
-              disabled={loading}
-            >
-              {enemies.map((enemy) => (
-                <option key={enemy.id} value={enemy.id}>
-                  {enemy.name} (HP: {enemy.hp}/{enemy.hp_max})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="combat-action-row">
-            <label>武器:</label>
-            <select
-              value={selectedWeapon}
-              onChange={(e) => onWeaponChange(e.target.value)}
-              disabled={loading}
-            >
-              {weapons.map((w) => (
-                <option key={w} value={w}>
-                  {w}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="combat-action-buttons">
-            <button
-              className="combat-btn attack"
-              onClick={() => onAction("attack")}
-              disabled={loading}
-            >
-              {loading ? "执行中…" : "⚔️ 攻击"}
-            </button>
-            <button
-              className="combat-btn defend"
-              onClick={() => onAction("defend")}
-              disabled={loading}
-            >
-              🛡️ 防御
-            </button>
-            <button className="combat-btn flee" onClick={onFlee} disabled={loading}>
-              🏃 逃跑
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface CombatEndScreenProps {
-  combat: CombatState;
-  onReturn: () => void;
-}
-
-function CombatEndScreen({ combat, onReturn }: CombatEndScreenProps) {
-  const isVictory = combat.status === "victory";
-  const isEscape = combat.status === "escaped";
-
-  return (
-    <div className="combat-end-screen">
-      <div className={`combat-result ${combat.status}`}>
-        <div className="combat-result-icon">{isVictory ? "🏆" : isEscape ? "🏃" : "💀"}</div>
-        <h2>
-          {isVictory ? "战斗胜利！" : isEscape ? "成功逃脱" : "战斗失败"}
-        </h2>
-        <p>
-          战斗持续了 {combat.round_number} 轮
-        </p>
-        <div className="combat-result-participants">
-          {combat.participants.map((p) => (
-            <div key={p.id} className={`result-participant ${p.is_player ? "player" : "enemy"}`}>
-              <span>{p.name}</span>
-              <span className={p.hp <= 0 ? "defeated" : "survived"}>
-                {p.hp <= 0 ? "倒下" : `${p.hp}/${p.hp_max} HP`}
-              </span>
-            </div>
-          ))}
-        </div>
-        <button className="return-btn" onClick={onReturn}>
-          返回冒险
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function CharacterCreationScreen({
   draft,
   actorPreview,
@@ -1236,7 +979,7 @@ function CharacterCreationScreen({
               </div>
             </div>
             <div className="creation-preview-section">
-              <h3>技能熟练</h3>
+              <h3>职业技能</h3>
               <SkillsList actor={actorPreview} compact />
             </div>
           </>
@@ -1252,27 +995,30 @@ function createPreviewActor(draft: CharacterDraft): Actor | null {
   const trimmedName = draft.name.trim();
   if (!trimmedName) return null;
 
-  // Hit dice match backend CLASS_HIT_DICE
-  const classHitDie: Record<CharacterClass, number> = { warrior: 10, mage: 6, rogue: 8 };
-
-  // Calculate HP: hit die max + CON modifier (matches backend)
+  // Base HP from hit die (max value) - matches backend CLASS_HIT_DICE
+  const classBaseHp: Record<CharacterClass, number> = { warrior: 10, mage: 6, rogue: 8 };
+  
+  // Calculate CON modifier and final HP
   const conMod = getModifier(draft.abilities.con);
-  const hp = classHitDie[draft.characterClass] + conMod;
+  const baseHp = classBaseHp[draft.characterClass];
+  const hp = baseHp + conMod;
 
-  // Calculate AC based on abilities
+  // Calculate AC based on abilities and class
   const dexMod = getModifier(draft.abilities.dex);
-  let ac = 16;
+  let ac: number;
   if (draft.characterClass === "mage") {
-    ac = 10 + dexMod;
+    ac = 10 + dexMod;  // Unarmored
   } else if (draft.characterClass === "rogue") {
-    ac = 11 + dexMod;
+    ac = 11 + dexMod;  // Leather armor
+  } else {
+    ac = 16;  // Warrior with heavy armor (no DEX bonus)
   }
 
-  // Compute skills to match backend logic
+  // Calculate skills with proficiency bonus
   const profBonus = 2;
-  const classProfSkills = CLASS_SKILLS[draft.characterClass] ?? [];
+  const classProfSkills = CLASS_SKILLS[draft.characterClass];
   const allSkills = [...SKILLS, ...EXTRA_SKILLS];
-  const skills = allSkills.map((skill) => {
+  const skills = allSkills.map(skill => {
     const abilityMod = getModifier(draft.abilities[skill.ability]);
     const isProficient = classProfSkills.includes(skill.name);
     return {
@@ -1462,23 +1208,13 @@ function App() {
     abilityGeneration: "standard_array",
   });
   const [creationError, setCreationError] = useState<string | null>(null);
+  const [inCombat, setInCombat] = useState(false);
   const messagesEnd = useRef<HTMLDivElement>(null);
-
-  // Combat state
-  const [combat, setCombat] = useState<CombatState | null>(null);
-  const [combatLoading, setCombatLoading] = useState(false);
-  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
-  const [selectedWeapon, setSelectedWeapon] = useState<string>("longsword");
-  const [combatNarrative, setCombatNarrative] = useState<string>("");
-  const [isCombatNarrativeStreaming, setIsCombatNarrativeStreaming] = useState(false);
 
   const actorPreview = useMemo(() => createPreviewActor(creationDraft), [creationDraft]);
   const stateDiff = useMemo(() => computeStateDiff(bootstrap, previousBootstrap), [bootstrap, previousBootstrap]);
   const newConditions = useMemo(() => stateDiff.newConditions, [stateDiff]);
-  const inAdventure = bootstrap?.phase === "adventure" && bootstrap.actor !== null;
-  const gamePhase = bootstrap?.game_phase ?? "exploration";
-  const inCombat = gamePhase === "combat";
-  const combatEnded = gamePhase === "ended";
+  const inAdventure = (bootstrap?.phase === "adventure" || bootstrap?.phase === "combat") && bootstrap.actor !== null;
 
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
@@ -1677,12 +1413,14 @@ function App() {
         ability_generation: creationDraft.abilityGeneration,
       };
 
-      // Backend ignores abilities when ability_generation is standard_array or random_4d6.
-      // To respect the player's chosen/rolled abilities, send as manual with the chosen abilities.
-      if (creationDraft.abilityGeneration === "standard_array" || creationDraft.abilityGeneration === "random_4d6") {
+      // Backend ignores abilities when ability_generation is standard_array.
+      // To respect the player's allocation, send as manual with the chosen abilities.
+      if (creationDraft.abilityGeneration === "standard_array") {
         body.ability_generation = "manual";
+        body.abilities = creationDraft.abilities;
+      } else {
+        body.abilities = creationDraft.abilities;
       }
-      body.abilities = creationDraft.abilities;
 
       const response = await fetch(apiUrl("/character/create"), {
         method: "POST",
@@ -2006,176 +1744,6 @@ function App() {
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Combat Functions
-  // ---------------------------------------------------------------------------
-
-  const startCombat = async () => {
-    if (!sessionId || combatLoading) return;
-    setCombatLoading(true);
-    try {
-      const response = await fetch(apiUrl("/combat/start"), {
-        method: "POST",
-        headers: buildSessionHeaders(sessionId, { "Content-Type": "application/json" }),
-        body: JSON.stringify({}),
-      });
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
-      const data = await response.json();
-      setCombat(data);
-      setSelectedTarget(data.participants.find((p: CombatParticipant) => !p.is_player)?.id || null);
-      addToTimeline({
-        type: "system",
-        title: "战斗开始",
-        details: `遭遇战开始，${data.participants.length} 名参与者`,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now(), role: "system", text: `战斗启动失败: ${message}`, timestamp: Date.now() },
-      ]);
-    } finally {
-      setCombatLoading(false);
-    }
-  };
-
-  const executeCombatAction = async (actionType: CombatActionType) => {
-    if (!sessionId || !combat || combatLoading) return;
-    if (combat.current_actor_id !== combat.participants.find((p) => p.is_player)?.id) {
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now(), role: "system", text: "还不是你的回合", timestamp: Date.now() },
-      ]);
-      return;
-    }
-    setCombatLoading(true);
-    setCombatNarrative("");
-    setIsCombatNarrativeStreaming(true);
-    try {
-      const response = await fetch(apiUrl("/combat/action"), {
-        method: "POST",
-        headers: buildSessionHeaders(sessionId, {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        }),
-        body: JSON.stringify({
-          action_type: actionType,
-          target_id: selectedTarget,
-          weapon: selectedWeapon,
-        }),
-      });
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
-      if (!response.body) {
-        throw new Error("后端未返回可读流");
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let finalResult: CombatActionResult | null = null;
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const blocks = buffer.split("\n\n");
-        buffer = blocks.pop() ?? "";
-        for (const block of blocks) {
-          const parsed = parseStreamEvent(block);
-          if (!parsed) continue;
-          if (parsed.event === "chunk") {
-            const payload = parsed.data as { field?: string; delta?: string };
-            if (payload.field === "narrative" && payload.delta) {
-              setCombatNarrative((prev) => prev + payload.delta);
-            }
-          } else if (parsed.event === "complete") {
-            finalResult = parsed.data as CombatActionResult;
-          }
-        }
-      }
-      if (buffer.trim()) {
-        const parsed = parseStreamEvent(buffer);
-        if (parsed?.event === "complete") {
-          finalResult = parsed.data as CombatActionResult;
-        }
-      }
-      if (finalResult) {
-        setCombat(finalResult.combat_state);
-        addToTimeline({
-          type: "action",
-          title: `战斗: ${actionType}`,
-          outcome: finalResult.hit ? "success" : "failure",
-          details: finalResult.hit
-            ? `命中，造成 ${finalResult.damage} 点伤害`
-            : "未命中",
-        });
-        // Refresh bootstrap state to get updated game_phase
-        await refreshState();
-        // If combat ended, show result
-        if (finalResult.combat_state.status !== "active") {
-          addToTimeline({
-            type: "system",
-            title: finalResult.combat_state.status === "victory" ? "战斗胜利" : "战斗结束",
-            details: `战斗在 ${finalResult.combat_state.round_number} 轮后结束`,
-          });
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now(), role: "system", text: `战斗行动失败: ${message}`, timestamp: Date.now() },
-      ]);
-    } finally {
-      setCombatLoading(false);
-      setIsCombatNarrativeStreaming(false);
-    }
-  };
-
-  const endCombat = async (reason: "flee" | "surrender" | "victory" | "defeat") => {
-    if (!sessionId || !combat) return;
-    try {
-      const response = await fetch(apiUrl("/combat/end"), {
-        method: "POST",
-        headers: buildSessionHeaders(sessionId, { "Content-Type": "application/json" }),
-        body: JSON.stringify({ reason }),
-      });
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
-      const data = await response.json();
-      setCombat(null);
-      // Refresh bootstrap state to get updated game_phase
-      await refreshState();
-      addToTimeline({
-        type: "system",
-        title: "战斗结束",
-        details: `结果: ${data.status}`,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now(), role: "system", text: `结束战斗失败: ${message}`, timestamp: Date.now() },
-      ]);
-    }
-  };
-
-  const returnToAdventure = async () => {
-    setCombat(null);
-    setCombatNarrative("");
-    setSelectedTarget(null);
-    await refreshState();
-  };
-
-  // Combat state is now managed by backend via game_phase
-  // Local combat state is only used for combat UI details when in combat
-
   return (
     <div className="app">
       <header className="header">
@@ -2204,10 +1772,9 @@ function App() {
           <button className="header-button" onClick={resetSession} disabled={resetting || sending || creatingCharacter}>
             {resetting ? "重置中…" : "重置"}
           </button>
-          {inCombat && <span className="combat-badge">⚔️ 战斗中</span>}
           <HealthDot status={health} />
           <span className="subtitle">
-            {inCombat ? `第 ${combat?.round_number} 轮` : inAdventure ? "AI 跑团原型" : "角色创建阶段"}
+            {inCombat ? "战斗模式" : inAdventure ? "AI 跑团原型" : "角色创建阶段"}
           </span>
         </div>
       </header>
@@ -2226,36 +1793,22 @@ function App() {
           )}
         </section>
         <section>
-          <h2>{inCombat ? "战斗参与者" : inAdventure ? "角色" : "职业预览"}</h2>
-          {inCombat && combat ? (
-            <div className="combat-participants">
-              {combat.initiative_order.map((participantId) => {
-                const participant = combat.participants.find((p) => p.id === participantId);
-                if (!participant) return null;
-                const isCurrentTurn = participantId === combat.current_actor_id;
-                const isPlayer = participant.is_player;
-                return (
-                  <div
-                    key={participantId}
-                    className={`combat-participant ${isCurrentTurn ? "current" : ""} ${isPlayer ? "player" : "enemy"}`}
-                  >
-                    <div className="combat-participant-initiative">{participant.initiative}</div>
-                    <div className="combat-participant-info">
-                      <div className="combat-participant-name">
-                        {participant.name} {isCurrentTurn && "▶"}
-                      </div>
-                      <div className="combat-participant-hp">
-                        HP: {participant.hp}/{participant.hp_max}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : inAdventure && bootstrap?.actor ? (
-            <ul>
-              <li className="active">{bootstrap.actor.name}</li>
-            </ul>
+          <h2>{inAdventure ? "角色" : "职业预览"}</h2>
+          {inAdventure && bootstrap?.actor ? (
+            <>
+              <ul>
+                <li className="active">{bootstrap.actor.name}</li>
+              </ul>
+              {!inCombat && (
+                <button
+                  className="combat-enter-btn"
+                  onClick={() => setInCombat(true)}
+                  disabled={sending || resetting}
+                >
+                  ⚔️ 进入战斗
+                </button>
+              )}
+            </>
           ) : actorPreview ? (
             <ul>
               <li className="active">{CLASS_LABELS[actorPreview.character_class ?? "warrior"]}</li>
@@ -2267,23 +1820,13 @@ function App() {
       </aside>
 
       <main className="chat">
-        {inCombat && combat ? (
-          <CombatScreen
-            combat={combat}
-            combatNarrative={combatNarrative}
-            isNarrativeStreaming={isCombatNarrativeStreaming}
-            selectedTarget={selectedTarget}
-            onTargetChange={setSelectedTarget}
-            selectedWeapon={selectedWeapon}
-            onWeaponChange={setSelectedWeapon}
-            onAction={executeCombatAction}
-            onFlee={() => endCombat("flee")}
-            loading={combatLoading}
-          />
-        ) : combatEnded ? (
-          <CombatEndScreen
-            combat={combat}
-            onReturn={returnToAdventure}
+        {inCombat ? (
+          <CombatMode
+            sessionId={sessionId}
+            apiUrl={apiUrl}
+            buildSessionHeaders={buildSessionHeaders}
+            refreshState={refreshState}
+            onExit={() => setInCombat(false)}
           />
         ) : inAdventure ? (
           <>
@@ -2316,19 +1859,11 @@ function App() {
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && send()}
-                placeholder={sending ? "裁定中…" : "输入你的行动（或先创建角色）…"}
+                placeholder={sending ? "裁定中…" : "输入你的行动…"}
                 disabled={sending}
               />
               <button onClick={send} disabled={sending}>
                 {sending ? "…" : "发送"}
-              </button>
-              <button
-                className="combat-start-btn"
-                onClick={startCombat}
-                disabled={combatLoading || sending}
-                title="开始战斗"
-              >
-                ⚔️ 战斗
               </button>
             </div>
           </>
@@ -2372,11 +1907,6 @@ function App() {
                   />
                 ))}
               </div>
-            </section>
-
-            <section>
-              <h2>装备</h2>
-              <EquipmentDisplay equipped={bootstrap.actor.equipped} />
             </section>
 
             <section>

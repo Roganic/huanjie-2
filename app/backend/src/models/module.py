@@ -357,6 +357,22 @@ class ActiveModuleState(BaseModel):
     current_story_node: str = Field(..., description="ID of the current story node")
     visited_nodes: list[str] = Field(default_factory=list)
     completed_quests: list[str] = Field(default_factory=list)
+    active_flags: list[str] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+# -----------------------------------------------------------------------------
+# Built-in default module for when no module is loaded
+# -----------------------------------------------------------------------------
+
+_DEFAULT_MODULE = Module(
+    id="default",
+    name="自由探索",
+    description="无模组模式，由 AI DM 自由创作剧情",
+    starting_scene_id=None,
+    starting_node_id=None,
+)
 
 
 # -----------------------------------------------------------------------------
@@ -455,14 +471,22 @@ STARTER_MODULE = ModuleDefinition(
     },
 )
 
+
 MODULE_REGISTRY: dict[str, ModuleDefinition] = {
     STARTER_MODULE.id: STARTER_MODULE,
 }
 
 
 def get_module(module_id: str) -> Optional[ModuleDefinition]:
+    """Get a module by ID from the registry."""
     return MODULE_REGISTRY.get(module_id)
 
 
 def get_default_module() -> ModuleDefinition:
+    """Return the default starter module."""
     return STARTER_MODULE
+
+
+def register_module(module: ModuleDefinition) -> None:
+    """Register a module in the registry."""
+    MODULE_REGISTRY[module.id] = module

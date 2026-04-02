@@ -153,12 +153,17 @@ def create_fresh_character_creation_scene() -> Scene:
 
 def create_fresh_adventure_scene() -> Scene:
     """Create the initial adventure scene."""
+    from .models.state import SceneExit
     return Scene(
         id="tavern-01",
         name="锈迹斑斑的灯笼酒馆",
         description="十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒。",
         actors=[],
         time=0,
+        exits=[
+            SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
+            SceneExit(direction="森林入口", target_scene_id="dungeon-entrance-01"),
+        ],
     )
 
 

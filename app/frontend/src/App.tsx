@@ -84,6 +84,11 @@ interface NPC {
   occupation?: string;
 }
 
+interface SceneExit {
+  direction: string;
+  target_scene_id: string;
+}
+
 interface Scene {
   id: string;
   name: string;
@@ -91,6 +96,7 @@ interface Scene {
   actors: string[];
   npcs: NPC[];
   time?: number;
+  exits?: SceneExit[];
 }
 
 interface NarrativeHistoryEntry {
@@ -558,17 +564,7 @@ function CharacterCard({
   );
 }
 
-function SceneCard({
-  scene,
-  playerName,
-  previousScene,
-  onNPCClick,
-}: {
-  scene: Scene;
-  playerName?: string;
-  previousScene?: Scene | null;
-  onNPCClick?: (npc: NPC) => void;
-}) {
+function SceneCard({ scene, playerName, previousScene, onExitClick }: { scene: Scene; playerName?: string; previousScene?: Scene | null; onExitClick?: (direction: string) => void }) {
   const timeChanged = previousScene !== undefined && previousScene !== null && previousScene.time !== scene.time;
 
   const npcTypeClass = (type: string) => {
@@ -583,12 +579,6 @@ function SceneCard({
     return "中立";
   };
 
-  const handleNPCClick = (npc: NPC) => {
-    if (onNPCClick && npc.type !== "hostile") {
-      onNPCClick(npc);
-    }
-  };
-
   return (
     <div className="scene-card">
       <div className="scene-name">{scene.name}</div>
@@ -598,6 +588,24 @@ function SceneCard({
         <div className={`scene-time ${timeChanged ? "changed" : ""}`}>
           <span className="scene-time-label">⏱️ 场景时间</span>
           <span className="scene-time-value">{scene.time}</span>
+        </div>
+      )}
+
+      {scene.exits && scene.exits.length > 0 && (
+        <div className="scene-exits">
+          <div className="scene-exits-label">可用出口</div>
+          <div className="exit-buttons">
+            {scene.exits.map((exit, index) => (
+              <button
+                key={index}
+                className="exit-button"
+                onClick={() => onExitClick?.(exit.direction)}
+                title={`前往 ${exit.direction}`}
+              >
+                → {exit.direction}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -619,16 +627,9 @@ function SceneCard({
           <div className="scene-npcs-label">场景 NPC</div>
           <div className="npc-list">
             {scene.npcs.map((npc) => (
-              <div
-                key={npc.id}
-                className={`npc-item ${npcTypeClass(npc.type)} ${onNPCClick && npc.type !== "hostile" ? "npc-clickable" : ""}`}
-                onClick={() => handleNPCClick(npc)}
-                role={onNPCClick && npc.type !== "hostile" ? "button" : undefined}
-                tabIndex={onNPCClick && npc.type !== "hostile" ? 0 : undefined}
-              >
+              <div key={npc.id} className={`npc-item ${npcTypeClass(npc.type)}`}>
                 <span className="npc-name">{npc.name}</span>
                 <span className="npc-type">{npcTypeLabel(npc.type)}</span>
-                <span className="npc-role">{npc.occupation || npc.race || "居民"}</span>
                 <p className="npc-desc">{npc.description}</p>
               </div>
             ))}
@@ -1632,66 +1633,6 @@ function App() {
     }
   };
 
-  const restartGame = async () => {
-    if (resetting) return;
-
-    setResetting(true);
-    setCreationError(null);
-
-    try {
-      // Call /session/reset to clear persistence file and reset to initial state
-      const response = await fetch(apiUrl("/session/reset"), {
-        method: "POST",
-        headers: buildSessionHeaders(sessionId),
-      });
-      if (!response.ok) {
-        if (response.status === 404) {
-          storeSessionId(null);
-          setSessionId(null);
-          await recoverExpiredSession("会话已过期，已进入新的建角流程。");
-          return;
-        }
-        throw new Error(await response.text());
-      }
-      const state: BootstrapState = await response.json();
-      
-      // Reset all local state to initial values
-      setPreviousBootstrap(null);
-      setSessionId(state.session_id);
-      storeSessionId(state.session_id);
-      setBootstrap(state);
-      setMessages([]);
-      setTimeline([]);
-      setInput("");
-      setStreamingPreview(null);
-      // Clear combat state
-      setCombat(null);
-      setCombatNarrative("");
-      setSelectedTarget(null);
-      setIsCombatNarrativeStreaming(false);
-      // Reset character creation draft
-      setCreationDraft({
-        name: "",
-        characterClass: "warrior",
-        abilities: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 },
-        abilityGeneration: "standard_array",
-      });
-      
-      // Show message that game was restarted
-      setMessages([
-        { id: Date.now(), role: "system", text: "游戏已重新开始。请创建新角色。", timestamp: Date.now() },
-      ]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMessages((previous) => [
-        ...previous,
-        { id: Date.now(), role: "system", text: `重新开始失败: ${message}`, timestamp: Date.now() },
-      ]);
-    } finally {
-      setResetting(false);
-    }
-  };
-
   const saveGame = async () => {
     if (saving) return;
 
@@ -1855,6 +1796,13 @@ function App() {
       ...prev,
       abilities: rollRandomAbilities(),
     }));
+  };
+
+  const handleExitClick = (direction: string) => {
+    // Auto-fill movement command to input
+    const movementCommands = ["前往", "去", "走向", "进入"];
+    const command = movementCommands[Math.floor(Math.random() * movementCommands.length)];
+    setInput(`${command}${direction}`);
   };
 
   const send = async () => {
@@ -2277,18 +2225,6 @@ function App() {
   // Combat state is now managed by backend via game_phase
   // Local combat state is only used for combat UI details when in combat
 
-  const handleNPCClick = (npc: NPC) => {
-    const actionText = `和${npc.name}说话`;
-    setInput(actionText);
-  };
-
-  const getInputPlaceholder = () => {
-    if (sending) return "裁定中…";
-    if (!inAdventure || !bootstrap?.scene) return "输入你的行动（或先创建角色）…";
-    const sceneName = bootstrap.scene.name;
-    return `你想在${sceneName}做什么？`;
-  };
-
   return (
     <div className="app">
       <header className="header">
@@ -2320,11 +2256,6 @@ function App() {
           <button className="header-button" onClick={resetSession} disabled={resetting || sending || creatingCharacter}>
             {resetting ? "重置中…" : "重置"}
           </button>
-          {inAdventure && (
-            <button className="header-button restart-btn" onClick={restartGame} disabled={resetting || sending || creatingCharacter}>
-              {resetting ? "重新开始中…" : "重新开始"}
-            </button>
-          )}
           {inCombat && <span className="combat-badge">⚔️ 战斗中</span>}
           <HealthDot status={health} />
           <span className="subtitle">
@@ -2341,7 +2272,7 @@ function App() {
               scene={bootstrap.scene}
               playerName={bootstrap.actor?.id}
               previousScene={previousBootstrap?.scene ?? null}
-              onNPCClick={inAdventure ? handleNPCClick : undefined}
+              onExitClick={handleExitClick}
             />
           ) : (
             <div className="sidebar-loading">加载中…</div>
@@ -2413,14 +2344,13 @@ function App() {
               messages={messages}
               streamingPreview={streamingPreview}
               sending={sending}
-              gamePhase={gamePhase}
             />
             <div className="input-bar">
               <input
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && send()}
-                placeholder={getInputPlaceholder()}
+                placeholder={sending ? "裁定中…" : "输入你的行动（或先创建角色）…"}
                 disabled={sending}
               />
               <button onClick={send} disabled={sending}>

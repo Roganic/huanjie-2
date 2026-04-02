@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "saved_at": "2026-04-02T11:50:22.923384",
-  "session_id": "556a0e576ee942c3a9b5c0fd92bd6569",
+  "saved_at": "2026-04-02T11:51:47.747941",
+  "session_id": "28528e9505f545e28ebd982cfdf37106",
   "phase": "adventure",
   "game_phase": "exploration",
   "character": {
-    "id": "warrior-aldric",
-    "name": "Aldric",
+    "id": "warrior-testhero",
+    "name": "TestHero",
     "character_class": "warrior",
     "abilities": {
       "str": 15,
@@ -213,7 +213,7 @@
     "name": "锈迹斑斑的灯笼酒馆",
     "description": "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒，角落里传来轻柔的竖琴声。酒保老马库斯在吧台后面擦拭着酒杯，不时用独眼打量着客人。",
     "actors": [
-      "warrior-aldric"
+      "warrior-testhero"
     ],
     "npcs": [
       {
@@ -242,21 +242,31 @@
       }
     ],
     "time": 1,
-    "flags": []
+    "flags": [],
+    "exits": [
+      {
+        "direction": "村庄广场",
+        "target_scene_id": "village-square-01"
+      },
+      {
+        "direction": "森林入口",
+        "target_scene_id": "dungeon-entrance-01"
+      }
+    ]
   },
   "combat_state": null,
   "action_history": [
     {
-      "action_summary": "Cara attempts to say a convincing lie to the magistrate by deceive him about our origins",
+      "action_summary": "TestHero attempts to search the room by look under tables and behind barrels",
       "resolution_summary": {
         "resolution_type": "check",
-        "outcome": "failure",
+        "outcome": "success",
         "check": {
-          "ability": "cha",
-          "modifier": 0,
+          "ability": "str",
+          "modifier": 2,
           "dc": 15,
-          "roll": 13,
-          "total": 13
+          "roll": 15,
+          "total": 17
         },
         "attack": null,
         "saving_throw": null,
@@ -266,20 +276,14 @@
             "field": "time",
             "delta": 1,
             "description": "时间流逝。"
-          },
-          {
-            "target": "warrior-aldric",
-            "field": "narrative_state",
-            "delta": "setback",
-            "description": "失败的尝试可能引起注意或浪费时间。"
           }
         ]
       },
-      "narration_summary": "Aldric attempts to say a convincing lie to the magistrate, but fortune does not favor them this time. The effort falls short of success. The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Aldric. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes. The failed attempt gives the scene permission ",
-      "narration": "Aldric attempts to say a convincing lie to the magistrate, but fortune does not favor them this time. The effort falls short of success.",
-      "scene_progression": "The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around Aldric. You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes.",
-      "gm_prompt": "The failed attempt gives the scene permission to push back. Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 1. What catches your attention first: an NPC response, a change in the environment, or a new tactic?",
-      "created_at": 1775101822922
+      "narration_summary": "TestHero sets out to search the room. Through skill and determination, the attempt succeeds, bringing the desired result. A ripple of response moves through 锈迹斑斑的灯笼酒馆 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed. A fresh opening has appeared in 锈迹斑斑的灯笼酒馆, but it will not stay open for long. Time ",
+      "narration": "TestHero sets out to search the room. Through skill and determination, the attempt succeeds, bringing the desired result.",
+      "scene_progression": "A ripple of response moves through 锈迹斑斑的灯笼酒馆 as the moment settles into its new shape. You can follow the opening immediately, watch how others react, or probe the environment for what changed.",
+      "gm_prompt": "A fresh opening has appeared in 锈迹斑斑的灯笼酒馆, but it will not stay open for long. Time in 锈迹斑斑的灯笼酒馆 has advanced to beat 1. Do you exploit that opening immediately, question whoever reacts, or examine what just shifted?",
+      "created_at": 1775101907745
     }
   ],
   "scene_history": []

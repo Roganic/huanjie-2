@@ -9,7 +9,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from ..models.state import NPC, NPCType
+from ..models.state import NPC, NPCType, SceneExit
 
 
 class SceneData(BaseModel):
@@ -32,6 +32,10 @@ class SceneData(BaseModel):
     connected_scenes: list[str] = Field(
         default_factory=list,
         description="IDs of scenes connected to this one"
+    )
+    exits: list[SceneExit] = Field(
+        default_factory=list,
+        description="Available exits from this scene with direction names"
     )
     
     model_config = {"populate_by_name": True}
@@ -95,6 +99,10 @@ VILLAGE_SQUARE_SCENE = SceneData(
         "与村民交谈收集情报",
     ],
     connected_scenes=["tavern-01", "dungeon-entrance-01"],
+    exits=[
+        SceneExit(direction="酒馆", target_scene_id="tavern-01"),
+        SceneExit(direction="森林入口", target_scene_id="dungeon-entrance-01"),
+    ],
 )
 
 # Scene 2: The Tavern (starting exploration scene)
@@ -128,6 +136,10 @@ TAVERN_SCENE = SceneData(
         "返回村庄广场",
     ],
     connected_scenes=["village-square-01", "dungeon-entrance-01"],
+    exits=[
+        SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
+        SceneExit(direction="森林入口", target_scene_id="dungeon-entrance-01"),
+    ],
 )
 
 # Scene 3: Dungeon Entrance
@@ -159,6 +171,11 @@ DUNGEON_ENTRANCE_SCENE = SceneData(
         "在入口处搜索线索",
     ],
     connected_scenes=["village-square-01", "tavern-01", "combat-encounter-01"],
+    exits=[
+        SceneExit(direction="村庄广场", target_scene_id="village-square-01"),
+        SceneExit(direction="酒馆", target_scene_id="tavern-01"),
+        SceneExit(direction="地下城", target_scene_id="combat-entrance-01"),
+    ],
 )
 
 # Scene 4: Combat Encounter (used when combat triggers)
@@ -190,6 +207,9 @@ COMBAT_ENCOUNTER_SCENE = SceneData(
         "利用环境优势",
     ],
     connected_scenes=["dungeon-entrance-01"],
+    exits=[
+        SceneExit(direction="地下城入口", target_scene_id="dungeon-entrance-01"),
+    ],
 )
 
 # Scene registry for lookups

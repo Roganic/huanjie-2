@@ -40,6 +40,27 @@ FAILURE_HIT_INDICATORS = (
     " easily ",
 )
 
+# Skill check failure - success semantics that should not appear when check fails
+SKILL_FAILURE_SUCCESS_INDICATORS = (
+    "成功",
+    "做到了",
+    "顺利完成",
+    "完美达成",
+    "出色完成",
+    "顺利做到",
+    "成功完成",
+    "达成目标",
+    "如愿以偿",
+    "得心应手",
+    "顺利完成",
+    "顺利完成",
+    "succeeded",
+    "successfully",
+    "managed to",
+    "accomplished",
+    "achieved",
+)
+
 FAILURE_HEAL_INDICATORS = (
     " recovers ",
     " recovered ",
@@ -226,9 +247,21 @@ def build_hard_constraints(context: NarrationConstraintContext) -> list[str]:
         total = context.check_result.get("total", 0)
         dc = context.check_result.get("dc", 0)
         modifier = context.check_result.get("modifier", 0)
-        lines.append(
-            f"- 检定详情 / Check: {ability.upper()}, 掷骰={roll}, 调整值={modifier}, 总计={total}, DC={dc}"
-        )
+        
+        # Detect natural 20 (critical success) and natural 1 (critical failure)
+        roll_int = roll if isinstance(roll, int) else 0
+        if roll_int == 20:
+            lines.append(
+                f"- 检定详情 / Check: {ability.upper()}, 掷骰={roll}【大成功!/CRITICAL SUCCESS】, 调整值={modifier}, 总计={total}, DC={dc}"
+            )
+        elif roll_int == 1:
+            lines.append(
+                f"- 检定详情 / Check: {ability.upper()}, 掷骰={roll}【大失败!/CRITICAL FAILURE】, 调整值={modifier}, 总计={total}, DC={dc}"
+            )
+        else:
+            lines.append(
+                f"- 检定详情 / Check: {ability.upper()}, 掷骰={roll}, 调整值={modifier}, 总计={total}, DC={dc}"
+            )
 
     if context.attack_result:
         damage = context.attack_result.get("damage")
@@ -504,6 +537,9 @@ def find_contradictions(
     if context.outcome == Outcome.FAILURE:
         if any(indicator in combined for indicator in FAILURE_HIT_INDICATORS):
             reasons.append("failure_narrated_as_success_or_hit")
+
+        if any(indicator in combined for indicator in SKILL_FAILURE_SUCCESS_INDICATORS):
+            reasons.append("skill_failure_narrated_as_success")
 
         if any(
             effect.field == "hp" and isinstance(effect.delta, int) and effect.delta > 0

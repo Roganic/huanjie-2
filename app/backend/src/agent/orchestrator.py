@@ -29,6 +29,7 @@ from ..models.action import (
     Outcome,
     ResolutionType,
     SavingThrowDetail,
+    SkillCheckDetail,
 )
 from ..models.state import Actor, NarrativeHistoryEntry
 from ..npc import find_target_npc, is_npc_interaction
@@ -370,10 +371,21 @@ class GMAgent:
         )
         self._maybe_record_npc_dialogue(req, narrative_result)
         
+        # Build skill_check detail for frontend display
+        skill_check = SkillCheckDetail(
+            skill=skill_name,
+            roll=roll_result.roll,
+            modifier=ability_modifier + prof_bonus,
+            total=total,
+            dc=dc,
+            success=outcome == Outcome.SUCCESS,
+        )
+        
         return ActionResponse(
             action_summary=action_summary,
             resolution_type=ResolutionType.CHECK,
             check=check,
+            skill_check=skill_check,
             attack=None,
             outcome=outcome,
             effects=self.effects,
@@ -482,15 +494,16 @@ class GMAgent:
         # Determine check parameters
         ability = req.ability or self._infer_ability(req.approach)
         modifier = actor.abilities.modifier(ability)
+        prof = actor.proficiency_bonus  # Generic checks add full prof for simplicity
         dc = req.dc or self._pick_dc(req.intent)
         advantage = req.advantage
         
-        # Step 1: Roll d20 (generic ability checks do not add proficiency bonus)
+        # Step 1: Roll d20 + ability modifier + proficiency
         roll_result = self._call_roll_dice(
             dice_type=DiceType.D20,
             reason=f"{ability.upper()} check for {req.intent}",
             advantage=advantage,
-            modifier=modifier,
+            modifier=modifier + prof,
         )
         
         total = roll_result.total
@@ -500,7 +513,7 @@ class GMAgent:
         check = CheckDetail(
             ability=ability,
             modifier=modifier,
-            proficiency_bonus=0,
+            proficiency_bonus=prof,
             advantage=advantage,
             roll=roll_result.roll,
             total=total,

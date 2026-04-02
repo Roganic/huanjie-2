@@ -24,6 +24,17 @@ interface CheckDetail {
   roll: number;
   total: number;
   dc: number;
+  skill_name?: string | null;
+}
+
+interface SkillCheckDetail {
+  skill: string | null;
+  ability?: string;
+  roll: number;
+  modifier: number;
+  total: number;
+  dc: number;
+  success: boolean;
 }
 
 interface Effect {
@@ -37,6 +48,7 @@ interface ActionResponse {
   action_summary: string;
   resolution_type: "auto_success" | "check";
   check: CheckDetail | null;
+  skill_check: SkillCheckDetail | null;
   outcome: "success" | "failure";
   effects: Effect[];
   narration: string;
@@ -1392,14 +1404,32 @@ function restoreTimelineFromHistory(history: NarrativeHistoryEntry[]): TimelineE
 
       if (entry.resolution_summary.resolution_type === "check" && entry.resolution_summary.check) {
         const check = entry.resolution_summary.check;
+        const abilityName = ABILITY_LABELS[check.ability] ?? check.ability;
+        const skillName = check.skill_name;
+        const isSkillCheck = skillName !== null && skillName !== undefined;
+        
+        const title = isSkillCheck && skillName
+          ? `${SKILL_LABELS[skillName] ?? skillName}检定 DC${check.dc}`
+          : `${abilityName}检定 DC${check.dc}`;
+        
+        const totalModifier = check.modifier + check.proficiency_bonus;
+        const modifierText = totalModifier >= 0 ? `+${totalModifier}` : `${totalModifier}`;
+        
+        let rollIndicator = "";
+        if (check.roll === 20) {
+          rollIndicator = "【大成功!】";
+        } else if (check.roll === 1) {
+          rollIndicator = "【大失败!】";
+        }
+        
+        const details = `掷出 ${check.roll}${rollIndicator} ${modifierText} = ${check.total} vs DC ${check.dc} — ${entry.resolution_summary.outcome === "success" ? "成功" : "失败"}`;
+        
         items.push({
           id: baseId + 1,
           type: "check",
-          title: `${ABILITY_LABELS[check.ability] ?? check.ability}检定 DC${check.dc}`,
+          title,
           outcome: entry.resolution_summary.outcome,
-          details: `掷骰: d20=${check.roll} 调整值:${check.modifier >= 0 ? "+" : ""}${check.modifier}${
-            check.proficiency_bonus > 0 ? `+${check.proficiency_bonus}` : ""
-          } = ${check.total}`,
+          details,
           timestamp: baseId + 1,
         });
       }
@@ -1975,13 +2005,41 @@ function App() {
       if (data.resolution_type === "check" && data.check) {
         const check = data.check;
         const abilityName = ABILITY_LABELS[check.ability] ?? check.ability;
+        
+        // Check for skill check (has skill_name or skill_check field)
+        const skillName = data.skill_check?.skill ?? check.skill_name;
+        const isSkillCheck = skillName !== null && skillName !== undefined;
+        
+        // Build skill check display text
+        let title: string;
+        let details: string;
+        
+        if (isSkillCheck && skillName) {
+          const skillLabel = SKILL_LABELS[skillName] ?? skillName;
+          title = `${skillLabel}检定 DC${check.dc}`;
+        } else {
+          title = `${abilityName}检定 DC${check.dc}`;
+        }
+        
+        // Calculate total modifier (ability + proficiency)
+        const totalModifier = check.modifier + check.proficiency_bonus;
+        const modifierText = totalModifier >= 0 ? `+${totalModifier}` : `${totalModifier}`;
+        
+        // Determine special roll (natural 20 or 1)
+        let rollIndicator = "";
+        if (check.roll === 20) {
+          rollIndicator = "【大成功!】";
+        } else if (check.roll === 1) {
+          rollIndicator = "【大失败!】";
+        }
+        
+        details = `掷出 ${check.roll}${rollIndicator} ${modifierText} = ${check.total} vs DC ${check.dc} — ${data.outcome === "success" ? "成功" : "失败"}`;
+        
         addToTimeline({
           type: "check",
-          title: `${abilityName}检定 DC${check.dc}`,
+          title,
           outcome: data.outcome,
-          details: `掷骰: d20=${check.roll} 调整值:${check.modifier >= 0 ? "+" : ""}${check.modifier}${
-            check.proficiency_bonus > 0 ? `+${check.proficiency_bonus}` : ""
-          } = ${check.total}`,
+          details,
         });
       } else {
         addToTimeline({

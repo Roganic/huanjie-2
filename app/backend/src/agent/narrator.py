@@ -157,24 +157,38 @@ def _build_narrative_prompt(
 # Fallback Templates (when API is unavailable)
 # ---------------------------------------------------------------------------
 
+def _class_ability_flavor(actor: Actor) -> str:
+    """Return a class-and-ability-aware narrative flavor snippet."""
+    cls = actor.character_class.value if actor.character_class else "adventurer"
+    if cls == "warrior":
+        return f"作为战士，{actor.name}的蛮力与钢铁意志"
+    if cls == "mage":
+        return f"身为法师，{actor.name}的知识与专注"
+    if cls == "rogue":
+        return f"身为盗贼，{actor.name}的敏捷与机警"
+    return f"{actor.name}"
+
+
 def _fallback_action_result(
     req: ActionRequest,
     actor: Actor,
     scene: Scene,
     outcome: Outcome,
     attack_result: Optional[dict] = None,
+    check_result: Optional[dict] = None,
 ) -> str:
     """Generate a template fallback narrative when API is unavailable."""
-    
+
     if attack_result:
         # Combat fallback
         weapon = attack_result.get("weapon", "weapon")
         target = attack_result.get("target", "enemy")
-        
+
         if outcome == Outcome.SUCCESS:
             damage = attack_result.get("damage")
             if damage:
                 return (
+                    f"{_class_ability_flavor(actor)}让这次攻击势大力沉。"
                     f"{actor.name} lunges forward with {weapon} in hand and hits the {target}. "
                     f"The blow lands cleanly, and the impact echoes through the scene."
                 )
@@ -189,17 +203,42 @@ def _fallback_action_result(
                 f"{actor.name} attacks {target} with the {weapon}, "
                 f"but misses as the {target} dances aside at the last moment."
             )
-    
+
+    # Skill/ability check fallback with character flavor
+    flavor = _class_ability_flavor(actor)
+    if check_result and check_result.get("skill"):
+        skill = check_result.get("skill", "")
+        ability = check_result.get("ability", "")
+        ability_flavor = {
+            "str": "蛮力",
+            "dex": "敏捷身手",
+            "con": "坚韧体魄",
+            "int": "渊博学识",
+            "wis": "敏锐感知",
+            "cha": "迷人魅力",
+        }.get(ability, "能力")
+        if outcome == Outcome.SUCCESS:
+            return (
+                f"{flavor}派上了用场。凭借{ability_flavor}，{actor.name}"
+                f"顺利完成了{req.intent}，达成了预期的结果。"
+            )
+        else:
+            return (
+                f"尽管{flavor}不俗，{actor.name}在尝试{req.intent}时"
+                f"还是差了一点运气，{ability_flavor}没能扭转局面。"
+            )
+
     # General action fallback
     if outcome == Outcome.SUCCESS:
         return (
-            f"{actor.name} sets out to {req.intent}. Through skill and determination, "
-            f"the attempt succeeds, bringing the desired result."
+            f"{flavor}让{actor.name}顺利完成了{req.intent}，"
+            f"努力得到了回报，周围的气氛也随之发生了微妙的变化。"
         )
     else:
         return (
-            f"{actor.name} attempts to {req.intent}, but fortune does not favor them this time. "
-            f"The effort falls short of success."
+            f"{actor.name}尝试{req.intent}，但时运不济，"
+            f"努力未能换来成功。挫败感在空气中弥漫，"
+            f"周围的世界似乎在趁机反击。"
         )
 
 
@@ -215,23 +254,34 @@ def _fallback_scene_progression(
         target = attack_result.get("target", "enemy")
         if outcome == Outcome.SUCCESS:
             return (
-                f"The {target} recoils and the air in {scene.name} tightens around the clash. "
-                f"You can press the advantage now or scan the room for whoever reacts next."
+                f"{target}在冲击下踉跄后退，{scene.name}中的空气因交锋而紧绷。"
+                f"你可以趁势追击，也可以观察周围还有谁会加入战局。"
             )
         return (
-            f"The {target} regains footing as the fight resets for a heartbeat, and nearby movement grows tense. "
-            f"You can reposition, watch for a counterattack, or call out to control the next exchange."
+            f"{target}稳住身形，战斗在瞬息间重新摆开架势，附近的动静变得紧张起来。"
+            f"你可以调整位置、提防反击，或者出声控制下一步的交锋。"
         )
 
     if outcome == Outcome.SUCCESS:
+        flags_hint = ""
+        if scene.flags:
+            latest_flag = scene.flags[-1]
+            flag_desc = {
+                "npc_persuaded": "周围的气氛因为刚刚的交涉而缓和了一些。",
+                "door_opened": "敞开的门让新的路径成为可能。",
+                "player_hidden": "你融入阴影中，周围环境似乎还没有察觉你的存在。",
+                "secrets_found": "新发现的秘密改变了你对这里的认知。",
+                "magic_identified": "被识别的魔法在空气中留下一丝异样的余韵。",
+            }.get(latest_flag, "场景中的某些东西已经悄然改变。")
+            flags_hint = f" {flag_desc}"
         return (
-            f"A ripple of response moves through {scene.name} as the moment settles into its new shape. "
-            f"You can follow the opening immediately, watch how others react, or probe the environment for what changed."
+            f"{scene.name}中泛起一阵回应的涟漪，这一刻定格成了新的形状。"
+            f"{flags_hint}你可以立即抓住机会、观察他人反应，或者探查环境的变化。"
         )
 
     return (
-        f"The setback leaves a brief opening for the world to answer back; sounds, glances, and pressure shift around {actor.name}. "
-        f"You can reassess the room, respond to any NPC reaction, or try a new angle before the moment closes."
+        f"挫折为世界留下了一个回应的空档；声音、目光和压力在{actor.name}周围悄然转移。"
+        f"你可以重新评估房间、回应任何NPC的反应，或者在时机关闭前尝试新的角度。"
     )
 
 
@@ -256,11 +306,12 @@ def _fallback_gm_prompt(
     scene: Scene,
     outcome: Outcome,
     attack_result: Optional[dict] = None,
+    check_result: Optional[dict] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
 ) -> str:
     history_callback = _build_history_callback(narrative_history)
     time_pressure = (
-        f" Time in {scene.name} has advanced to beat {scene.time}."
+        f" {scene.name}的时间已经推进到第{scene.time}拍。"
         if scene.time
         else ""
     )
@@ -269,23 +320,47 @@ def _fallback_gm_prompt(
         target = attack_result.get("target", "enemy")
         if outcome == Outcome.SUCCESS:
             return (
-                f"{target} staggers but does not leave the scene; something in the melee is about to answer your advantage."
-                f"{history_callback}{time_pressure} Do you press the wounded foe, break away to reposition, or react to whoever else moves?"
+                f"{target}踉跄着但没有离开战场；混战中的某个东西即将回应你的优势。"
+                f"{history_callback}{time_pressure} 你要追击受伤的敌人、撤退 reposition，还是应对其他动向？"
             )
         return (
-            f"{target} has seen your line now and the fight threatens to turn back on you."
-            f"{history_callback}{time_pressure} What do you do before the counterpressure lands?"
+            f"{target}已经看穿了你的路线，战斗似乎要反噬你了。"
+            f"{history_callback}{time_pressure} 在反击到来之前，你打算怎么做？"
         )
+
+    # Build contextual prompt based on check result and scene state
+    check_hint = ""
+    if check_result:
+        skill = check_result.get("skill")
+        ability = check_result.get("ability", "")
+        total = check_result.get("total", 0)
+        dc = check_result.get("dc", 0)
+        if skill == "persuasion" and outcome == Outcome.SUCCESS:
+            check_hint = " NPC的态度已经软化，现在可能是进一步交涉或提出请求的好时机。"
+        elif skill == "stealth" and outcome == Outcome.SUCCESS:
+            check_hint = " 你目前处于隐匿状态，可以趁机移动、偷袭，或者保持隐蔽观察。"
+        elif skill == "perception" and outcome == Outcome.SUCCESS:
+            check_hint = " 你的察觉让你注意到了常人忽略的细节，不妨去调查那个发现。"
+        elif skill == "arcana" and outcome == Outcome.SUCCESS:
+            check_hint = " 魔法的本质已经向你揭示，你可以决定如何利用这一知识。"
+        elif ability == "str" and outcome == Outcome.SUCCESS:
+            check_hint = " 你的力量突破了一道障碍，接下来要利用这条新路做什么？"
+        elif outcome == Outcome.FAILURE:
+            margin = dc - total
+            if margin >= 5:
+                check_hint = " 这次失败相当明显，周围的反应可能不会对你有利。"
+            else:
+                check_hint = " 你几乎就要成功了，也许再尝试一次，或者换一个方法？"
 
     if outcome == Outcome.SUCCESS:
         return (
-            f"A fresh opening has appeared in {scene.name}, but it will not stay open for long."
-            f"{history_callback}{time_pressure} Do you exploit that opening immediately, question whoever reacts, or examine what just shifted?"
+            f"{scene.name}中出现了一个新的机会窗口，但它不会一直敞开。"
+            f"{check_hint}{history_callback}{time_pressure} 你要立即利用这个机会、向做出反应的人发问，还是检查刚刚发生了什么变化？"
         )
 
     return (
-        f"The failed attempt gives the scene permission to push back."
-        f"{history_callback}{time_pressure} What catches your attention first: an NPC response, a change in the environment, or a new tactic?"
+        f"失败的尝试让场景获得了反推的许可。"
+        f"{check_hint}{history_callback}{time_pressure} 什么最先引起你的注意：一个NPC的反应、环境的变化，还是一个新的策略？"
     )
 
 
@@ -295,12 +370,13 @@ def _fallback_narration_bundle(
     scene: Scene,
     outcome: Outcome,
     attack_result: Optional[dict] = None,
+    check_result: Optional[dict] = None,
     narrative_history: Optional[list[NarrativeHistoryEntry]] = None,
 ) -> NarrationBundle:
     return NarrationBundle(
-        action_result=_fallback_action_result(req, actor, scene, outcome, attack_result),
+        action_result=_fallback_action_result(req, actor, scene, outcome, attack_result, check_result),
         scene_progression=_fallback_scene_progression(req, actor, scene, outcome, attack_result),
-        gm_prompt=_fallback_gm_prompt(req, actor, scene, outcome, attack_result, narrative_history),
+        gm_prompt=_fallback_gm_prompt(req, actor, scene, outcome, attack_result, check_result, narrative_history),
     )
 
 
@@ -505,5 +581,6 @@ def generate_narration(
         scene,
         outcome,
         attack_result,
+        check_result,
         narrative_history,
     )

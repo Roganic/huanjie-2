@@ -144,6 +144,16 @@ class SavingThrowDetail(BaseModel):
     outcome: Outcome
 
 
+class SkillCheckDetail(BaseModel):
+    """Simplified skill check summary for frontend display."""
+    skill: Optional[str] = None
+    roll: int
+    modifier: int
+    total: int
+    dc: int
+    success: bool
+
+
 class Effect(BaseModel):
     target: str
     field: str
@@ -155,6 +165,7 @@ class ActionResponse(BaseModel):
     action_summary: str
     resolution_type: ResolutionType
     check: Optional[CheckDetail] = None
+    skill_check: Optional[SkillCheckDetail] = None
     attack: Optional[AttackDetail] = None
     saving_throw: Optional[SavingThrowDetail] = None
     outcome: Outcome

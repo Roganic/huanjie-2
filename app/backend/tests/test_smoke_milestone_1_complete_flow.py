@@ -188,7 +188,7 @@ async def test_complete_game_flow_with_combat(client):
         
         if first_attack_hit:
             assert enemy_hp_after_first < enemy_initial_hp
-            assert enemy_hp_after_first == enemy_initial_hp - damage_dealt
+            assert enemy_hp_after_first == max(0, enemy_initial_hp - damage_dealt)
         
         # Step 5: 继续战斗 - 第二次攻击
         resp = await c.post("/action", json={

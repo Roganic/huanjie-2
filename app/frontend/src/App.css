@@ -2222,3 +2222,44 @@
     font-size: 24px;
   }
 }
+
+/* Scene flags */
+.scene-flags {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.scene-flags-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.flag-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flag-tag {
+  font-size: 11px;
+  padding: 3px 8px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 12px;
+  color: var(--accent-light);
+}
+
+/* Skill check display */
+.check-skill {
+  font-weight: 600;
+  color: var(--accent-light);
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+}

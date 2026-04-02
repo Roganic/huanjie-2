@@ -20,6 +20,7 @@ from .models.state import (
 )
 from .state import (
     SessionData,
+    _bootstrap_from_session,
     _create_fresh_session,
     _get_session,
     _resolve_session_id,
@@ -71,6 +72,9 @@ def save_current_game(session_id: str | None = None) -> dict[str, Any]:
 def load_saved_game() -> BootstrapState | None:
     """Load game from save file and restore session state.
     
+    Also copies the saved state to the default session so that
+    clients without a session_id will get the saved state.
+    
     Returns:
         BootstrapState if save exists and was loaded successfully, None otherwise.
     """
@@ -79,10 +83,8 @@ def load_saved_game() -> BootstrapState | None:
         return None
     
     with _SESSION_LOCK:
-        # Create or get the session
+        # Restore to the saved session
         session = _get_session(save_data.session_id, create_if_missing=True)
-        
-        # Restore all saved state
         session.phase = save_data.phase
         session.game_phase = save_data.game_phase
         session.actor = save_data.character
@@ -90,9 +92,19 @@ def load_saved_game() -> BootstrapState | None:
         session.scene = save_data.scene if save_data.scene else persistence.create_fresh_character_creation_scene()
         session.narrative_history = save_data.action_history
         session.scene_history = save_data.scene_history
-        
-        # Persist the restored session
         _save_session(session)
+        
+        # Also copy to default session so clients without session_id get the saved state
+        from .state import DEFAULT_SESSION_ID
+        default_session = _get_session(DEFAULT_SESSION_ID, create_if_missing=True)
+        default_session.phase = save_data.phase
+        default_session.game_phase = save_data.game_phase
+        default_session.actor = save_data.character
+        default_session.enemy = save_data.enemy
+        default_session.scene = save_data.scene if save_data.scene else persistence.create_fresh_character_creation_scene()
+        default_session.narrative_history = save_data.action_history
+        default_session.scene_history = save_data.scene_history
+        _save_session(default_session)
     
     return get_bootstrap_state(session_id=save_data.session_id)
 
@@ -146,9 +158,41 @@ def get_save_info() -> dict[str, Any] | None:
 def try_auto_load_on_startup() -> BootstrapState | None:
     """Try to load saved game on server startup.
     
+    Also copies the saved state to the default session so that
+    clients without a session_id will get the saved state.
+    
     Returns:
         BootstrapState if save was loaded, None if no save exists.
     """
-    if persistence.has_save_file():
-        return load_saved_game()
-    return None
+    if not persistence.has_save_file():
+        return None
+    
+    save_data = persistence.load_game()
+    if save_data is None:
+        return None
+    
+    with _SESSION_LOCK:
+        # Restore to the saved session
+        saved_session = _get_session(save_data.session_id, create_if_missing=True)
+        saved_session.phase = save_data.phase
+        saved_session.game_phase = save_data.game_phase
+        saved_session.actor = save_data.character
+        saved_session.enemy = save_data.enemy
+        saved_session.scene = save_data.scene if save_data.scene else persistence.create_fresh_character_creation_scene()
+        saved_session.narrative_history = save_data.action_history
+        saved_session.scene_history = save_data.scene_history
+        _save_session(saved_session)
+        
+        # Also copy to default session so clients without session_id get the saved state
+        from .state import DEFAULT_SESSION_ID
+        default_session = _get_session(DEFAULT_SESSION_ID, create_if_missing=True)
+        default_session.phase = save_data.phase
+        default_session.game_phase = save_data.game_phase
+        default_session.actor = save_data.character
+        default_session.enemy = save_data.enemy
+        default_session.scene = save_data.scene if save_data.scene else persistence.create_fresh_character_creation_scene()
+        default_session.narrative_history = save_data.action_history
+        default_session.scene_history = save_data.scene_history
+        _save_session(default_session)
+    
+    return _bootstrap_from_session(saved_session)

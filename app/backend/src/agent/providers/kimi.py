@@ -16,9 +16,12 @@ class KimiProvider(NarrationProvider):
 
     def __init__(self) -> None:
         self._api_key = os.getenv("KIMI_API_KEY", "")
-        self._api_url = os.getenv("KIMI_API_URL", "https://api.moonshot.cn/v1/chat/completions")
-        self._model = os.getenv("KIMI_MODEL", "moonshot-v1-8k")
-        self._timeout = float(os.getenv("KIMI_TIMEOUT_SECONDS", "5"))
+        self._api_url = os.getenv(
+            "KIMI_API_URL",
+            "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+        )
+        self._model = os.getenv("KIMI_MODEL", "doubao-1-5-pro-32k-250115")
+        self._timeout = float(os.getenv("KIMI_TIMEOUT_SECONDS", "30"))
 
     @property
     def name(self) -> str:

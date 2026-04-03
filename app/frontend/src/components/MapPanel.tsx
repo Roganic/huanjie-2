@@ -44,8 +44,9 @@ export function MapPanel({
 
   const fetchMapData = useCallback(async () => {
     if (!isVisible) return;
-    
-    setLoading(true);
+
+    // Only show loading spinner if we have no data yet (first load)
+    if (!mapData) setLoading(true);
     setError(null);
     try {
       const response = await fetch(apiUrl("/map"), {

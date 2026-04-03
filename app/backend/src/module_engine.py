@@ -35,7 +35,9 @@ def get_current_story_node(session_id: str | None = None) -> tuple[Optional[Stor
     module = get_module(active.module_id)
     if module is None:
         return None, None
-    node = module.nodes.get(active.current_story_node)
+    if not active.current_story_node:
+        return None, module
+    node = next((n for n in module.story_nodes if n.id == active.current_story_node), None)
     return node, module
 
 
@@ -77,7 +79,7 @@ def evaluate_triggers(
             matched = trigger.target.lower() in intent_lower
         
         if matched:
-            next_node = module.nodes.get(trigger.next_node_id)
+            next_node = next((n for n in module.story_nodes if n.id == trigger.next_node_id), None)
             if next_node is None:
                 continue
             

@@ -734,7 +734,7 @@ def create_character(
         session.active_module = ActiveModuleState(
             module_id=default_module.id,
             current_story_node=default_module.starting_node_id,
-            visited_nodes=[default_module.starting_node_id],
+            visited_nodes=[default_module.starting_node_id] if default_module.starting_node_id else [],
         )
         _save_session(session)
         
@@ -1173,7 +1173,7 @@ def _create_fresh_session(session_id: str) -> SessionData:
         session.active_module = ActiveModuleState(
             module_id=default_module.id,
             current_story_node=default_module.starting_node_id,
-            visited_nodes=[default_module.starting_node_id],
+            visited_nodes=[default_module.starting_node_id] if default_module.starting_node_id else [],
         )
 
     return session

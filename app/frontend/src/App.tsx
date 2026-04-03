@@ -2147,7 +2147,7 @@ function App() {
     return state;
   };
 
-  const refreshState = async (overrideSessionId?: string) => {
+  const refreshState = async (overrideSessionId?: string, { preserveMessages = false }: { preserveMessages?: boolean } = {}) => {
     const sid = overrideSessionId ?? sessionId;
     const response = await fetch(apiUrl("/state"), {
       headers: buildSessionHeaders(sid),
@@ -2164,8 +2164,10 @@ function App() {
     setSessionId(state.session_id);
     storeSessionId(state.session_id);
     setBootstrap(state);
-    setMessages(restoreMessagesFromHistory(state.narrative_history));
-    setTimeline(restoreTimelineFromHistory(state.narrative_history));
+    if (!preserveMessages) {
+      setMessages(restoreMessagesFromHistory(state.narrative_history));
+      setTimeline(restoreTimelineFromHistory(state.narrative_history));
+    }
     return state;
   };
 
@@ -2691,7 +2693,7 @@ function App() {
       });
 
       setPreviousBootstrap(bootstrap);
-      await refreshState();
+      await refreshState(undefined, { preserveMessages: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setMessages((previous) => {
@@ -2750,6 +2752,8 @@ function App() {
         title: "战斗开始",
         details: `遭遇战开始，${data.participants.length} 名参与者`,
       });
+      // Refresh bootstrap so gamePhase updates to "combat" and CombatScreen renders
+      await refreshState();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setMessages((prev) => [
@@ -3273,17 +3277,17 @@ function App() {
                       <span className="story-node-icon">🎭</span>
                       <span>剧情节点</span>
                     </div>
-                    <div className="story-node-name">{bootstrap.active_module.current_story_node}</div>
-                    <div className="story-node-description">{bootstrap.active_module.current_story_description}</div>
+                    <div className="story-node-name">{bootstrap.active_module?.current_story_node ?? "自由探索"}</div>
+                    <div className="story-node-description">{(bootstrap.active_module as any)?.current_story_description ?? ""}</div>
                   </div>
                 </section>
 
                 <section>
                   <h2>📜 任务目标</h2>
                   <div className="active-quests-section">
-                    {bootstrap.active_module.active_quests.length > 0 ? (
+                    {(bootstrap.active_module?.active_quests?.length ?? 0) > 0 ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                        {bootstrap.active_module.active_quests.map((quest) => (
+                        {bootstrap.active_module.active_quests!.map((quest) => (
                           <div
                             key={quest.quest_id}
                             className={`active-quest-item ${quest.is_main ? "main-quest" : "side-quest"}`}

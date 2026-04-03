@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .memory import ActionHistoryEntry
+from .memory_types import ActionHistoryEntry  # type: ignore[import]
 
 
 def build_memory_context(

@@ -238,3 +238,14 @@ def get_all_npc_dialogue_states(
     """
     session_states = _get_session_npc_states(session_id)
     return dict(session_states)
+
+
+def is_first_npc_contact(npc_id: str, session_id: str | None = None) -> bool:
+    """Check if this is the first contact with an NPC in this session.
+    Stub that delegates to state module at call time to avoid circular imports.
+    """
+    try:
+        from ..state import is_first_npc_contact as _fn
+        return _fn(npc_id, session_id=session_id)
+    except Exception:
+        return False

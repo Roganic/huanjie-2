@@ -48,6 +48,7 @@ DC_HARD = 20
 # ---------------------------------------------------------------------------
 
 AUTO_SUCCESS_PHRASES = [
+    "环顾四周", "看看周围", "四处看看", "坐下", "站起来",
     "look around",
     "look at",
     "walk to",
@@ -61,6 +62,7 @@ AUTO_SUCCESS_PHRASES = [
 # If any of these words appear alongside a phrase match, the action is
 # probably non-trivial and should NOT auto-succeed.
 AUTO_SUCCESS_DISQUALIFIERS = [
+    "陷阱", "隐藏", "秘密", "危险", "潜行", "偷窃", "说服", "威胁",
     "locked", "trapped", "guard", "convince", "persuade", "deceive",
     "lie", "trick", "sneak", "steal", "force", "break", "dangerous",
     "difficult", "careful", "secret", "hidden",
@@ -310,7 +312,7 @@ def resolve_action(req: ActionRequest) -> ActionResponse:
     # --- generic ability check path ---
     ability = req.ability or _infer_ability(req.approach)
     modifier = actor.abilities.modifier(ability)
-    prof = actor.proficiency_bonus  # Generic checks add full prof for simplicity
+    prof = 0  # Generic ability checks do not automatically gain skill proficiency.
     dc = req.dc or _pick_dc(req.intent)
     advantage = req.advantage
 

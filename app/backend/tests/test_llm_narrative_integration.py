@@ -42,7 +42,6 @@ class TestLLMNarrativePath:
 
     def test_llm_narrative_path_with_mock_client(self, sample_actor, sample_scene, monkeypatch):
         """When LLM client returns valid narrative, it should be used."""
-        from src.config import LLMConfig
 
         req = ActionRequest(
             scene_id="dungeon-01",
@@ -59,10 +58,8 @@ class TestLLMNarrativePath:
             '"gm_prompt": "Do you press the attack?"}'
         )
 
-        dummy_config = LLMConfig(api_key="dummy", model="dummy", base_url="http://test", timeout=1.0)
         monkeypatch.setattr("src.agent.narrator.KIMI_API_KEY", "test-key")
-        monkeypatch.setattr("src.agent.narrator.get_llm_config", lambda _provider=None: dummy_config)
-        with patch("src.agent.narrator.OpenAICompatibleClient", return_value=mock_client):
+        with patch("src.agent.narrator.get_provider", return_value=mock_client):
             narration = generate_narration(
                 req=req,
                 actor=sample_actor,
@@ -110,7 +107,7 @@ class TestLLMNarrativePath:
         mock_client.generate.return_value = "this is not json"
 
         monkeypatch.setattr("src.agent.narrator.KIMI_API_KEY", "test-key")
-        with patch("src.agent.narrator.OpenAICompatibleClient", return_value=mock_client):
+        with patch("src.agent.narrator.get_provider", return_value=mock_client):
             narration = generate_narration(
                 req=req,
                 actor=sample_actor,
@@ -143,7 +140,7 @@ class TestLLMNarrativePath:
         )
 
         monkeypatch.setattr("src.agent.narrator.KIMI_API_KEY", "test-key")
-        with patch("src.agent.narrator.OpenAICompatibleClient", return_value=mock_client):
+        with patch("src.agent.narrator.get_provider", return_value=mock_client):
             narration = generate_narration(
                 req=req,
                 actor=sample_actor,

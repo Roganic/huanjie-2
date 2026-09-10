@@ -7,6 +7,10 @@ with automatic persistence to local JSON file.
 from __future__ import annotations
 
 from typing import Any
+from contextvars import ContextVar
+import uuid
+
+DEFER_AUTOSAVE = ContextVar("defer_autosave", default=False)
 
 from . import persistence
 from .models.state import (
@@ -33,7 +37,7 @@ from .state import (
 )
 
 
-def save_current_game(session_id: str | None = None, save_name: str = "") -> dict[str, Any]:
+def save_current_game(session_id: str | None = None, save_name: str = "", *, automatic: bool = False) -> dict[str, Any]:
     """Save the current game state to a new save file.
     
     Args:
@@ -43,24 +47,19 @@ def save_current_game(session_id: str | None = None, save_name: str = "") -> dic
     Returns:
         Dict with save metadata including save_id, timestamp, etc.
     """
+    if automatic and DEFER_AUTOSAVE.get():
+        return {"deferred": True}
     resolved_session_id = _resolve_session_id(session_id)
     
     with _SESSION_LOCK:
         session = _get_session(resolved_session_id, create_if_missing=True)
         
-        # Build combat state data if in combat
-        combat_state_data = None
-        if session.game_phase == AdventurePhase.COMBAT:
-            combat_state_data = CombatStateData(
-                combat_id="combat-01",
-                round_number=1,
-                turn_index=0,
-                status="active",
-            )
-        
+        from routes.combat import _get_combat_state
+        live_combat = _get_combat_state(resolved_session_id)
+        combat_state_data = CombatStateData.model_validate(live_combat.model_dump(mode="json")) if live_combat else None
         return persistence.save_game_with_id(
-            save_id=None,  # Auto-generate save_id
-            save_name=save_name,
+            save_id=f"auto_{uuid.uuid5(uuid.NAMESPACE_URL, resolved_session_id).hex}" if automatic else None,
+            save_name="自动存档 · " + (session.actor.name if session.actor else "准备冒险") if automatic else save_name,
             session_id=session.session_id,
             phase=session.phase,
             game_phase=session.game_phase,
@@ -70,6 +69,8 @@ def save_current_game(session_id: str | None = None, save_name: str = "") -> dic
             combat_state=combat_state_data,
             action_history=list(session.narrative_history),
             scene_history=list(session.scene_history),
+            session_snapshot=session.model_dump(mode="json", by_alias=True),
+            combat_snapshot=live_combat.model_dump(mode="json") if live_combat else None,
         )
 
 
@@ -90,36 +91,40 @@ def load_saved_game(save_id: str | None = None) -> BootstrapState | None:
     if save_data is None:
         return None
     
+    from .state import _sessions, DEFAULT_SESSION_ID
+    from routes.combat import CombatState, _set_combat_state, _clear_combat_state
+
+    # Validate the entire snapshot before replacing any live state.
+    if save_data.session_snapshot is not None:
+        restored = SessionData.model_validate(save_data.session_snapshot)
+        if restored.session_id != save_data.session_id:
+            raise ValueError("存档会话信息不一致")
+    else:
+        restored = SessionData(
+            session_id=save_data.session_id,
+            phase=save_data.phase,
+            game_phase=save_data.game_phase,
+            actor=save_data.character,
+            enemy=save_data.enemy or _create_fresh_session(save_data.session_id).enemy,
+            scene=save_data.scene or persistence.create_fresh_character_creation_scene(),
+            narrative_history=save_data.action_history,
+            scene_history=save_data.scene_history,
+            explored_nodes=[save_data.scene.id] if save_data.scene else [],
+        )
+    combat = CombatState.model_validate(save_data.combat_snapshot) if save_data.combat_snapshot else None
+    if restored.game_phase == AdventurePhase.COMBAT and combat is None:
+        # Legacy saves do not contain enough information to resume combat.
+        restored.game_phase = AdventurePhase.EXPLORATION
+
     with _SESSION_LOCK:
-        # Restore to the saved session
-        session = _get_session(save_data.session_id, create_if_missing=True)
-        session.phase = save_data.phase
-        session.game_phase = save_data.game_phase
-        session.actor = save_data.character
-        session.enemy = save_data.enemy
-        session.scene = save_data.scene if save_data.scene else persistence.create_fresh_character_creation_scene()
-        session.narrative_history = save_data.action_history
-        session.scene_history = save_data.scene_history
-        # Initialize visited_scenes from loaded scene if not present in save
-        if session.scene and session.scene.id:
-            session.visited_scenes = {session.scene.id: session.scene.visited_count}
-        _save_session(session)
-        
-        # Also copy to default session so clients without session_id get the saved state
-        from .state import DEFAULT_SESSION_ID
-        default_session = _get_session(DEFAULT_SESSION_ID, create_if_missing=True)
-        default_session.phase = save_data.phase
-        default_session.game_phase = save_data.game_phase
-        default_session.actor = save_data.character
-        default_session.enemy = save_data.enemy
-        default_session.scene = save_data.scene if save_data.scene else persistence.create_fresh_character_creation_scene()
-        default_session.narrative_history = save_data.action_history
-        default_session.scene_history = save_data.scene_history
-        if default_session.scene and default_session.scene.id:
-            default_session.visited_scenes = {default_session.scene.id: default_session.scene.visited_count}
-        _save_session(default_session)
-    
-    return get_bootstrap_state(session_id=save_data.session_id)
+        for sid in {restored.session_id, DEFAULT_SESSION_ID}:
+            copy = restored.model_copy(deep=True, update={"session_id": sid})
+            _sessions[sid] = copy
+            _save_session(copy)
+            _clear_combat_state(sid)
+            if combat is not None:
+                _set_combat_state(sid, combat.model_copy(deep=True))
+    return get_bootstrap_state(session_id=restored.session_id)
 
 
 def load_game_by_id(save_id: str) -> BootstrapState | None:
@@ -143,8 +148,7 @@ def reset_and_clear_save(session_id: str | None = None) -> BootstrapState:
     Returns:
         Fresh BootstrapState after reset.
     """
-    # Clear the save file
-    persistence.clear_save()
+    persistence.reset_session(_resolve_session_id(session_id))
     
     # Reset the session state
     return reset_state(session_id=session_id)
@@ -201,35 +205,29 @@ def try_auto_load_on_startup() -> BootstrapState | None:
     Returns:
         BootstrapState if save was loaded, None if no save exists.
     """
-    if not persistence.has_save_file():
+    # A persisted default adventure is independent of other named saves. Never
+    # replace it implicitly just because another adventure was saved later.
+    from .state import _load_session, _sessions, DEFAULT_SESSION_ID
+    current_default = _load_session(DEFAULT_SESSION_ID)
+    if current_default is not None and current_default.actor is not None:
+        with _SESSION_LOCK:
+            _sessions[DEFAULT_SESSION_ID] = current_default
+        return get_bootstrap_state(DEFAULT_SESSION_ID)
+    # Automatic startup resumes the latest live session; it must not roll back
+    # a newly started encounter to an older manual/automatic save.
+    try:
+        saved = persistence.load_game()
+    except ValueError:
         return None
-    
-    save_data = persistence.load_game()
-    if save_data is None:
-        return None
-    
-    with _SESSION_LOCK:
-        # Restore to the saved session
-        saved_session = _get_session(save_data.session_id, create_if_missing=True)
-        saved_session.phase = save_data.phase
-        saved_session.game_phase = save_data.game_phase
-        saved_session.actor = save_data.character
-        saved_session.enemy = save_data.enemy
-        saved_session.scene = save_data.scene if save_data.scene else persistence.create_fresh_character_creation_scene()
-        saved_session.narrative_history = save_data.action_history
-        saved_session.scene_history = save_data.scene_history
-        _save_session(saved_session)
-        
-        # Also copy to default session so clients without session_id get the saved state
-        from .state import DEFAULT_SESSION_ID
-        default_session = _get_session(DEFAULT_SESSION_ID, create_if_missing=True)
-        default_session.phase = save_data.phase
-        default_session.game_phase = save_data.game_phase
-        default_session.actor = save_data.character
-        default_session.enemy = save_data.enemy
-        default_session.scene = save_data.scene if save_data.scene else persistence.create_fresh_character_creation_scene()
-        default_session.narrative_history = save_data.action_history
-        default_session.scene_history = save_data.scene_history
-        _save_session(default_session)
-    
-    return _bootstrap_from_session(saved_session)
+    if saved is not None:
+        from .state import _load_session, _sessions, DEFAULT_SESSION_ID
+        current = _load_session(saved.session_id)
+        snapshot_time = (saved.session_snapshot or {}).get("updated_at", 0)
+        if current is not None and current.actor is not None and current.updated_at >= snapshot_time:
+            with _SESSION_LOCK:
+                for sid in {current.session_id, DEFAULT_SESSION_ID}:
+                    restored = current.model_copy(deep=True, update={"session_id": sid})
+                    _sessions[sid] = restored
+                    _save_session(restored)
+            return get_bootstrap_state(current.session_id)
+    return load_saved_game()

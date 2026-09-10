@@ -1,0 +1,826 @@
+{
+  "schema_version": 1,
+  "id": "story-3b05aac346a62a61",
+  "version": "1.0.0",
+  "name": "最后一盏渡灯",
+  "description": "暮潮港的最后一班渡船载着七个人入港，浓雾压低而导航灯只剩红色余烬。守灯人岑婆委托你在雾封港前指引渡船回家：修好灯光，或敲出正确的渡钟。真相藏在修灯学徒阿禾的沉默里——调查、交涉与救援，无强制战斗，约20–40分钟，适合1名低等级角色。",
+  "starting_scene_id": "ferry_dock",
+  "scenes": {
+    "ferry_dock": {
+      "id": "ferry_dock",
+      "name": "渡口",
+      "description": "暮潮港的渡口，雾气贴着水面爬行。最后一班渡船的轮廓在雾中若隐若现，守灯人岑婆提着一圈红色余烬的旧灯站在栈桥尽头。",
+      "aliases": [],
+      "exits": [
+        {
+          "direction": "修灯棚",
+          "target_scene_id": "repair_shed"
+        },
+        {
+          "direction": "潮阶",
+          "target_scene_id": "tide_steps"
+        },
+        {
+          "direction": "灯塔",
+          "target_scene_id": "lighthouse"
+        }
+      ],
+      "character_ids": [
+        "cen_po"
+      ],
+      "item_ids": [],
+      "interactions": [],
+      "safe_rest": false,
+      "challenges": []
+    },
+    "repair_shed": {
+      "id": "repair_shed",
+      "name": "修灯棚",
+      "description": "堆满灯油桶、螺栓与镜片布的小棚屋。修灯学徒阿禾坐在工作台后，袖口沾着灯灰，眼神躲闪。",
+      "aliases": [],
+      "exits": [
+        {
+          "direction": "渡口",
+          "target_scene_id": "ferry_dock"
+        }
+      ],
+      "character_ids": [
+        "a_he"
+      ],
+      "item_ids": [],
+      "interactions": [],
+      "safe_rest": false,
+      "challenges": [
+        {
+          "id": "persuade_ahe",
+          "name": "安抚阿禾",
+          "description": "说服阿禾交出校准图；失败则他继续沉默，你只能另寻维修记录。",
+          "target_id": "a_he",
+          "check_kind": "ability",
+          "skill": "persuasion",
+          "ability": "cha",
+          "dc": 10,
+          "time_cost": 1,
+          "risk": "minor",
+          "stakes": "说服阿禾交出校准图；失败则他继续沉默，你只能另寻维修记录。",
+          "retry": "once",
+          "retry_delay": 0,
+          "required_flags": [],
+          "goal_id": null,
+          "retry_flags": null,
+          "completed_flags": [
+            "beat-fe6bd69c5b80586230801d4c-success"
+          ],
+          "complete_on_success": true,
+          "approaches": [],
+          "consequences": [],
+          "on_success": [
+            {
+              "title": "安抚阿禾",
+              "narration": "你没有追问谁的错，只说船上的孩子在发烧。阿禾沉默半晌，从袖中抽出校准图：『照这个调镜框，灯光能扫到小码头。』",
+              "category": "social",
+              "scope": "scene",
+              "priority": "normal",
+              "clock": "world",
+              "delay": 0,
+              "after_combat": "continue",
+              "required_flags": [],
+              "wait_for_conditions": false,
+              "cancel_flags": [],
+              "scene_id": "repair_shed",
+              "cancel_on_leave": false,
+              "visible": true,
+              "effects": [
+                {
+                  "kind": "clue",
+                  "target_id": "calibration_chart",
+                  "value": "校准图：聚光镜镜框的校准顺序与角度，可稳妥调整灯塔灯光。",
+                  "amount": 1
+                },
+                {
+                  "kind": "relationship",
+                  "target_id": "a_he",
+                  "value": "",
+                  "amount": 1
+                },
+                {
+                  "kind": "flag",
+                  "target_id": "",
+                  "value": "beat-fe6bd69c5b80586230801d4c-success",
+                  "amount": 1
+                },
+                {
+                  "kind": "flag",
+                  "target_id": "",
+                  "value": "join-f7526648f88f25290993eff4",
+                  "amount": 1
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "安抚阿禾",
+              "narration": "阿禾别过脸去：『我自己会处理。』他不肯再多说一个字——但潮阶上那只维修匣或许藏着答案，之后仍可再来找他。",
+              "category": "social",
+              "scope": "scene",
+              "priority": "normal",
+              "clock": "world",
+              "delay": 0,
+              "after_combat": "continue",
+              "required_flags": [],
+              "wait_for_conditions": false,
+              "cancel_flags": [],
+              "scene_id": "repair_shed",
+              "cancel_on_leave": false,
+              "visible": true,
+              "effects": [
+                {
+                  "kind": "flag",
+                  "target_id": "",
+                  "value": "beat-fe6bd69c5b80586230801d4c-failure",
+                  "amount": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "tide_steps": {
+      "id": "tide_steps",
+      "name": "潮阶",
+      "description": "通往海面的石阶，潮水刚刚漫过第三级。一只铜制维修匣半埋在湿沙里，匣盖浮雕着操作顺序的纹样。",
+      "aliases": [],
+      "exits": [
+        {
+          "direction": "渡口",
+          "target_scene_id": "ferry_dock"
+        },
+        {
+          "direction": "灯塔",
+          "target_scene_id": "lighthouse"
+        }
+      ],
+      "character_ids": [],
+      "item_ids": [],
+      "interactions": [
+        {
+          "id": "restore_wet_paper",
+          "name": "复原匣盖纹样",
+          "action_name": "复原匣盖纹样",
+          "time_cost": 3,
+          "skill": null,
+          "aliases": [],
+          "required_flags": [
+            "beat-208ccbb84d3ba6a8506ece2f-failure"
+          ],
+          "set_flags": [],
+          "locked_reason": "请先寻找相关线索。",
+          "advantage_flags": [],
+          "success_condition": null,
+          "failure_condition": null,
+          "dc": 10,
+          "success_narrative": "你借着余烬的微光，用指尖一寸寸描过匣盖浮雕，再对照湿纸上残存的墨痕。操作顺序在你手中一点点复原——足够在灯塔校准灯光了。",
+          "failure_narrative": "这次尝试没有成功。",
+          "failure_damage": 0,
+          "reward_item": null,
+          "reward_info": null
+        }
+      ],
+      "safe_rest": false,
+      "challenges": [
+        {
+          "id": "investigate_box",
+          "name": "潮阶维修匣",
+          "description": "在潮水漫上来之前取出维修匣里的记录；失败则图纸被打湿、耗去时间，但匣盖浮雕仍可复原。",
+          "target_id": "tide_steps",
+          "check_kind": "ability",
+          "skill": "investigation",
+          "ability": "int",
+          "dc": 10,
+          "time_cost": 1,
+          "risk": "minor",
+          "stakes": "在潮水漫上来之前取出维修匣里的记录；失败则图纸被打湿、耗去时间，但匣盖浮雕仍可复原。",
+          "retry": "once",
+          "retry_delay": 0,
+          "required_flags": [],
+          "goal_id": null,
+          "retry_flags": null,
+          "completed_flags": [
+            "beat-208ccbb84d3ba6a8506ece2f-success"
+          ],
+          "complete_on_success": true,
+          "approaches": [],
+          "consequences": [],
+          "on_success": [
+            {
+              "title": "潮阶维修匣",
+              "narration": "你赶在潮水之前撬开维修匣：里面是被藏起来的维修记录，写明了阿禾拆下镜框加固、弄断一颗螺栓的经过，还附着一份校准信息。送油人离开时灯还完好——他是清白的。",
+              "category": "environment",
+              "scope": "scene",
+              "priority": "normal",
+              "clock": "world",
+              "delay": 0,
+              "after_combat": "continue",
+              "required_flags": [],
+              "wait_for_conditions": false,
+              "cancel_flags": [],
+              "scene_id": "tide_steps",
+              "cancel_on_leave": false,
+              "visible": true,
+              "effects": [
+                {
+                  "kind": "clue",
+                  "target_id": "repair_record",
+                  "value": "维修记录：阿禾擅自拆下镜框加固并弄断一颗螺栓，事后藏起记录；送油人离开时灯仍完好，可证明其清白。",
+                  "amount": 1
+                },
+                {
+                  "kind": "clue",
+                  "target_id": "calibration_info",
+                  "value": "校准信息：镜框复位与灯光校准的操作顺序，可在灯塔稳妥调整灯光。",
+                  "amount": 1
+                },
+                {
+                  "kind": "flag",
+                  "target_id": "",
+                  "value": "beat-208ccbb84d3ba6a8506ece2f-success",
+                  "amount": 1
+                },
+                {
+                  "kind": "flag",
+                  "target_id": "",
+                  "value": "join-f7526648f88f25290993eff4",
+                  "amount": 1
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "潮阶维修匣",
+              "narration": "潮水漫过第三级石阶，打湿了匣中的图纸，墨迹晕成一片。你抢回的只是一张湿纸——但匣盖的浮雕纹样仍在，花些时间或许能复原操作顺序。",
+              "category": "environment",
+              "scope": "scene",
+              "priority": "normal",
+              "clock": "world",
+              "delay": 0,
+              "after_combat": "continue",
+              "required_flags": [],
+              "wait_for_conditions": false,
+              "cancel_flags": [],
+              "scene_id": "tide_steps",
+              "cancel_on_leave": false,
+              "visible": true,
+              "effects": [
+                {
+                  "kind": "clue",
+                  "target_id": "wet_paper",
+                  "value": "湿纸线索：图纸被潮水打湿、字迹晕开，无法直接读出校准信息；维修匣盖的浮雕纹样记录了操作顺序。",
+                  "amount": 1
+                },
+                {
+                  "kind": "flag",
+                  "target_id": "",
+                  "value": "beat-208ccbb84d3ba6a8506ece2f-failure",
+                  "amount": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "lighthouse": {
+      "id": "lighthouse",
+      "name": "灯塔",
+      "description": "暮潮港灯塔的顶层。聚光镜的镜框裂开一道缝，灯芯只剩一圈红色余烬；一旁的渡钟悬在雾里，等着正确的钟声。",
+      "aliases": [],
+      "exits": [
+        {
+          "direction": "渡口",
+          "target_scene_id": "ferry_dock"
+        },
+        {
+          "direction": "潮阶",
+          "target_scene_id": "tide_steps"
+        }
+      ],
+      "character_ids": [],
+      "item_ids": [],
+      "interactions": [
+        {
+          "id": "light_success",
+          "name": "点亮渡灯",
+          "action_name": "点亮渡灯",
+          "time_cost": 1,
+          "skill": null,
+          "aliases": [],
+          "required_flags": [
+            "join-f7526648f88f25290993eff4"
+          ],
+          "set_flags": [],
+          "locked_reason": "请先寻找相关线索。",
+          "advantage_flags": [],
+          "success_condition": null,
+          "failure_condition": null,
+          "dc": 10,
+          "success_narrative": "依照校准信息，你把裂开的镜框稳稳复位，拧上最后一颗螺栓。灯光穿透浓雾扫过海面——渡船鸣笛回应，朝着小码头缓缓靠岸。七个人都回家了。",
+          "failure_narrative": "这次尝试没有成功。",
+          "failure_damage": 0,
+          "reward_item": null,
+          "reward_info": null
+        },
+        {
+          "id": "bell_success",
+          "name": "三短一长的渡钟",
+          "action_name": "三短一长的渡钟",
+          "time_cost": 1,
+          "skill": null,
+          "aliases": [],
+          "required_flags": [
+            "beat-67f0b19b3d589161d4d582d9-success"
+          ],
+          "set_flags": [],
+          "locked_reason": "请先寻找相关线索。",
+          "advantage_flags": [],
+          "success_condition": null,
+          "failure_condition": null,
+          "dc": 10,
+          "success_narrative": "没有修灯的条件，你依照潮汐纸握起钟槌：三短，一长。钟声穿过浓雾，渡船循声靠近避风的小码头。乘客平安下船，只是来不及固定的货物被海水浸坏了。",
+          "failure_narrative": "这次尝试没有成功。",
+          "failure_damage": 0,
+          "reward_item": null,
+          "reward_info": null
+        }
+      ],
+      "safe_rest": false,
+      "challenges": []
+    }
+  },
+  "characters": {
+    "cen_po": {
+      "id": "cen_po",
+      "name": "岑婆",
+      "description": "暮潮港的守灯人，皱纹里藏着几十年的潮汐。她把一张潮汐纸摊在你掌心：亮灯，或者敲出正确的钟声。",
+      "type": "friendly",
+      "race": null,
+      "occupation": "守灯人",
+      "role": "neutral",
+      "alive": true,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": null,
+      "dialogue": "船上的人不能等我们追究谁的错。亮灯，或者照潮汐纸敲出三短一长的渡钟——雾封港之前，让渡船回家。",
+      "clue": null,
+      "personality": "沉稳、务实，先救人后问罪；对学徒严格却不肯放弃。",
+      "knowledge": [
+        {
+          "id": "cen_oilman_clear",
+          "text": "维修记录证明送油人早早离开时灯还完好，他是清白的。岑婆点头：『那就只剩一个不肯开口的孩子了。』",
+          "required_flags": [
+            "beat-208ccbb84d3ba6a8506ece2f-success"
+          ]
+        },
+        {
+          "id": "cen_aher_bolt",
+          "text": "岑婆没有立刻原谅阿禾，却把一颗旧螺栓交给他：『明天开始，你学的第一件事是求助。』",
+          "required_flags": [
+            "join-2934a0daa778a676974325ba"
+          ]
+        }
+      ],
+      "xp_reward": 0,
+      "drops": []
+    },
+    "a_he": {
+      "id": "a_he",
+      "name": "阿禾",
+      "description": "年轻的修灯学徒，手指上有新的擦伤。他发现镜框裂开擅自拆下加固，又怕承认弄断了一颗螺栓，把维修记录藏了起来。",
+      "type": "neutral",
+      "race": null,
+      "occupation": "修灯学徒",
+      "role": "neutral",
+      "alive": true,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": null,
+      "dialogue": "我……没什么可说的。灯的事，我自己会处理。",
+      "clue": null,
+      "personality": "倔强而心虚，相信只要在师父发现前修好就不算犯错；沉默不是恶意。",
+      "knowledge": [
+        {
+          "id": "ahe_confess_chart",
+          "text": "阿禾低声承认了镜框和螺栓的事，把藏在袖中的校准图递给你：『照这个调，灯光能扫到小码头。』",
+          "required_flags": [
+            "beat-fe6bd69c5b80586230801d4c-success"
+          ]
+        },
+        {
+          "id": "ahe_after_record",
+          "text": "阿禾得知维修记录已被找到，肩膀垮了下来：『我不是想害送油人……我只是怕。』",
+          "required_flags": [
+            "beat-208ccbb84d3ba6a8506ece2f-success"
+          ]
+        }
+      ],
+      "xp_reward": 0,
+      "drops": []
+    }
+  },
+  "items": {
+    "ferry_medal": {
+      "id": "ferry_medal",
+      "name": "渡口纪念章",
+      "type": "misc",
+      "damage_dice": null,
+      "attack_ability": null,
+      "effect_type": null,
+      "effect_dice": null,
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "岑婆交出的旧铜纪念章，正面刻着一盏渡灯，背面是暮潮港的潮纹。"
+    }
+  },
+  "quests": {
+    "quest_ferry_home": {
+      "id": "quest_ferry_home",
+      "name": "让渡船回家",
+      "kind": "flags",
+      "giver_id": "cen_po",
+      "target_scene_id": "lighthouse",
+      "objective": "在浓雾封港之前指引最后一班渡船入港：用校准信息点亮灯塔，或依照潮汐纸敲出三短一长的渡钟。",
+      "required_flags": [
+        "join-2934a0daa778a676974325ba"
+      ],
+      "ready_text": "渡船已经靠岸，七名乘客平安。回到渡口向岑婆报告结果。",
+      "rewards": [
+        {
+          "item_id": "ferry_medal",
+          "quantity": 1
+        }
+      ],
+      "alternative_flags": [],
+      "alternative_objective": "",
+      "alternative_ready_text": "",
+      "progress_hints": [],
+      "xp_reward": 80
+    }
+  },
+  "events": {
+    "arrive_dock": {
+      "title": "雾压渡口",
+      "narration": "雾在入夜前压低，导航灯只剩一圈红色的余烬。最后一班渡船载着七个人——其中有一名发着高烧的孩子——正在雾中等待指引。守灯人岑婆朝你招手。",
+      "category": "quest",
+      "scope": "scene",
+      "priority": "normal",
+      "clock": "world",
+      "delay": 0,
+      "after_combat": "continue",
+      "required_flags": [],
+      "wait_for_conditions": false,
+      "cancel_flags": [],
+      "scene_id": "ferry_dock",
+      "cancel_on_leave": false,
+      "visible": true,
+      "effects": [
+        {
+          "kind": "flag",
+          "target_id": "",
+          "value": "beat-811be1db0b4656c787530e74-success",
+          "amount": 1
+        }
+      ],
+      "id": "arrive_dock",
+      "on": "enter_scene",
+      "target_id": "ferry_dock",
+      "set_flags": [],
+      "grants": []
+    },
+    "talk_cen": {
+      "title": "岑婆的委托",
+      "narration": "岑婆把一张潮汐纸摊在你的掌心：『灯塔的聚光镜还在，只是没人会调。亮灯，或者照这张纸敲出三短一长的渡钟，引船靠避风的小码头。船上的人不能等我们追究谁的错。』",
+      "category": "quest",
+      "scope": "scene",
+      "priority": "normal",
+      "clock": "world",
+      "delay": 0,
+      "after_combat": "continue",
+      "required_flags": [],
+      "wait_for_conditions": false,
+      "cancel_flags": [],
+      "scene_id": "ferry_dock",
+      "cancel_on_leave": false,
+      "visible": true,
+      "effects": [
+        {
+          "kind": "clue",
+          "target_id": "tide_paper",
+          "value": "潮汐纸：入夜后潮水漫过潮阶第三级；渡钟三短一长可引渡船靠避风的小码头，但货物会被海水浸坏。",
+          "amount": 1
+        },
+        {
+          "kind": "flag",
+          "target_id": "",
+          "value": "beat-67f0b19b3d589161d4d582d9-success",
+          "amount": 1
+        }
+      ],
+      "id": "talk_cen",
+      "on": "talk",
+      "target_id": "cen_po",
+      "set_flags": [],
+      "grants": []
+    },
+    "fog_lock": {
+      "title": "浓雾封港",
+      "narration": "浓雾完全封港，海面只剩一片灰白。渡船无法自行靠岸，必须等待拖船协助——救援仍能完成，但已经延误到天亮。",
+      "category": "environment",
+      "scope": "story",
+      "priority": "urgent",
+      "clock": "world",
+      "delay": 10,
+      "after_combat": "continue",
+      "required_flags": [],
+      "wait_for_conditions": false,
+      "cancel_flags": [
+        "beat-b2b49aa21c0c2e3e3ea9ae69-success",
+        "beat-377c5e3e2d122937341b2c72-success"
+      ],
+      "scene_id": null,
+      "cancel_on_leave": false,
+      "visible": true,
+      "effects": [
+        {
+          "kind": "flag",
+          "target_id": "",
+          "value": "beat-c10e4307dd78a4fc8b2c6fe1-success",
+          "amount": 1
+        }
+      ],
+      "id": "fog_lock",
+      "on": "talk",
+      "target_id": "cen_po",
+      "set_flags": [],
+      "grants": []
+    },
+    "restore_wet_paper": {
+      "title": "复原匣盖纹样",
+      "narration": "你借着余烬的微光，用指尖一寸寸描过匣盖浮雕，再对照湿纸上残存的墨痕。操作顺序在你手中一点点复原——足够在灯塔校准灯光了。",
+      "category": "environment",
+      "scope": "scene",
+      "priority": "normal",
+      "clock": "world",
+      "delay": 0,
+      "after_combat": "continue",
+      "required_flags": [
+        "beat-208ccbb84d3ba6a8506ece2f-failure"
+      ],
+      "wait_for_conditions": false,
+      "cancel_flags": [],
+      "scene_id": "tide_steps",
+      "cancel_on_leave": false,
+      "visible": true,
+      "effects": [
+        {
+          "kind": "clue",
+          "target_id": "calibration_restored",
+          "value": "复原的校准顺序：由匣盖浮雕与湿纸残痕拼出的镜框复位与灯光校准步骤，可在灯塔稳妥调整灯光。",
+          "amount": 1
+        },
+        {
+          "kind": "flag",
+          "target_id": "",
+          "value": "beat-0deacfa43da84469d714b3b1-success",
+          "amount": 1
+        },
+        {
+          "kind": "flag",
+          "target_id": "",
+          "value": "join-f7526648f88f25290993eff4",
+          "amount": 1
+        }
+      ],
+      "id": "restore_wet_paper",
+      "on": "interact",
+      "target_id": "tide_steps:restore_wet_paper",
+      "set_flags": [],
+      "grants": []
+    },
+    "light_success": {
+      "title": "点亮渡灯",
+      "narration": "依照校准信息，你把裂开的镜框稳稳复位，拧上最后一颗螺栓。灯光穿透浓雾扫过海面——渡船鸣笛回应，朝着小码头缓缓靠岸。七个人都回家了。",
+      "category": "quest",
+      "scope": "story",
+      "priority": "normal",
+      "clock": "world",
+      "delay": 0,
+      "after_combat": "continue",
+      "required_flags": [
+        "join-f7526648f88f25290993eff4"
+      ],
+      "wait_for_conditions": false,
+      "cancel_flags": [],
+      "scene_id": null,
+      "cancel_on_leave": false,
+      "visible": true,
+      "effects": [
+        {
+          "kind": "flag",
+          "target_id": "",
+          "value": "beat-b2b49aa21c0c2e3e3ea9ae69-success",
+          "amount": 1
+        },
+        {
+          "kind": "flag",
+          "target_id": "",
+          "value": "join-2934a0daa778a676974325ba",
+          "amount": 1
+        }
+      ],
+      "id": "light_success",
+      "on": "interact",
+      "target_id": "lighthouse:light_success",
+      "set_flags": [],
+      "grants": []
+    },
+    "bell_success": {
+      "title": "三短一长的渡钟",
+      "narration": "没有修灯的条件，你依照潮汐纸握起钟槌：三短，一长。钟声穿过浓雾，渡船循声靠近避风的小码头。乘客平安下船，只是来不及固定的货物被海水浸坏了。",
+      "category": "quest",
+      "scope": "story",
+      "priority": "normal",
+      "clock": "world",
+      "delay": 0,
+      "after_combat": "continue",
+      "required_flags": [
+        "beat-67f0b19b3d589161d4d582d9-success"
+      ],
+      "wait_for_conditions": false,
+      "cancel_flags": [],
+      "scene_id": null,
+      "cancel_on_leave": false,
+      "visible": true,
+      "effects": [
+        {
+          "kind": "flag",
+          "target_id": "",
+          "value": "beat-377c5e3e2d122937341b2c72-success",
+          "amount": 1
+        },
+        {
+          "kind": "flag",
+          "target_id": "",
+          "value": "join-2934a0daa778a676974325ba",
+          "amount": 1
+        }
+      ],
+      "id": "bell_success",
+      "on": "interact",
+      "target_id": "lighthouse:bell_success",
+      "set_flags": [],
+      "grants": []
+    },
+    "ahe_steps_forward": {
+      "title": "阿禾站出来",
+      "narration": "渡船靠岸的消息传回渡口时，阿禾主动站到了岑婆面前，把断掉的螺栓放在她掌心。岑婆没有立刻原谅他，只说：『明天开始，你学的第一件事是求助。』",
+      "category": "social",
+      "scope": "scene",
+      "priority": "normal",
+      "clock": "world",
+      "delay": 0,
+      "after_combat": "continue",
+      "required_flags": [
+        "join-2934a0daa778a676974325ba"
+      ],
+      "wait_for_conditions": false,
+      "cancel_flags": [],
+      "scene_id": "ferry_dock",
+      "cancel_on_leave": false,
+      "visible": true,
+      "effects": [
+        {
+          "kind": "relationship",
+          "target_id": "a_he",
+          "value": "",
+          "amount": 1
+        },
+        {
+          "kind": "flag",
+          "target_id": "",
+          "value": "beat-d7cad762a349026797bb9dde-success",
+          "amount": 1
+        }
+      ],
+      "id": "ahe_steps_forward",
+      "on": "talk",
+      "target_id": "cen_po",
+      "set_flags": [],
+      "grants": []
+    },
+    "prove_oilman": {
+      "title": "送油人的清白",
+      "narration": "你出示维修记录：送油人离开时灯还完好，嫌疑不该落在他头上。岑婆接过记录，长久地看着海面：『那就只剩一个不肯开口的孩子了。』",
+      "category": "social",
+      "scope": "scene",
+      "priority": "normal",
+      "clock": "world",
+      "delay": 0,
+      "after_combat": "continue",
+      "required_flags": [
+        "beat-208ccbb84d3ba6a8506ece2f-success",
+        "join-2934a0daa778a676974325ba"
+      ],
+      "wait_for_conditions": false,
+      "cancel_flags": [],
+      "scene_id": "ferry_dock",
+      "cancel_on_leave": false,
+      "visible": true,
+      "effects": [
+        {
+          "kind": "relationship",
+          "target_id": "cen_po",
+          "value": "",
+          "amount": 1
+        },
+        {
+          "kind": "flag",
+          "target_id": "",
+          "value": "beat-094c4b7850e6f2072ef1502d-success",
+          "amount": 1
+        }
+      ],
+      "id": "prove_oilman",
+      "on": "talk",
+      "target_id": "cen_po",
+      "set_flags": [],
+      "grants": []
+    }
+  },
+  "endings": [
+    {
+      "id": "ending_light",
+      "title": "雾里的光",
+      "description": "你在浓雾封港之前点亮了渡灯。灯光扫过海面，渡船及时靠岸，发烧的孩子被抱上栈桥时，雾正开始散去。岑婆把渡口纪念章放进你手里：『暮潮港欠你一盏灯。』",
+      "required_flags": [
+        "beat-b2b49aa21c0c2e3e3ea9ae69-success"
+      ],
+      "forbidden_flags": [
+        "beat-c10e4307dd78a4fc8b2c6fe1-success"
+      ],
+      "completed_quests": [
+        "quest_ferry_home"
+      ],
+      "failed_quests": []
+    },
+    {
+      "id": "ending_bell",
+      "title": "听见归航",
+      "description": "灯塔没能亮起，你依照潮汐纸敲出三短一长的渡钟，钟声穿过了浓雾。渡船及时靠上避风的小码头，乘客平安，只有浸坏的货物见证这一夜的仓促。阿禾站在人群外，第一次主动开口说话。",
+      "required_flags": [
+        "beat-377c5e3e2d122937341b2c72-success"
+      ],
+      "forbidden_flags": [
+        "beat-c10e4307dd78a4fc8b2c6fe1-success",
+        "beat-b2b49aa21c0c2e3e3ea9ae69-success"
+      ],
+      "completed_quests": [
+        "quest_ferry_home"
+      ],
+      "failed_quests": []
+    },
+    {
+      "id": "ending_dawn",
+      "title": "等到天亮",
+      "description": "浓雾封港，渡船在灰白的海面上等了整夜，直到拖船协助才缓缓靠岸。救援终究完成了——七个人都活着踏上了栈桥，只是那个发烧的孩子多熬了一夜。岑婆望着晨光说：『晚了，但没有更晚。』",
+      "required_flags": [
+        "beat-c10e4307dd78a4fc8b2c6fe1-success",
+        "join-2934a0daa778a676974325ba"
+      ],
+      "forbidden_flags": [],
+      "completed_quests": [
+        "quest_ferry_home"
+      ],
+      "failed_quests": []
+    }
+  ],
+  "supplies": null
+}

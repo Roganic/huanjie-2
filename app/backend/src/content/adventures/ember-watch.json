@@ -1,0 +1,766 @@
+{
+  "schema_version": 1,
+  "id": "ember-watch",
+  "version": "2.0.0",
+  "name": "余烬钟声",
+  "description": "第二阶段样例冒险：用交涉、调查或战斗找回巡逻队的消息。失败也有后续路线，人物记得你的尝试。",
+  "starting_scene_id": "ember-square",
+  "scenes": {
+    "ember-square": {
+      "id": "ember-square",
+      "name": "暮钟广场",
+      "description": "暮色落在熄灭的钟楼上。伊莲等待巡逻队的消息。你可以争取支援、核实证言，或前往档案室和河岸调查。",
+      "exits": [
+        {
+          "direction": "east",
+          "target_scene_id": "ember-archive"
+        },
+        {
+          "direction": "south",
+          "target_scene_id": "ember-bank"
+        }
+      ],
+      "character_ids": [
+        "ember-captain"
+      ],
+      "challenges": [
+        {
+          "id": "ember-support",
+          "name": "争取出发支援",
+          "target_id": "ember-captain",
+          "description": "提出具体支援请求。可凭过往经验或清晰计划说服伊莲；支援与询问证言是不同目标。",
+          "skill": "persuasion",
+          "dc": 12,
+          "stakes": "1 格时间；成功得到一份治疗药水，失败伊莲关系 -1。只能尝试一次。",
+          "goal_id": "ember-support",
+          "retry": "once",
+          "retry_flags": [],
+          "complete_on_success": true,
+          "on_success": [
+            {
+              "title": "得到支援",
+              "narration": "伊莲批准了一份急救支援。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "ember-support"
+                },
+                {
+                  "kind": "item",
+                  "target_id": "healing_potion"
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "支援被拒",
+              "narration": "伊莲拒绝额外支援，但仍愿意讨论巡逻队的线索。",
+              "effects": [
+                {
+                  "kind": "relationship",
+                  "target_id": "ember-captain",
+                  "amount": -1
+                }
+              ]
+            }
+          ],
+          "approaches": [
+            {
+              "id": "plan",
+              "name": "说明行动计划",
+              "skill": "persuasion",
+              "dc": 12,
+              "description": "解释打算如何安全调查"
+            },
+            {
+              "id": "experience",
+              "name": "引用类似巡逻经验",
+              "skill": "history",
+              "dc": 12,
+              "description": "结合过往巡逻惯例提出准备方案"
+            }
+          ],
+          "consequences": [
+            {
+              "id": "encouragement",
+              "name": "请求鼓舞",
+              "stakes": "1 格时间；成功获得激励，失败关系 -1；不会同时得到药水。",
+              "on_success": [
+                {
+                  "title": "临行鼓舞",
+                  "narration": "伊莲用老兵的经验鼓舞了你。",
+                  "effects": [
+                    {
+                      "kind": "flag",
+                      "value": "ember-support"
+                    },
+                    {
+                      "kind": "condition",
+                      "value": "inspired"
+                    }
+                  ]
+                }
+              ],
+              "on_failure": [
+                {
+                  "title": "支援被拒",
+                  "narration": "伊莲拒绝额外支援，但仍愿意讨论巡逻队的线索。",
+                  "effects": [
+                    {
+                      "kind": "relationship",
+                      "target_id": "ember-captain",
+                      "amount": -1
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "completed_flags": [
+            "ember-support"
+          ]
+        },
+        {
+          "id": "ember-testimony",
+          "name": "核实队长的证言",
+          "target_id": "ember-captain",
+          "description": "请求伊莲核实最后的钟声。只问公开消息无需检定；要取得可据以报告的完整证言则需要她配合。",
+          "skill": "persuasion",
+          "dc": 12,
+          "stakes": "1 格时间；成功取得改道证言，失败关系 -1，但得到档案室调查方向。",
+          "goal_id": "ember-testimony",
+          "retry": "once",
+          "retry_flags": [],
+          "complete_on_success": true,
+          "on_success": [
+            {
+              "title": "证言核实",
+              "narration": "伊莲确认：两短一长是改道信号，巡逻队可能在避风港。你已有足够证据提交调查报告。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "ember-report"
+                },
+                {
+                  "kind": "flag",
+                  "value": "ember-testimony"
+                },
+                {
+                  "kind": "clue",
+                  "target_id": "ember-proof",
+                  "value": "伊莲确认最后钟声是改道信号，足以提交报告。"
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "证言不足",
+              "narration": "伊莲不能确认细节，态度变得冷淡；她建议你去旧档案室核对钟声记录。",
+              "effects": [
+                {
+                  "kind": "relationship",
+                  "target_id": "ember-captain",
+                  "amount": -1
+                },
+                {
+                  "kind": "flag",
+                  "value": "ember-referred"
+                },
+                {
+                  "kind": "clue",
+                  "target_id": "ember-next",
+                  "value": "旧档案室保存着钟声记录，可以独立调查。"
+                }
+              ]
+            }
+          ],
+          "approaches": [
+            {
+              "id": "reassure",
+              "name": "耐心说明核实目的",
+              "skill": "persuasion",
+              "dc": 12,
+              "description": "让队长相信你会如实呈报"
+            },
+            {
+              "id": "reconstruct",
+              "name": "引导回忆当时细节",
+              "skill": "insight",
+              "dc": 14,
+              "description": "根据停顿和情绪引导队长重新核对记忆"
+            }
+          ],
+          "completed_flags": [
+            "ember-report"
+          ]
+        }
+      ],
+      "safe_rest": true
+    },
+    "ember-archive": {
+      "id": "ember-archive",
+      "name": "旧档案室",
+      "description": "焦纸味尚未散去。诺娅守着残页，低柜里是成叠的登记册。",
+      "exits": [
+        {
+          "direction": "west",
+          "target_scene_id": "ember-square"
+        }
+      ],
+      "character_ids": [
+        "ember-witness"
+      ],
+      "challenges": [
+        {
+          "id": "ember-record",
+          "name": "辨认烧焦的记录",
+          "target_id": "ember-archive",
+          "description": "检查残页中的钟声或魔法记号；失败仍可转向副本。",
+          "skill": "investigation",
+          "dc": 12,
+          "stakes": "1 格时间；成功获得报告证据；失败受伤 1 点并找到副本线索，2 格时间后烟尘会再次造成 1 点伤害（先完成报告证据可取消）。",
+          "goal_id": "ember-record",
+          "retry": "once",
+          "retry_flags": [],
+          "complete_on_success": true,
+          "on_success": [
+            {
+              "title": "还原记录",
+              "narration": "残页证实巡逻队主动改道。已有足够证据返回广场报告。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "ember-report"
+                },
+                {
+                  "kind": "flag",
+                  "value": "ember-record"
+                },
+                {
+                  "kind": "clue",
+                  "target_id": "ember-proof",
+                  "value": "钟声记录确认巡逻队主动改道。"
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "残页破损",
+              "narration": "烟尘呛得你咳嗽，残页无法辨认；诺娅指出低柜中还有登记副本。",
+              "effects": [
+                {
+                  "kind": "damage",
+                  "amount": 1
+                },
+                {
+                  "kind": "flag",
+                  "value": "ember-backup"
+                },
+                {
+                  "kind": "clue",
+                  "target_id": "ember-backup",
+                  "value": "低柜中的登记副本可整理，不需再次辨认残页。"
+                }
+              ]
+            },
+            {
+              "title": "烟尘扩散",
+              "narration": "档案室的烟尘再次灼伤了你。",
+              "effects": [
+                {
+                  "kind": "damage",
+                  "amount": 1
+                }
+              ],
+              "category": "environment",
+              "priority": "urgent",
+              "delay": 2,
+              "scene_id": "ember-archive",
+              "cancel_flags": [
+                "ember-report"
+              ],
+              "cancel_on_leave": true
+            }
+          ],
+          "approaches": [
+            {
+              "id": "pages",
+              "name": "核对页码与字迹",
+              "skill": "investigation",
+              "dc": 12,
+              "description": "用页码和剩余字迹拼接记录"
+            },
+            {
+              "id": "runes",
+              "name": "辨识钟声记号",
+              "skill": "arcana",
+              "dc": 14,
+              "description": "解读残页上的传讯记号"
+            }
+          ],
+          "completed_flags": [
+            "ember-report"
+          ]
+        },
+        {
+          "id": "ember-copy",
+          "name": "整理登记副本",
+          "target_id": "ember-archive",
+          "description": "沿低柜页码逐页核对，无不确定结果，只付出时间。",
+          "goal_id": "ember-copy",
+          "check_kind": "automatic",
+          "time_cost": 2,
+          "stakes": "2 格时间；取得完整证据。若仍留在烟尘中，之前安排的烟尘后果可能先到。",
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [
+            "ember-backup"
+          ],
+          "completed_flags": [
+            "ember-report"
+          ],
+          "on_success": [
+            {
+              "title": "副本核实",
+              "narration": "你付出时间整理副本，确认巡逻队沿支流改道。可以返回广场报告。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "ember-report"
+                },
+                {
+                  "kind": "flag",
+                  "value": "ember-recovered"
+                },
+                {
+                  "kind": "clue",
+                  "target_id": "ember-proof",
+                  "value": "登记副本确认巡逻队沿支流改道。"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "safe_rest": false
+    },
+    "ember-bank": {
+      "id": "ember-bank",
+      "name": "芦苇河岸",
+      "description": "河水把细碎的钟声带向远处。洛恩停船在栈桥旁，北面的营地仍被两名匪徒占据。",
+      "exits": [
+        {
+          "direction": "north",
+          "target_scene_id": "ember-camp"
+        },
+        {
+          "direction": "west",
+          "target_scene_id": "ember-square"
+        }
+      ],
+      "character_ids": [
+        "ember-ferryman"
+      ],
+      "challenges": [
+        {
+          "id": "ember-river",
+          "name": "核实船夫的航线",
+          "target_id": "ember-ferryman",
+          "description": "用航行痕迹或解释报告目的核实巡逻船去向。",
+          "skill": "survival",
+          "dc": 12,
+          "stakes": "1 格时间；成功取得航线证据，失败关系 -1，并明确可清理营地保障归路。",
+          "goal_id": "ember-river",
+          "retry": "once",
+          "retry_flags": [],
+          "complete_on_success": true,
+          "on_success": [
+            {
+              "title": "航线核实",
+              "narration": "洛恩核实了巡逻船的航线：队伍去了支流避风港。可以回广场报告。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "ember-report"
+                },
+                {
+                  "kind": "flag",
+                  "value": "ember-river"
+                },
+                {
+                  "kind": "clue",
+                  "target_id": "ember-proof",
+                  "value": "洛恩确认巡逻船去了支流避风港。"
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "航线未核实",
+              "narration": "洛恩拒绝为不确定的航线作证。他提醒你：北边营地的匪徒仍阻挡着归路。",
+              "effects": [
+                {
+                  "kind": "relationship",
+                  "target_id": "ember-ferryman",
+                  "amount": -1
+                },
+                {
+                  "kind": "clue",
+                  "target_id": "ember-camp",
+                  "value": "河岸北边匪徒营地有两名敌人，清理后可回报队长。"
+                }
+              ]
+            }
+          ],
+          "approaches": [
+            {
+              "id": "tracks",
+              "name": "核对水流与船痕",
+              "skill": "survival",
+              "dc": 12,
+              "description": "从水流与船痕复原航线"
+            },
+            {
+              "id": "honest",
+              "name": "说明如实报告的承诺",
+              "skill": "persuasion",
+              "dc": 14,
+              "description": "诚恳说明证言用途"
+            }
+          ],
+          "completed_flags": [
+            "ember-report"
+          ]
+        }
+      ],
+      "safe_rest": false
+    },
+    "ember-camp": {
+      "id": "ember-camp",
+      "name": "匪徒营地",
+      "description": "两名匪徒守着巡逻队的归路。进入即与全部敌人遭遇。",
+      "exits": [
+        {
+          "direction": "south",
+          "target_scene_id": "ember-bank"
+        }
+      ],
+      "character_ids": [
+        "ember-bandit-1",
+        "ember-bandit-2"
+      ],
+      "challenges": [],
+      "safe_rest": false
+    }
+  },
+  "characters": {
+    "ember-captain": {
+      "id": "ember-captain",
+      "name": "守备队长伊莲",
+      "type": "friendly",
+      "description": "一位疲惫的守备队长，把旧巡逻名册压在手下。",
+      "dialogue": "巡逻队失联了。你可以核实他们为何改道，也可以清理截断归路的匪徒。先从我的证言、档案室或河岸查起。",
+      "clue": "失踪巡逻队留下的是改道信号；旧档案室的钟声记录和河岸船夫可以交叉核实。",
+      "personality": "谨慎、直接，不愿凭空认定巡逻队遇害。面对抱怨先倾听，只有明确请求才考虑是否合作。",
+      "knowledge": [
+        {
+          "id": "public",
+          "text": "旧档案室在广场东边，河岸在南边；河岸能通往匪徒营地。"
+        },
+        {
+          "id": "private",
+          "text": "巡逻队曾用两短一长的钟声表示改道；没有证据表明他们已经死亡。",
+          "required_flags": [
+            "ember-testimony"
+          ]
+        }
+      ]
+    },
+    "ember-witness": {
+      "id": "ember-witness",
+      "name": "抄写员诺娅",
+      "type": "neutral",
+      "description": "年轻的抄写员守着被烟熏黑的档案柜。",
+      "dialogue": "昨夜有人烧了部分巡逻记录。你可以检查残页；若原件坏了，我还知道副本在哪。",
+      "personality": "胆小但认真，不知道匪徒的计划。",
+      "knowledge": [
+        {
+          "id": "archive",
+          "text": "档案的残页和钟声记录可以解释巡逻队的去向。"
+        },
+        {
+          "id": "backup",
+          "text": "登记副本收在低柜里，按页码整理需要时间。",
+          "required_flags": [
+            "ember-backup"
+          ]
+        }
+      ]
+    },
+    "ember-ferryman": {
+      "id": "ember-ferryman",
+      "name": "船夫洛恩",
+      "type": "neutral",
+      "description": "一个沉默的船夫坐在潮湿的栈桥边。",
+      "dialogue": "我见过巡逻队的船，但你得拿航线说话，或者让我相信你会如实报告。营地就在河岸北边，里面有两名匪徒。",
+      "personality": "务实，讨厌夸口。只讲亲眼见过的事。",
+      "knowledge": [
+        {
+          "id": "river",
+          "text": "巡逻船沿支流向避风港去了，匪徒仍在营地。",
+          "required_flags": [
+            "ember-river"
+          ]
+        }
+      ]
+    },
+    "ember-bandit-1": {
+      "id": "ember-bandit-1",
+      "name": "拦路匪徒1",
+      "type": "hostile",
+      "description": "占据归路的匪徒。",
+      "hp": 6,
+      "ac": 10,
+      "xp_reward": 75,
+      "weapon_id": "encounter-weapon"
+    },
+    "ember-bandit-2": {
+      "id": "ember-bandit-2",
+      "name": "拦路匪徒2",
+      "type": "hostile",
+      "description": "占据归路的匪徒。",
+      "hp": 6,
+      "ac": 10,
+      "xp_reward": 75,
+      "weapon_id": "encounter-weapon"
+    }
+  },
+  "items": {
+    "encounter-weapon": {
+      "id": "encounter-weapon",
+      "name": "简易武器",
+      "type": "weapon",
+      "damage_dice": "1d3",
+      "attack_ability": "str",
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": ""
+    },
+    "shortsword": {
+      "id": "shortsword",
+      "name": "短剑",
+      "type": "weapon",
+      "damage_dice": "1d6",
+      "attack_ability": "dex",
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "一把轻便的短剑。"
+    },
+    "leather": {
+      "id": "leather",
+      "name": "皮甲",
+      "type": "armor",
+      "damage_dice": null,
+      "attack_ability": null,
+      "base_ac": 11,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "轻便的皮革护甲。"
+    },
+    "healing_potion": {
+      "id": "healing_potion",
+      "name": "治疗药水",
+      "type": "consumable",
+      "damage_dice": null,
+      "attack_ability": null,
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "一瓶红色的治疗药水，饮用后可恢复生命值。",
+      "effect_type": "heal",
+      "effect_dice": "2d4+2"
+    },
+    "gold_coins": {
+      "id": "gold_coins",
+      "name": "金币",
+      "type": "misc",
+      "damage_dice": null,
+      "attack_ability": null,
+      "effect_type": null,
+      "effect_dice": null,
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "几枚闪闪发光的金币。"
+    },
+    "dagger": {
+      "id": "dagger",
+      "name": "匕首",
+      "type": "misc",
+      "damage_dice": null,
+      "attack_ability": null,
+      "effect_type": null,
+      "effect_dice": null,
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "一把锈迹斑斑的匕首。"
+    },
+    "bones": {
+      "id": "bones",
+      "name": "骨头",
+      "type": "misc",
+      "damage_dice": null,
+      "attack_ability": null,
+      "effect_type": null,
+      "effect_dice": null,
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "几根散落的骨头，可能有些用途。"
+    },
+    "rusty_sword": {
+      "id": "rusty_sword",
+      "name": "生锈剑",
+      "type": "misc",
+      "damage_dice": null,
+      "attack_ability": null,
+      "effect_type": null,
+      "effect_dice": null,
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "一把锈迹斑斑的旧剑，但仍可使用。"
+    },
+    "camp-supply": {
+      "id": "camp-supply",
+      "name": "营地补给",
+      "type": "misc",
+      "description": "野外长休消耗一份；酒馆和村庄可免费整备。"
+    },
+    "antidote": {
+      "id": "antidote",
+      "name": "解毒剂",
+      "type": "consumable",
+      "effect_type": "cure_poison",
+      "description": "解除中毒；未中毒时不会消耗。"
+    }
+  },
+  "quests": {
+    "ember-patrol": {
+      "id": "ember-patrol",
+      "name": "未归的巡逻队",
+      "giver_id": "ember-captain",
+      "target_scene_id": "ember-camp",
+      "xp_reward": 300,
+      "rewards": [
+        {
+          "item_id": "healing_potion"
+        }
+      ],
+      "alternative_flags": [
+        "ember-report"
+      ],
+      "alternative_objective": "通过队长证言、档案记录或河岸航线，核实巡逻队改道后向伊莲报告。",
+      "alternative_ready_text": "巡逻队的改道已得到证实；营地匪徒仍在，但守备队可以据此调整搜索路线。",
+      "progress_hints": [
+        {
+          "required_flags": [],
+          "text": "核实队长证言，或去档案室/河岸取得证据；也可清理匪徒营地保障归路。"
+        },
+        {
+          "required_flags": [
+            "ember-backup"
+          ],
+          "text": "残页无法辨认，旧档案室低柜还有登记副本。整理副本后回广场报告。"
+        }
+      ]
+    }
+  },
+  "events": {
+    "ember-search": {
+      "id": "ember-search",
+      "on": "talk",
+      "target_id": "ember-captain",
+      "title": "搜索队即将出发",
+      "narration": "等待已久的搜索队按旧路线出发了。伊莲对延误感到失望，但仍需要你的调查结果。",
+      "delay": 8,
+      "priority": "urgent",
+      "scope": "region",
+      "category": "quest",
+      "cancel_flags": [
+        "ember-report",
+        "ember-camp-cleared"
+      ],
+      "effects": [
+        {
+          "kind": "flag",
+          "value": "ember-late"
+        },
+        {
+          "kind": "relationship",
+          "target_id": "ember-captain",
+          "amount": -1
+        }
+      ]
+    },
+    "ember-cleared": {
+      "id": "ember-cleared",
+      "on": "scene_cleared",
+      "target_id": "ember-camp",
+      "title": "归路已通",
+      "narration": "营地的两名匪徒已经被击败，巡逻队归路恢复。回暮钟广场向伊莲报告。",
+      "effects": [
+        {
+          "kind": "flag",
+          "value": "ember-camp-cleared"
+        }
+      ]
+    }
+  },
+  "endings": [
+    {
+      "id": "ember-road",
+      "title": "归路重开",
+      "description": "你清除了拦路匪徒，守备队得以沿河接应巡逻队。",
+      "required_flags": [
+        "ember-camp-cleared"
+      ],
+      "completed_quests": [
+        "ember-patrol"
+      ]
+    },
+    {
+      "id": "ember-recovered",
+      "title": "灰烬中的副本",
+      "description": "调查并不顺利，但你承担代价从副本找到了答案。守备队据此调整了搜索路线。",
+      "required_flags": [
+        "ember-recovered"
+      ],
+      "completed_quests": [
+        "ember-patrol"
+      ]
+    },
+    {
+      "id": "ember-truth",
+      "title": "钟声的答案",
+      "description": "你用证言或记录确认了改道消息，让守备队有据可循。匪徒问题仍留待处理。",
+      "required_flags": [
+        "ember-report"
+      ],
+      "completed_quests": [
+        "ember-patrol"
+      ]
+    }
+  ],
+  "supplies": {
+    "item_id": "camp-supply",
+    "starting_quantity": 2
+  }
+}

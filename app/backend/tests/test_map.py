@@ -9,8 +9,10 @@ from src.scenes.data import SCENE_REGISTRY
 
 
 @pytest.fixture(autouse=True)
-def _fresh_state():
+def _fresh_state(_isolated_runtime):
     reset_state()
+    from tests.conftest import create_default_actor
+    create_default_actor()
 
 
 @pytest.fixture
@@ -64,7 +66,10 @@ class TestMapState:
 
         bootstrap = create_session()
         session_id = bootstrap.session_id
-        initial_scene = bootstrap.scene.id
+        from src.state import create_character
+        from src.models.state import CharacterCreateRequest
+        create_character(CharacterCreateRequest(name="地图测试", character_class="warrior"), session_id)
+        initial_scene = "tavern-01"
 
         # Switch to a different scene
         target_scene = "village-square-01"
@@ -141,6 +146,7 @@ class TestMapEndpoint:
             updated_explored = set(updated_map["explored_nodes"])
 
             # At minimum the current node should still be explored
-            assert updated_map["current_node"] in updated_explored
+            assert updated_map["current_node"] == "village-square-01"
+            assert "village-square-01" in updated_explored
             # Explored set should not shrink
             assert initial_explored.issubset(updated_explored)

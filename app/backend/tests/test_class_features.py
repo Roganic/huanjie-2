@@ -73,34 +73,13 @@ async def test_second_wind_heals_and_marks_used(client):
 
 
 @pytest.mark.asyncio
-async def test_action_surge_marks_used_and_returns_extra_action(client):
-    async with client as c:
-        session_id = await _create_character(c, name="WarriorTest", character_class="warrior")
-        
-        # Verify initial state
-        state_resp = await c.get("/state", headers={"X-Session-Id": session_id})
-        assert state_resp.status_code == 200
-        state_data = state_resp.json()
-        assert state_data["actor"]["class_features"]["action_surge_used"] is False
-        
-        # Use action surge
-        resp = await c.post("/action", json={
-            "scene_id": "forest-01",
-            "actor": "WarriorTest",
-            "intent": "action_surge",
-            "approach": "",
-        }, headers={"X-Session-Id": session_id})
-        
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["outcome"] == "success"
-        assert data["extra_action_available"] is True
-        
-        # Verify feature is marked used
-        state_resp = await c.get("/state", headers={"X-Session-Id": session_id})
-        assert state_resp.status_code == 200
-        state_data = state_resp.json()
-        assert state_data["actor"]["class_features"]["action_surge_used"] is True
+async def test_action_surge_does_not_consume_resource_outside_combat(client):
+    from src.state import get_actor
+    sid = await _create_character(client,name="WarriorTest",character_class="warrior")
+    before = get_actor(sid).model_dump()
+    r = await client.post("/action",headers={"X-Session-Id":sid},json=dict(scene_id="x",actor="x",intent="action_surge",approach=""))
+    assert r.status_code == 409
+    assert get_actor(sid).model_dump() == before
 
 
 @pytest.mark.asyncio
@@ -121,6 +100,8 @@ async def test_second_wind_cannot_be_used_twice(client):
     async with client as c:
         session_id = await _create_character(c, name="WarriorTest", character_class="warrior")
         
+        from src.state import get_actor
+        get_actor(session_id).hp = 1
         # Use second wind first time
         resp1 = await c.post("/action", json={
             "scene_id": "forest-01",
@@ -130,6 +111,7 @@ async def test_second_wind_cannot_be_used_twice(client):
         }, headers={"X-Session-Id": session_id})
         assert resp1.status_code == 200
         
+        get_actor(session_id).hp = 1
         # Try to use second wind again
         resp2 = await c.post("/action", json={
             "scene_id": "forest-01",

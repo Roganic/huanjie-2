@@ -55,17 +55,17 @@ class TestVillageSquareScene:
 
     def test_village_square_has_exits(self):
         """Village square should have exits to tavern and dungeon entrance."""
-        assert len(VILLAGE_SQUARE_SCENE.exits) == 2
+        assert len(VILLAGE_SQUARE_SCENE.exits) == 3
         
         exit_directions = [e.direction for e in VILLAGE_SQUARE_SCENE.exits]
-        assert "酒馆" in exit_directions
-        assert "森林入口" in exit_directions
+        assert "north" in exit_directions
+        assert "south" in exit_directions
 
     def test_village_square_exit_targets(self):
         """Village square exits should point to correct scenes."""
         exits_by_direction = {e.direction: e.target_scene_id for e in VILLAGE_SQUARE_SCENE.exits}
-        assert exits_by_direction["酒馆"] == "tavern-01"
-        assert exits_by_direction["森林入口"] == "dungeon-entrance-01"
+        assert exits_by_direction["north"] == "tavern-01"
+        assert exits_by_direction["east"] == "dungeon-entrance-01"
 
 
 class TestTavernScene:
@@ -76,14 +76,14 @@ class TestTavernScene:
         assert len(TAVERN_SCENE.exits) == 2
         
         exit_directions = [e.direction for e in TAVERN_SCENE.exits]
-        assert "村庄广场" in exit_directions
-        assert "森林入口" in exit_directions
+        assert "south" in exit_directions
+        assert "east" in exit_directions
 
     def test_tavern_exit_targets(self):
         """Tavern exits should point to correct scenes."""
         exits_by_direction = {e.direction: e.target_scene_id for e in TAVERN_SCENE.exits}
-        assert exits_by_direction["村庄广场"] == "village-square-01"
-        assert exits_by_direction["森林入口"] == "dungeon-entrance-01"
+        assert exits_by_direction["south"] == "village-square-01"
+        assert exits_by_direction["east"] == "dungeon-entrance-01"
 
 
 class TestDungeonEntranceScene:
@@ -91,12 +91,12 @@ class TestDungeonEntranceScene:
 
     def test_dungeon_entrance_has_exits(self):
         """Dungeon entrance should have exits to tavern, village square and dungeon."""
-        assert len(DUNGEON_ENTRANCE_SCENE.exits) == 3
+        assert len(DUNGEON_ENTRANCE_SCENE.exits) == 4
         
         exit_directions = [e.direction for e in DUNGEON_ENTRANCE_SCENE.exits]
-        assert "村庄广场" in exit_directions
-        assert "酒馆" in exit_directions
-        assert "地下城" in exit_directions
+        assert "west" in exit_directions
+        assert "down" in exit_directions
+        assert "north" in exit_directions
 
 
 class TestSceneRegistry:
@@ -115,43 +115,6 @@ class TestSceneRegistry:
         assert scene is None
 
 
-class TestMovementActionDetection:
-    """Test that movement actions are properly detected."""
-
-    @pytest.mark.parametrize("intent", [
-        "前往酒馆",
-        "去村庄广场",
-        "走回酒馆",
-        "进入森林",
-        "离开这里",
-        "返回村庄",
-        "到酒馆去",
-        "向北走",
-    ])
-    def test_movement_keywords(self, intent):
-        """Movement keywords should be detected in intents."""
-        from src.routers.action import _is_movement_action, _MOVEMENT_KEYWORDS
-        
-        # The function checks if any movement keyword is in the intent
-        intent_lower = intent.lower()
-        has_movement = any(kw in intent_lower for kw in _MOVEMENT_KEYWORDS)
-        assert has_movement, f"Should detect movement in: {intent}"
-
-    @pytest.mark.parametrize("intent", [
-        "战斗",
-        "砍杀敌人",
-        "检查物品",
-        "与NPC交谈",
-    ])
-    def test_non_movement_actions(self, intent):
-        """Non-movement actions should not be detected as movement."""
-        from src.routers.action import _MOVEMENT_KEYWORDS
-        
-        intent_lower = intent.lower()
-        has_movement = any(kw in intent_lower for kw in _MOVEMENT_KEYWORDS)
-        # Clear non-movement actions should not be detected as movement
-        if "检查" in intent_lower or "交谈" in intent_lower:
-            assert not has_movement, f"Should not detect movement in: {intent}"
 
 
 class TestSceneSwitching:
@@ -166,53 +129,47 @@ class TestSceneSwitching:
         session_id = bootstrap.session_id
         
         # Switch to village square
-        success, source_name = switch_scene("village-square-01", session_id)
+        from src.state import create_character
+        from src.models.state import CharacterCreateRequest
+        create_character(CharacterCreateRequest(name="导航", character_class="warrior"), session_id)
+        success = switch_scene("village-square-01", session_id)
         assert success is True
-        assert source_name == bootstrap.scene.name
         
         # Verify scene was updated with exits
         scene = get_scene(session_id)
         assert scene.id == "village-square-01"
-        assert len(scene.exits) == 2
+        assert len(scene.exits) == 3
         assert all(isinstance(e, SceneExit) for e in scene.exits)
 
     def test_switch_scene_not_found(self):
         """switch_scene should return False for non-existent scene."""
         from src.state import switch_scene
         
-        success, source_name = switch_scene("non-existent-scene")
+        success = switch_scene("non-existent-scene")
         assert success is False
-        assert source_name == ""
 
 
 class TestMovementDoesNotTriggerCombat:
-    """Test that movement actions don't trigger combat."""
+    """Combat comes from real scene enemies or explicit attacks, not place-name keywords."""
 
-    def test_movement_does_not_trigger_combat(self):
-        """Movement actions should not trigger combat even with combat keywords."""
-        from src.routers.action import _should_trigger_combat, _is_movement_action
-        
-        # Even "前往战斗地点" (go to battle location) should not trigger combat
-        # because it's primarily a movement action
-        intent = "前往战斗地点"
-        approach = ""
-        
-        is_movement = _is_movement_action(intent, approach)
-        should_combat = _should_trigger_combat(intent, approach)
-        
-        # Movement actions should not trigger combat
-        if is_movement:
-            assert not should_combat, "Movement actions should not trigger combat"
+    @pytest.mark.asyncio
+    async def test_movement_to_peaceful_scene_remains_peaceful(self, client):
+        from tests.conftest import create_session_and_character
+        sid = await create_session_and_character(client)
+        h = {"X-Session-Id": sid}
+        r = await client.post("/map/move", headers=h, json={"target_scene_id": "dungeon-entrance-01"})
+        assert r.status_code == 200 and r.json()["combat"] is None
+        assert (await client.get("/state", headers=h)).json()["game_phase"] == "exploration"
 
-    def test_combat_still_triggers_without_movement(self):
-        """Combat keywords should trigger combat when not a movement action."""
-        from src.routers.action import _should_trigger_combat
-        
-        # Use combat keywords that don't overlap with movement keywords
-        intent = "fight the goblin"
-        approach = "swing sword"
-        
-        assert _should_trigger_combat(intent, approach) is True
+    @pytest.mark.asyncio
+    async def test_explicit_peaceful_npc_attack_is_disabled(self, client):
+        from tests.conftest import create_session_and_character
+        sid = await create_session_and_character(client)
+        h = {"X-Session-Id": sid}
+        r = await client.post("/action", headers=h, json=dict(scene_id="ignored", actor="ignored", intent="攻击老马库斯", approach=""))
+        assert r.status_code == 409
+        assert "暂不支持攻击" in r.json()["detail"]
+        assert (await client.get("/state", headers=h)).json()["game_phase"] == "exploration"
 
 
 class TestThreeConnectedScenes:

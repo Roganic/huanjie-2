@@ -18,7 +18,7 @@ from src.models.action import (
     Effect,
     Outcome,
 )
-from src.models.state import Scene, InventoryItem, ItemType
+from src.models.state import Scene, InventoryItem, ItemType, DEFAULT_WEAPONS, DEFAULT_ARMORS, DEFAULT_CONSUMABLES
 from src.state import (
     get_actor,
     get_enemy,
@@ -52,6 +52,8 @@ class CombatParticipant(BaseModel):
     hp_max: int
     ac: int
     initiative: int
+    initiative_roll: int | None = None
+    speed: int = 0
     is_player: bool
     type: str = "enemy"  # "player" or "enemy"
     conditions: list[str] = []
@@ -68,6 +70,11 @@ class CombatState(BaseModel):
     scene: Scene
     status: Literal["active", "victory", "defeat", "escaped"]
     log: list["CombatLogEntry"] = []
+    actions_remaining: int = 1
+    bonus_action_available: bool = True
+    rewards: dict | None = None
+    encounter_scene_id: str | None = None
+    retreat_scene_id: str | None = None
 
 
 class CombatLogEntry(BaseModel):
@@ -85,6 +92,7 @@ class StartCombatRequest(BaseModel):
     """Request to start a combat encounter."""
     enemy_config: Optional[dict] = None  # Optional enemy customization
     scene_id: Optional[str] = None
+    target_id: Optional[str] = None
 
 
 class CombatActionRequest(BaseModel):
@@ -93,6 +101,7 @@ class CombatActionRequest(BaseModel):
     target_id: Optional[str] = None
     weapon: Optional[str] = None
     skill: Optional[str] = None
+    ability_id: Optional[str] = None
 
 
 class CombatActionResponse(BaseModel):
@@ -106,11 +115,20 @@ class CombatActionResponse(BaseModel):
     effects: list[Effect] = []
     narrative: str
     combat_state: CombatState
+    outcome: str = "success"
+    costs: list[dict] = []
+    events: list[dict] = []
+    available_actions: list[dict] = []
+    xp_gained: int = 0
+    loot_gained: list[dict] = []
+    level_up: dict | None = None
+    combat_ended: bool = False
+    victory: bool = False
 
 
 class EndCombatRequest(BaseModel):
     """Request to end combat (flee or surrender)."""
-    reason: str  # "flee", "surrender", "victory", "defeat"
+    reason: Literal["flee", "surrender", "victory", "defeat"]
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +158,8 @@ def _actor_to_participant(actor, is_player: bool, initiative: int) -> CombatPart
         hp_max=actor.hp_max,
         ac=actor.ac,
         initiative=initiative,
+        initiative_roll=initiative - actor.abilities.modifier("dex"),
+        speed=actor.abilities.modifier("dex"),
         is_player=is_player,
         type="player" if is_player else "enemy",
         conditions=actor.conditions or [],
@@ -148,22 +168,29 @@ def _actor_to_participant(actor, is_player: bool, initiative: int) -> CombatPart
 
 def _get_combat_state(session_id: str) -> Optional[CombatState]:
     """Get combat state for a session."""
-    return _combats.get(session_id)
+    session = _get_session(session_id, create_if_missing=False)
+    if session.combat_snapshot is None:
+        return None
+    return CombatState.model_validate(session.combat_snapshot)
 
 
 def _set_combat_state(session_id: str, state: CombatState) -> None:
-    """Set combat state for a session."""
-    _combats[session_id] = state
+    session = _get_session(session_id, create_if_missing=False)
+    session.combat_snapshot = state.model_dump(mode="json")
+    _combats[session_id] = state  # compatibility cache; session snapshot is authoritative
+    _save_session(session)
 
 
 def _clear_combat_state(session_id: str) -> None:
-    """Clear combat state for a session."""
+    session = _get_session(session_id, create_if_missing=False)
+    session.combat_snapshot = None
     _combats.pop(session_id, None)
+    _save_session(session)
 
 
 def _sort_initiative(participants: list[CombatParticipant]) -> list[str]:
     """Sort participants by initiative (highest first)."""
-    sorted_parts = sorted(participants, key=lambda p: p.initiative, reverse=True)
+    sorted_parts = sorted(participants, key=lambda p: (-p.initiative, -p.speed, not p.is_player, p.id))
     return [p.id for p in sorted_parts]
 
 
@@ -206,118 +233,43 @@ def _resolve_combat_action(
     req: CombatActionRequest,
 ) -> CombatActionResponse:
     """Resolve a single combat action and update combat state."""
-    actor_id = combat.current_actor_id
-    actor = next((p for p in combat.participants if p.id == actor_id), None)
-    if not actor:
-        raise ValueError(f"Actor {actor_id} not found in combat")
-
-    # Build ActionRequest for the orchestrator
-    action_req = ActionRequest(
-        scene_id=combat.scene.id,
-        actor=actor.name,
-        intent=_get_action_intent(req),
-        approach=_get_action_approach(req),
-        action_type=ActionType.ATTACK if req.action_type == "attack" else ActionType.GENERIC,
-        weapon=req.weapon,
-        target=req.target_id,
-        skill=req.skill,
-    )
-
-    # Resolve action using orchestrator
-    action_resp = resolve_action_with_agent(action_req)
-
-    # Calculate sneak attack damage for rogues
-    sneak_attack_damage: Optional[int] = None
-    if req.action_type == "attack":
-        player_actor = get_actor(session_id=session_id)
-        if player_actor and player_actor.character_class and player_actor.character_class.value == "rogue":
-            # Check for advantage or ally nearby
-            has_advantage = "advantage" in (player_actor.conditions or [])
-            has_ally_nearby = any(
-                p.is_player and p.id != actor_id 
-                for p in combat.participants
-            )
-            if has_advantage or has_ally_nearby:
-                # Roll sneak attack dice: 1d6 per 2 levels (min 1d6)
-                dice_count = max(1, ((player_actor.level or 1) + 1) // 2)
-                import random
-                sneak_damage = sum(random.randint(1, 6) for _ in range(dice_count))
-                sneak_attack_damage = sneak_damage
-                # Add to existing damage if hit
-                if action_resp.outcome == Outcome.SUCCESS and action_resp.attack and action_resp.attack.damage:
-                    # Apply sneak attack damage to target
-                    for p in combat.participants:
-                        if p.id == req.target_id or p.name == req.target_id:
-                            p.hp = max(0, p.hp - sneak_damage)
-                            break
-
-    # Update participant HP from effects
-    for effect in action_resp.effects:
-        if effect.field == "hp":
-            for p in combat.participants:
-                if p.id == effect.target or p.name == effect.target:
-                    p.hp = max(0, min(p.hp_max, p.hp + effect.delta))
-        elif effect.field == "conditions_add":
-            for p in combat.participants:
-                if p.id == effect.target or p.name == effect.target:
-                    if effect.delta not in p.conditions:
-                        p.conditions.append(effect.delta)
-
-    # Check combat end conditions
-    combat.status = _check_combat_status(combat)
-
-    # Add log entry
-    log_entry = CombatLogEntry(
-        actor_id=actor_id,
-        action_type=req.action_type,
-        target_id=req.target_id,
-        hit=action_resp.outcome == Outcome.SUCCESS if req.action_type == "attack" else None,
-        damage=action_resp.attack.damage.total if action_resp.attack and action_resp.attack.damage else 0,
-        narrative=action_resp.narration,
-        timestamp=int(asyncio.get_event_loop().time() * 1000),
-    )
-    combat.log.append(log_entry)
-
-    # Advance turn if combat continues
-    if combat.status == "active":
-        _advance_turn(combat)
-
-    # Save updated combat state
-    _set_combat_state(session_id, combat)
-
-    return CombatActionResponse(
-        action_type=req.action_type,
-        actor_id=actor_id,
-        target_id=req.target_id,
-        hit=action_resp.outcome == Outcome.SUCCESS if req.action_type == "attack" else None,
-        damage=action_resp.attack.damage.total if action_resp.attack and action_resp.attack.damage else 0,
-        sneak_attack_damage=sneak_attack_damage,
-        effects=action_resp.effects,
-        narrative=action_resp.narration,
-        combat_state=combat,
-    )
+    from src.game.combat_service import execute_turn
+    return execute_turn(session_id, combat, req)
 
 
-def _award_victory_rewards(session_id: str, combat: CombatState) -> dict | None:
+def _award_victory_rewards(session_id: str, combat: CombatState, *, persist: bool = True) -> dict | None:
     """Award XP and loot when combat ends in victory."""
     with _SESSION_LOCK:
         session = _get_session(session_id, create_if_missing=False)
         if session is None or session.actor is None:
             return None
         
+        if combat.rewards is not None:
+            return combat.rewards
+        world = session.world_scenes.get(combat.encounter_scene_id)
+        if world:
+            from src.scene import get_scene_by_id
+            from src.content.store import for_session
+            original = get_scene_by_id(combat.encounter_scene_id, for_session(session))
+            eligible = {n.id for n in original.npcs if n.type == "hostile"} if original else set()
+        else:
+            eligible = {p.id for p in combat.participants if not p.is_player}
         actor = session.actor
         
         # Find defeated enemies
         defeated_enemies: list[tuple[str, str]] = []
         for p in combat.participants:
-            if not p.is_player and (p.hp <= 0 or "defeated" in p.conditions):
+            if not p.is_player and p.id in eligible and (not world or p.id not in world.rewarded_ids) and (p.hp <= 0 or "defeated" in p.conditions):
                 defeated_enemies.append((p.id, p.name))
         
         if not defeated_enemies:
-            return None
+            combat.rewards = {"xp_gained": 0, "loot_gained": [], "total_xp": actor.experience_points}
+            return combat.rewards
         
-        # Generate loot
-        loot = generate_combat_loot(defeated_enemies)
+        # Running content supplies drops and XP; old single-enemy snapshots retain their fallback.
+        from src.content.store import for_session
+        pack = for_session(session) if world else None
+        loot = generate_combat_loot(defeated_enemies, pack=pack) if pack else generate_combat_loot(defeated_enemies)
         loot_items_for_response: list[dict] = []
         inventory_items_to_add: list[InventoryItem] = []
         
@@ -329,12 +281,18 @@ def _award_victory_rewards(session_id: str, combat: CombatState) -> dict | None:
                     "quantity": item.quantity,
                     "description": item.description,
                 })
-                inventory_items_to_add.append(InventoryItem(
-                    id=item.item_id,
-                    name=item.name,
-                    type=ItemType.MISC,
-                    description=item.description or "战利品",
-                ))
+                if pack and item.item_id in pack.items:
+                    inventory_item = pack.items[item.item_id].model_copy(deep=True)
+                elif item.item_id in DEFAULT_WEAPONS:
+                    inventory_item = InventoryItem.from_weapon(DEFAULT_WEAPONS[item.item_id])
+                elif item.item_id in DEFAULT_ARMORS:
+                    inventory_item = InventoryItem.from_armor(DEFAULT_ARMORS[item.item_id])
+                elif item.item_id in DEFAULT_CONSUMABLES:
+                    inventory_item = InventoryItem.from_consumable(DEFAULT_CONSUMABLES[item.item_id])
+                else:
+                    inventory_item = InventoryItem(id=item.item_id, name=item.name,
+                                                   type=ItemType.MISC, description=item.description or "战利品")
+                inventory_items_to_add.extend(inventory_item.model_copy(deep=True) for _ in range(item.quantity))
             if entry_items:
                 loot_items_for_response.append({
                     "enemy_name": entry.enemy_name,
@@ -347,53 +305,16 @@ def _award_victory_rewards(session_id: str, combat: CombatState) -> dict | None:
             session.actor = session.actor.model_copy(update={"inventory": new_inventory})
         
         # Get XP reward (use first defeated enemy)
-        enemy_name = defeated_enemies[0][1]
-        xp_gained = get_enemy_xp_reward(enemy_name)
+        xp_gained = sum(pack.characters[id].xp_reward for id, _ in defeated_enemies) if pack else sum(get_enemy_xp_reward(name) for _, name in defeated_enemies)
         
-        # Calculate level-up
-        con_modifier = actor.abilities.modifier("con")
-        new_xp, level_up_result = calculate_level_up(
-            current_level=actor.level,
-            current_xp=actor.experience_points,
-            xp_gained=xp_gained,
-            con_modifier=con_modifier,
-            character_class=actor.character_class,
-        )
-        
-        # Update actor
-        updates: dict = {"experience_points": new_xp}
-        
-        if level_up_result and level_up_result.leveled_up:
-            updates["level"] = level_up_result.new_level
-            updates["proficiency_bonus"] = level_up_result.new_proficiency_bonus
-            # Recalculate HP max
-            hit_die = CLASS_HIT_DICE[actor.character_class]
-            base_hp = hit_die + con_modifier
-            if level_up_result.new_level > 1:
-                hp_per_level = (hit_die // 2) + 1 + con_modifier
-                new_hp_max = base_hp + hp_per_level * (level_up_result.new_level - 1)
-            else:
-                new_hp_max = base_hp
-            updates["hp_max"] = new_hp_max
-            updates["hp"] = new_hp_max  # Heal to full on level up
-        
-        session.actor = actor.model_copy(update=updates)
-        _save_session(session)
-        
-        result: dict = {
-            "xp_gained": xp_gained,
-            "total_xp": new_xp,
-            "loot_gained": loot_items_for_response,
-        }
-        
-        if level_up_result and level_up_result.leveled_up:
-            result["level_up"] = {
-                "old_level": level_up_result.old_level,
-                "new_level": level_up_result.new_level,
-                "hp_increase": level_up_result.hp_increase,
-                "new_proficiency_bonus": level_up_result.new_proficiency_bonus,
-            }
-        
+        from src.game.progression import grant_experience
+        result = {**grant_experience(session, xp_gained), "loot_gained": loot_items_for_response}
+
+        combat.rewards = result
+        if world:
+            world.rewarded_ids.extend(id for id, _ in defeated_enemies)
+        if persist:
+            _set_combat_state(session_id, combat)
         return result
 
 
@@ -467,61 +388,10 @@ async def start_combat(req: StartCombatRequest, request: Request):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
 
-    token = set_current_session(session_id)
-    try:
-        if not has_character(session_id=session_id):
-            raise HTTPException(status_code=400, detail="No character found. Create a character first.")
-
-        # Get player and enemy actors
-        player = get_actor(session_id=session_id)
-        enemy = get_enemy(session_id=session_id)
-
-        if not player:
-            raise HTTPException(status_code=400, detail="Player character not found.")
-
-        # Roll initiative for all participants
-        player_init = _roll_initiative(player)
-        enemy_init = _roll_initiative(enemy)
-
-        # Create participants
-        participants = [
-            _actor_to_participant(player, is_player=True, initiative=player_init),
-            _actor_to_participant(enemy, is_player=False, initiative=enemy_init),
-        ]
-
-        # Sort initiative order
-        initiative_order = _sort_initiative(participants)
-
-        # Set combat scene
-        set_combat_scene(session_id=session_id)
-        scene = get_scene(session_id=session_id)
-
-        # Create combat state
-        combat = CombatState(
-            combat_id=f"combat-{session_id[:8]}",
-            round_number=1,
-            turn_index=0,
-            participants=participants,
-            initiative_order=initiative_order,
-            current_actor_id=initiative_order[0],
-            scene=scene,
-            status="active",
-        )
-
-        _set_combat_state(session_id, combat)
-
-        return {
-            "combat_id": combat.combat_id,
-            "status": combat.status,
-            "round_number": combat.round_number,
-            "current_actor_id": combat.current_actor_id,
-            "initiative_order": combat.initiative_order,
-            "participants": [p.model_dump() for p in combat.participants],
-            "combatants": [p.model_dump() for p in combat.participants],
-            "scene": scene.model_dump(),
-        }
-    finally:
-        reset_current_session(token)
+    from src.game.combat_service import begin_combat, combat_view
+    with _SESSION_LOCK:
+        combat = begin_combat(session_id, target_id=req.target_id)
+        return combat_view(session_id, combat)
 
 
 @router.post("/combat/action")
@@ -540,50 +410,17 @@ async def combat_action(req: CombatActionRequest, request: Request):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
 
-    combat = _get_combat_state(session_id)
-    if not combat:
-        raise HTTPException(status_code=400, detail="No active combat. Start combat first.")
-
-    if combat.status != "active":
-        raise HTTPException(status_code=400, detail=f"Combat already ended: {combat.status}")
-
-    token = set_current_session(session_id)
-    try:
+    with _SESSION_LOCK:
+        combat = _get_combat_state(session_id)
+        if not combat:
+            raise HTTPException(400, "No active combat. 没有正在进行的战斗。")
+        if combat.status != "active":
+            raise HTTPException(409, "战斗已结束。")
         result = _resolve_combat_action(session_id, combat, req)
-
-        # Check if client accepts streaming
-        accepts_stream = "text/event-stream" in request.headers.get("accept", "")
-        if not accepts_stream:
-            response_data = result.model_dump(exclude_none=True)
-            # Add victory result fields if combat ended
-            if combat.status == "victory":
-                victory_result = _award_victory_rewards(session_id, combat)
-                if victory_result:
-                    response_data["loot_gained"] = victory_result.get("loot_gained", [])
-                    response_data["xp_gained"] = victory_result.get("xp_gained", 0)
-                    response_data["total_xp"] = victory_result.get("total_xp", 0)
-                    if "level_up" in victory_result:
-                        response_data["level_up"] = victory_result["level_up"]
-                    response_data["victory"] = True
-                else:
-                    response_data["loot_gained"] = []
-                    response_data["xp_gained"] = 0
-            else:
-                response_data["loot_gained"] = []
-            response_data["combat_ended"] = combat.status != "active"
-            return response_data
-
-        return StreamingResponse(
-            _stream_combat_response(result),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
-    finally:
-        reset_current_session(token)
+    if "text/event-stream" in request.headers.get("accept", ""):
+        return StreamingResponse(_stream_combat_response(result), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return {**result.model_dump(mode="json", exclude_none=True), "round_number": result.combat_state.round_number}
 
 
 @router.get("/combat/state")
@@ -601,21 +438,12 @@ async def get_combat_state(request: Request):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
 
-    combat = _get_combat_state(session_id)
-    if not combat:
-        raise HTTPException(status_code=404, detail="No active combat found.")
-
-    return {
-        "combat_id": combat.combat_id,
-        "status": combat.status,
-        "round_number": combat.round_number,
-        "turn_index": combat.turn_index,
-        "current_actor_id": combat.current_actor_id,
-        "initiative_order": combat.initiative_order,
-        "participants": [p.model_dump() for p in combat.participants],
-        "combatants": [p.model_dump() for p in combat.participants],
-        "log": [entry.model_dump() for entry in combat.log[-10:]],  # Last 10 entries
-    }
+    from src.game.combat_service import combat_view
+    with _SESSION_LOCK:
+        combat = _get_combat_state(session_id)
+        if not combat:
+            raise HTTPException(404, "No active combat found. 没有战斗记录。")
+        return combat_view(session_id, combat)
 
 
 @router.post("/combat/end")
@@ -633,30 +461,6 @@ async def end_combat(req: EndCombatRequest, request: Request):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
 
-    combat = _get_combat_state(session_id)
-    if not combat:
-        raise HTTPException(status_code=404, detail="No active combat found.")
-
-    # Update combat status based on end reason
-    if req.reason == "flee":
-        combat.status = "escaped"
-    elif req.reason == "surrender":
-        combat.status = "defeat"
-    elif req.reason == "victory":
-        combat.status = "victory"
-    elif req.reason == "defeat":
-        combat.status = "defeat"
-
-    _set_combat_state(session_id, combat)
-
-    response = {
-        "combat_id": combat.combat_id,
-        "status": combat.status,
-        "final_round": combat.round_number,
-        "participants": [p.model_dump() for p in combat.participants],
-    }
-
-    # Clear combat state after reporting
-    _clear_combat_state(session_id)
-
-    return response
+    from src.game.combat_service import leave_combat
+    with _SESSION_LOCK:
+        return leave_combat(session_id, req.reason)

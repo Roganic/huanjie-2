@@ -27,6 +27,8 @@ XP_THRESHOLDS: dict[int, int] = {
     5: 6500,
 }
 
+SUPPORTED_LEVEL_CAP = max(XP_THRESHOLDS)
+
 # XP rewards for defeating enemies by type/name
 ENEMY_XP_REWARDS: dict[str, int] = {
     "goblin": 50,
@@ -83,7 +85,7 @@ def get_level_from_xp(xp: int) -> int:
         xp: Total experience points
         
     Returns:
-        Current level (1-20)
+        Current level (1-5 in the playable ruleset)
     """
     level = 1
     for lvl, threshold in sorted(XP_THRESHOLDS.items()):
@@ -137,7 +139,7 @@ def calculate_level_up(
         # Calculate HP increase for each level gained
         hit_die = CLASS_HIT_DICE[character_class]
         # Average hit die roll rounded up: (die_size / 2) + 1
-        hp_per_level = (hit_die // 2) + 1 + con_modifier
+        hp_per_level = max(1, (hit_die // 2) + 1 + con_modifier)
         levels_gained = new_level - current_level
         total_hp_increase = hp_per_level * levels_gained
         

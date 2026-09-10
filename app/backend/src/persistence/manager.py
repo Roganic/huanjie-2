@@ -6,6 +6,8 @@ import json
 import os
 import re
 import uuid
+import tempfile
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -148,6 +150,8 @@ def save_game_with_id(
     combat_state: CombatStateData | None,
     action_history: list[NarrativeHistoryEntry],
     scene_history: list[SceneHistoryEntry],
+    session_snapshot: dict[str, Any] | None = None,
+    combat_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Save the current game state to a specific save file.
     
@@ -172,7 +176,7 @@ def save_game_with_id(
         save_id = _generate_save_id()
     
     save_data = SaveData(
-        version=1,
+        version=2 if session_snapshot is not None else 1,
         saved_at=datetime.now().isoformat(),
         save_id=save_id,
         save_name=save_name or f"存档 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -185,13 +189,20 @@ def save_game_with_id(
         combat_state=combat_state,
         action_history=action_history,
         scene_history=scene_history,
+        session_snapshot=session_snapshot,
+        combat_snapshot=combat_snapshot,
     )
     
     save_path = _get_save_path(save_id)
-    save_path.write_text(
-        json.dumps(save_data.model_dump(mode="json", by_alias=True), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=save_path.parent, suffix=".tmp", delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(save_data.model_dump(mode="json", by_alias=True), stream, ensure_ascii=False, indent=2)
+        os.replace(temporary, save_path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     
     return {
         "success": True,
@@ -211,7 +222,13 @@ def load_game(save_id: str | None = None) -> SaveData | None:
     Returns:
         SaveData if save exists and is valid, None otherwise.
     """
+    if save_id is not None and not _is_valid_save_id(save_id):
+        raise ValueError("Invalid save ID")
     save_path = _get_save_path(save_id)
+    if save_id is None and not save_path.exists():
+        saves = list_saves()
+        if saves:
+            save_path = _get_save_path(saves[0].save_id)
     if not save_path.exists():
         return None
     
@@ -219,8 +236,7 @@ def load_game(save_id: str | None = None) -> SaveData | None:
         data = json.loads(save_path.read_text(encoding="utf-8"))
         return SaveData.model_validate(data)
     except (json.JSONDecodeError, ValueError) as e:
-        print(f"[Persistence] Failed to load save: {e}")
-        return None
+        raise ValueError("存档损坏或格式不兼容。") from e
 
 
 def load_game_by_id(save_id: str) -> SaveData | None:
@@ -325,8 +341,17 @@ def reset_session(session_id: str) -> dict[str, Any]:
     """
     from ..models.state import GamePhase, AdventurePhase
     
-    # Clear the save file
-    was_deleted = clear_save()
+    # Resetting live progress does not delete manual saves or another session's legacy save.
+    was_deleted = False
+    legacy_path = _get_save_path()
+    if legacy_path.exists():
+        try:
+            legacy = SaveData.model_validate_json(legacy_path.read_text(encoding="utf-8"))
+            if legacy.session_id == session_id:
+                was_deleted = clear_save()
+        except ValueError:
+            pass
+
     
     return {
         "success": True,

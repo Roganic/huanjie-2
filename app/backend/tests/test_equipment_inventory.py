@@ -142,39 +142,14 @@ async def test_equip_armor_updates_ac(client):
         assert actor["equipped"]["armor"]["id"] == "leather"
 
 
-@pytest.mark.asyncio
-async def test_unarmed_damage_is_1d4(client):
-    """AC5: Unarmed attack uses 1d4 damage dice."""
-    async with client as c:
-        session_id = await _create_session_and_character(c, character_class="warrior")
-        
-        # Unequip weapon by creating a custom character with no weapon
-        # Actually, warrior starts with longsword equipped. Let's test via action resolution
-        # by sending an attack without specifying weapon and with equipped weapon removed.
-        # For simplicity, use the resolver directly.
-        from src.state import _get_session
-        session = _get_session(session_id, create_if_missing=True)
-        # Manually unequip weapon for test
-        from src.models.state import EquippedItems
-        session.actor = session.actor.model_copy(update={"equipped": EquippedItems(weapon=None, armor=session.actor.equipped.armor)})
-        from src.state import _save_session
-        _save_session(session)
-        
-        resp = await c.post(
-            "/action",
-            json={
-                "scene_id": "combat-01",
-                "actor": "Aldric",
-                "intent": "攻击哥布林",
-                "approach": "用拳头打",
-                "action_type": "attack",
-                "target": "goblin-01",
-                "dc": 1,
-            },
-            headers={"X-Session-Id": session_id},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        if data["outcome"] == "success" and data["attack"]["damage"]:
-            assert data["attack"]["damage"]["dice_expression"] == "1d4"
-            assert 1 <= data["attack"]["damage"]["rolls"][0] <= 4
+def test_unarmed_damage_uses_fixed_one_plus_strength(monkeypatch):
+    from tests.conftest import create_default_actor
+    from src.state import get_actor
+    from src.combat import resolve_attack_with_equipment
+    create_default_actor()
+    actor = get_actor()
+    actor.equipped.weapon = None
+    monkeypatch.setattr("random.randint",lambda a,b:20)
+    result = resolve_attack_with_equipment(actor,10)
+    assert result["damage"] == 1 + actor.abilities.modifier("str")
+    assert result["damage_rolls"] == []

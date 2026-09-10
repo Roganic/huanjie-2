@@ -112,7 +112,7 @@ def find_target_for_enemy(enemy: Combatant, combat_state: CombatState) -> Option
     If all players have the same HP, attack the first available one.
     """
     players = combat_state.get_players()
-    alive_players = [p for p in players if p.is_alive()]
+    alive_players = [p for p in players if p.is_alive() and p.hp > 0]
     
     if not alive_players:
         return None
@@ -234,7 +234,7 @@ def execute_enemy_turn(
     Returns:
         EnemyActionResult with full details, or None if enemy cannot act.
     """
-    if not enemy.is_alive():
+    if not enemy.can_act() or enemy.hp <= 0:
         return None
     
     # Get enemy configuration

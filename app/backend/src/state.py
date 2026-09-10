@@ -1,6 +1,7 @@
 """Session-scoped mutable state store for the V1 prototype."""
 
 from __future__ import annotations
+from typing import Literal
 
 import json
 import os
@@ -12,11 +13,14 @@ from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from .content.schema import ModulePack
 
 from .models.action import CombatState, Effect
-from .models.module import ActiveModuleState, get_default_module
+from .models.module import ActiveModuleState
+from .models.world import WorldSceneState
 from .scene import SceneData, get_default_exploration_scene, get_scene_by_id
+from .scene_map import get_scene_node
 from .models.state import (
     AbilityScores,
     Actor,
@@ -41,33 +45,10 @@ from .models.state import (
     Skill,
     SpellSlot,
 )
-def _load_npc_dialogue_state_module():
-    """Load npc/dialogue_state.py directly, bypassing npc/__init__.py.
-
-    npc/__init__.py references find_target_npc and is_npc_interaction from
-    npc.py, but those functions were removed. Loading dialogue_state.py
-    directly avoids triggering the broken __init__.py.
-    """
-    import importlib.util as _ilu
-    import sys as _sys
-
-    mod_name = "src.npc._dialogue_state_direct"
-    if mod_name in _sys.modules:
-        return _sys.modules[mod_name]
-
-    _ds_path = Path(__file__).parent / "npc" / "dialogue_state.py"
-    _spec = _ilu.spec_from_file_location(mod_name, _ds_path)
-    _mod = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
-    _sys.modules[mod_name] = _mod
-    _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
-    return _mod
-
-
-_npc_ds = _load_npc_dialogue_state_module()
-NPCDialogueState = _npc_ds.NPCDialogueState
-get_all_npc_dialogue_counts = _npc_ds.get_all_npc_dialogue_counts
-get_all_npc_dialogue_states = _npc_ds.get_all_npc_dialogue_states
-reset_session_npc_states = _npc_ds.reset_session_npc_states
+from .npc.dialogue_state import (
+    NPCDialogueState, get_all_npc_dialogue_counts,
+    get_all_npc_dialogue_states, reset_session_npc_states,
+)
 
 _CHARACTER_CREATION_SCENE_INIT = dict(
     id="character-creation-01",
@@ -209,6 +190,7 @@ DEFAULT_PROMPT_HISTORY_ENTRIES = 5
 DEFAULT_PROMPT_HISTORY_CHARS = 1800
 DEFAULT_SESSION_ID = "default-session"
 SESSION_TTL_SECONDS = max(60, int(os.getenv("SESSION_TTL_SECONDS", "43200")))
+SESSION_DURABLE = os.getenv('SESSION_DURABLE', '').lower() == 'true'
 SESSION_STORE_DIR = Path(
     os.getenv("SESSION_STATE_DIR", Path(tempfile.gettempdir()) / "huanjie-2-sessions")
 )
@@ -254,6 +236,9 @@ def update_combatant_hp(combatant_id: str, hp: int) -> None:
     _combat_state.combatant_hp[combatant_id] = hp
 
 
+from .models.events import EventClock, ScheduledEvent
+
+
 class SessionData(BaseModel):
     session_id: str
     phase: GamePhase = GamePhase.CHARACTER_CREATION
@@ -271,6 +256,37 @@ class SessionData(BaseModel):
         default_factory=list,
         description="List of scene IDs that have been explored by the player"
     )
+    collected_items: dict[str, list[str]] = Field(default_factory=dict)
+    defeat_reason: str | None = None
+    completed_interactions: dict[str, list[str]] = Field(default_factory=dict)
+    discovered_clues: dict[str, str] = Field(default_factory=dict)
+    world_scenes: dict[str, WorldSceneState] = Field(default_factory=dict)
+    previous_scene_id: str | None = None
+    content_pack: ModulePack | None = None
+    quest_states: dict[str, Literal["available", "active", "ready", "completed", "failed"]] = Field(default_factory=dict)
+    fired_events: list[str] = Field(default_factory=list)
+    content_flags: list[str] = Field(default_factory=list)
+    adventure_outcome: dict | None = None
+    command_receipts: dict[str, dict] = Field(default_factory=dict)
+    gm_turns: list[dict] = Field(default_factory=list)
+    event_clock: EventClock = Field(default_factory=EventClock)
+    scheduled_events: dict[str, ScheduledEvent] = Field(default_factory=dict)
+    event_seen_ids: list[str] = Field(default_factory=list)
+    event_facts: list[dict] = Field(default_factory=list)
+    relationships: dict[str, int] = Field(default_factory=dict)
+    action_attempts: list[dict] = Field(default_factory=list)
+    challenge_attempts: dict[str, dict] = Field(default_factory=dict)
+    discourse: dict = Field(default_factory=dict)
+    npc_memories: dict[str, list[dict]] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_content_state(cls, data):
+        if isinstance(data, dict) and "passage_quest" in data:
+            data = dict(data)
+            data.setdefault("quest_states", {"clear-passage": data.pop("passage_quest")})
+        return data
+    combat_snapshot: dict | None = None
     active_module: ActiveModuleState | None = Field(
         default=None,
         description="Active module story progress"
@@ -379,7 +395,7 @@ def append_narrative_history(
         # Persist to save file for session restoration after restart
         try:
             from . import game_state
-            game_state.save_current_game(session_id=resolved_session_id)
+            game_state.save_current_game(session_id=resolved_session_id, automatic=True)
         except Exception:
             # Don't fail action if save fails
             pass
@@ -399,11 +415,14 @@ def append_action_history(
     narrative_entry = NarrativeHistoryEntry(
         action_summary=entry.get("action", ""),
         resolution_summary={
+            **entry.get("resolution_summary", {}),
             "result": entry.get("result", ""),
+            "outcome": entry.get("result", "success"),
             "narrative_summary": entry.get("narrative_summary", ""),
         },
         narration_summary=entry.get("narrative_summary", ""),
         narration=entry.get("narrative_summary", ""),
+        scene_progression=entry.get("scene_progression", ""),
         created_at=int(datetime.now().timestamp() * 1000),
     )
     append_narrative_history(narrative_entry, session_id)
@@ -488,16 +507,15 @@ def switch_scene(scene_id: str, session_id: str | None = None) -> bool:
     from .scene import get_scene_by_id
     from .scene_map import get_scene_node
     
-    scene_data = get_scene_by_id(scene_id)
-    if scene_data is None:
-        return False
-    
-    # Get scene node from new scene_map for exits
-    scene_node = get_scene_node(scene_id)
-    
+    from .content.store import for_session
     resolved_session_id = _resolve_session_id(session_id)
     with _SESSION_LOCK:
         session = _get_session(resolved_session_id, create_if_missing=True)
+        pack = for_session(session)
+        scene_data = get_scene_by_id(scene_id, pack)
+        if scene_data is None:
+            return False
+        scene_node = get_scene_node(scene_id, pack)
         # Preserve the player actor in the actors list
         actors = [session.actor.id] if session.actor else []
         
@@ -660,7 +678,7 @@ def create_character(
 
         # Calculate HP: base + CON modifier
         con_mod = abilities.modifier("con")
-        hp = base_hp + con_mod
+        hp = max(1, base_hp + con_mod)
 
         # Get starting equipment for the class
         weapon, armor = _get_starting_equipment(req.character_class)
@@ -714,8 +732,38 @@ def create_character(
             class_features=class_features,
         )
         session.phase = GamePhase.ADVENTURE
+        session.game_phase = AdventurePhase.EXPLORATION
+        session.collected_items = {}
+        session.completed_interactions = {}
+        session.defeat_reason = None
+        session.discovered_clues = {}
+        session.npc_dialogue_states = {}
+        session.world_scenes = {}
+        session.previous_scene_id = None
+        session.quest_states = {}
+        session.fired_events = []
+        session.content_flags = []
+        session.adventure_outcome = None
+        session.command_receipts = {}
+        session.gm_turns = []
+        session.event_clock = EventClock()
+        session.scheduled_events = {}
+        session.event_facts = []
+        session.event_seen_ids = []
+        session.relationships = {}
+        session.action_attempts = []
+        session.challenge_attempts = {}
+        session.discourse = {}
+        session.npc_memories = {}
+        session.combat_snapshot = None
         # Initialize scene with NPCs from scene system
-        scene_data = get_default_exploration_scene()
+        from .content.store import for_session
+        pack = for_session(session)
+        session.content_pack = pack.model_copy(deep=True)
+        if pack.supplies:
+            session.actor.inventory.extend(pack.items[pack.supplies.item_id].model_copy(deep=True)
+                for _ in range(pack.supplies.starting_quantity))
+        scene_data = get_scene_by_id(pack.starting_scene_id, pack)
         session.scene = Scene(
             id=scene_data.id,
             name=scene_data.name,
@@ -729,19 +777,20 @@ def create_character(
         session.scene_history = []
         # Initialize explored nodes with current scene
         session.explored_nodes = [scene_data.id]
-        # Initialize active module
-        default_module = get_default_module()
-        session.active_module = ActiveModuleState(
-            module_id=default_module.id,
-            current_story_node=default_module.starting_node_id,
-            visited_nodes=[default_module.starting_node_id] if default_module.starting_node_id else [],
-        )
+        # Legacy module progress is read only for old snapshots; new games use content state.
+        session.active_module = None
+        from .game.world import fire_events, world_scene
+        for narration in fire_events(session, "enter_scene", scene_data.id):
+            append_action_history({"action": "冒险开始", "result": "success", "narrative_summary": narration}, resolved_session_id)
+        if any(enemy.hp > 0 for enemy in world_scene(session).enemies.values()):
+            from .game.combat_service import begin_combat
+            begin_combat(resolved_session_id)
         _save_session(session)
         
         # Persist to save file for session restoration after restart
         try:
             from . import game_state
-            game_state.save_current_game(session_id=resolved_session_id)
+            game_state.save_current_game(session_id=resolved_session_id, automatic=True)
         except Exception:
             # Don't fail character creation if save fails
             pass
@@ -872,7 +921,7 @@ def equip_item_for_actor(item_name: str, session_id: str | None = None) -> dict:
             # Persist to save file
             try:
                 from . import game_state
-                game_state.save_current_game(session_id=resolved_session_id)
+                game_state.save_current_game(session_id=resolved_session_id, automatic=True)
             except Exception:
                 pass
             
@@ -926,7 +975,7 @@ def unequip_item_from_actor(slot: str, session_id: str | None = None) -> dict:
             # Persist to save file
             try:
                 from . import game_state
-                game_state.save_current_game(session_id=resolved_session_id)
+                game_state.save_current_game(session_id=resolved_session_id, automatic=True)
             except Exception:
                 pass
             
@@ -982,6 +1031,11 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
             session.actor = actor.model_copy(
                 update={"hp": max(0, min(actor.hp_max, actor.hp + eff.delta))}
             )
+            if session.actor.hp <= 0:
+                session.defeat_reason = f"{actor.name}在{scene.name}因{eff.description or '受伤'}而倒下。"
+                session.game_phase = AdventurePhase.ENDED
+                if "defeated" not in session.actor.conditions:
+                    session.actor.conditions.append("defeated")
         elif eff.field == "conditions_add" and isinstance(eff.delta, str):
             if eff.delta not in actor.conditions:
                 session.actor = actor.model_copy(
@@ -991,16 +1045,18 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
             session.actor = actor.model_copy(
                 update={"conditions": [c for c in actor.conditions if c != eff.delta]}
             )
+            session.actor.condition_turns.pop(eff.delta, None)
         elif eff.field == "spell_slot_consumed" and isinstance(eff.delta, int):
             # Spell slot already consumed by spell resolver, this is just for tracking
             pass
         elif eff.field == "inventory_remove" and isinstance(eff.delta, str):
             # Remove consumed item from inventory
             if session.actor is not None:
-                new_inventory = [
-                    item for item in actor.inventory
-                    if item.name.lower() != eff.delta.lower()
-                ]
+                new_inventory = list(actor.inventory)
+                for index, item in enumerate(new_inventory):
+                    if item.id == eff.delta or item.name.lower() == eff.delta.lower():
+                        new_inventory.pop(index)
+                        break
                 session.actor = actor.model_copy(
                     update={"inventory": new_inventory}
                 )
@@ -1008,15 +1064,9 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
             # Add item to inventory
             if session.actor is not None:
                 item_name = eff.delta
-                # Try to find item definition in scene loot_items
-                new_item = None
-                from .scene import get_scene_by_id
-                scene_data = get_scene_by_id(session.scene.id)
-                if scene_data and scene_data.loot_items:
-                    for loot_item in scene_data.loot_items:
-                        if loot_item.name == item_name:
-                            new_item = loot_item
-                            break
+                from .content.store import for_session
+                pack = for_session(session)
+                new_item = pack.items.get(item_name) or next((item for item in pack.items.values() if item.name == item_name), None)
                 # Fallback: try default items by name
                 if new_item is None:
                     for weapon in DEFAULT_WEAPONS.values():
@@ -1042,7 +1092,7 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
                         description="一个物品。",
                     )
                 session.actor = actor.model_copy(
-                    update={"inventory": [*actor.inventory, new_item]}
+                    update={"inventory": [*actor.inventory, new_item.model_copy(deep=True)]}
                 )
         elif eff.field == "spell_slots_restored":
             # Spell slots already restored by rest resolver, this is just for tracking
@@ -1066,7 +1116,8 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
         return
 
     if eff.target == scene.id and eff.field == "time" and isinstance(eff.delta, int):
-        session.scene = scene.model_copy(update={"time": scene.time + eff.delta})
+        from .game.conditions import advance_time
+        advance_time(session, eff.delta)
         return
 
     if eff.target == scene.id and eff.field == "flags" and isinstance(eff.delta, str):
@@ -1076,9 +1127,12 @@ def _apply_one(session: SessionData, eff: Effect) -> None:
 
 
 def _bootstrap_from_session(session: SessionData) -> BootstrapState:
+    from .game.world import scene_view
+    from .content.runtime import active_view
     # Build scene with NPC dialogue counts
     scene_npcs_with_counts = []
-    for npc in session.scene.npcs:
+    visible_scene = scene_view(session)
+    for npc in visible_scene.npcs:
         # Get dialogue count from session's npc_dialogue_states
         dialogue_count = 0
         if npc.id in session.npc_dialogue_states:
@@ -1088,9 +1142,13 @@ def _bootstrap_from_session(session: SessionData) -> BootstrapState:
         scene_npcs_with_counts.append(npc_with_count)
     
     # Create scene copy with updated NPCs
-    scene_with_counts = session.scene.model_copy(update={"npcs": scene_npcs_with_counts})
+    scene_with_counts = visible_scene.model_copy(update={"npcs": scene_npcs_with_counts})
     
+    from .game.lifecycle import play_status
+    from .game.journey import journey_view
     return BootstrapState(
+        journey=journey_view(session),
+        play_status=play_status(session),
         session_id=session.session_id,
         phase=session.phase,
         game_phase=session.game_phase,
@@ -1098,7 +1156,7 @@ def _bootstrap_from_session(session: SessionData) -> BootstrapState:
         scene=scene_with_counts,
         narrative_history=list(session.narrative_history),
         scene_history=list(session.scene_history),
-        active_module=session.active_module.model_dump(mode="json") if session.active_module else None,
+        active_module=active_view(session),
     )
 
 
@@ -1168,13 +1226,6 @@ def _create_fresh_session(session_id: str) -> SessionData:
         )
         # Initialize explored nodes for default session
         session.explored_nodes = [scene_data.id]
-        # Initialize active module for default session
-        default_module = get_default_module()
-        session.active_module = ActiveModuleState(
-            module_id=default_module.id,
-            current_story_node=default_module.starting_node_id,
-            visited_nodes=[default_module.starting_node_id] if default_module.starting_node_id else [],
-        )
 
     return session
 
@@ -1204,8 +1255,9 @@ def _get_session(session_id: str, create_if_missing: bool) -> SessionData:
             _persist_session(session)
             return session
 
-        session.updated_at = time.time()
-        _persist_session(session)
+        if not SESSION_DURABLE:
+            session.updated_at = time.time()
+            _persist_session(session)
         return session
 
 
@@ -1367,7 +1419,7 @@ def reset_class_features(session_id: str | None = None) -> None:
 
 
 def _is_expired(session: SessionData) -> bool:
-    return (time.time() - session.updated_at) > SESSION_TTL_SECONDS
+    return not SESSION_DURABLE and (time.time() - session.updated_at) > SESSION_TTL_SECONDS
 
 # ---------------------------------------------------------------------------
 # NPC Dialogue State Functions

@@ -103,3 +103,4 @@ body,
 .flash-negative {
   animation: value-flash-red 1s ease-out;
 }
+#runtime-loading{position:fixed;inset:0;z-index:999;background:#101722;color:#e8c992;display:grid;place-items:center;font:500 1.15rem/1.6 Georgia,serif;padding:2rem;text-align:center}

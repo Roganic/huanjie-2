@@ -18,14 +18,6 @@ CLASS_HIT_DICE: dict[CharacterClass, int] = {
     "mage": 6,      # 法师 d6
 }
 
-# 法师法术位 (V1简化版，1-3级)
-MAGE_SPELL_SLOTS = {
-    1: {"1": 2},  # 1级法师：2个1环法术位
-    2: {"1": 3},  # 2级法师：3个1环法术位
-    3: {"1": 4, "2": 2},  # 3级法师：4个1环，2个2环
-}
-
-
 def get_hit_die_size(character_class: CharacterClass | None) -> int:
     """获取职业的生命骰大小"""
     if character_class is None:
@@ -151,7 +143,8 @@ def initialize_actor_rest_resources(actor: Actor) -> Actor:
     
     # 法师初始化法术位
     if actor.character_class and actor.character_class.value == "mage":
-        max_slots = MAGE_SPELL_SLOTS.get(min(level, 3), {"1": 2})
+        from .rules.spells import get_wizard_spell_slots
+        max_slots = get_wizard_spell_slots(level)
         slots = [
             SpellSlot(level=int(spell_level), max=max_count, current=max_count)
             for spell_level, max_count in sorted(max_slots.items())

@@ -280,7 +280,9 @@ class TestSpellSlotAcceptanceCriteria:
         assert slot["max"] == 2
         assert slot["current"] == 2
 
-    def test_ac2_cast_magic_missile_decreases_slot(self, client, mage_session):
+    def test_ac2_cast_magic_missile_decreases_slot(self, client, mage_session, predictable_combat):
+        from tests.conftest import enter_passage_sync
+        enter_passage_sync(client,mage_session)
         """验收标准2: 施放魔法飞弹后 spell_slots[0].current 减少 1。"""
         # 施放魔法飞弹
         resp = client.post("/action", json={
@@ -297,7 +299,9 @@ class TestSpellSlotAcceptanceCriteria:
         spell_slots = state_resp.json().get("actor", {}).get("spell_slots", [])
         assert spell_slots[0]["current"] == 1, f"施放后1级法术槽应为1，实际为 {spell_slots[0]['current']}"
 
-    def test_ac3_cast_with_empty_slots_fails(self, client, mage_session):
+    def test_ac3_cast_with_empty_slots_fails(self, client, mage_session, predictable_combat):
+        from tests.conftest import enter_passage_sync
+        enter_passage_sync(client,mage_session)
         """验收标准3: 法术槽为0时施法返回错误，spell_slots 不变。"""
         # 消耗所有法术槽
         for _ in range(2):
@@ -328,7 +332,9 @@ class TestSpellSlotAcceptanceCriteria:
         spell_slots_after = state_resp.json().get("actor", {}).get("spell_slots", [])
         assert spell_slots_after[0]["current"] == 0, "失败后法术槽不应改变"
 
-    def test_ac4_long_rest_restores_spell_slots(self, client, mage_session):
+    def test_ac4_long_rest_restores_spell_slots(self, client, mage_session, predictable_combat):
+        from tests.conftest import enter_passage_sync
+        enter_passage_sync(client,mage_session)
         """验收标准4: 长休后 spell_slots 全部恢复至 max 值。"""
         # 消耗一个法术槽
         client.post("/action", json={
@@ -343,6 +349,7 @@ class TestSpellSlotAcceptanceCriteria:
         spell_slots = state_resp.json().get("actor", {}).get("spell_slots", [])
         assert spell_slots[0]["current"] == 1
 
+        assert client.post("/combat/end",headers={"X-Session-Id":mage_session},json={"reason":"flee"}).status_code == 200
         # 执行长休
         rest_resp = client.post("/action", json={
             "scene_id": "exploration-01",

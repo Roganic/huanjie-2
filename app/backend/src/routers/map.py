@@ -3,7 +3,9 @@
 from fastapi import APIRouter, HTTPException, Request
 
 from ..models.map import MapConnection, MapNode, MapResponse
-from ..scene_map import SCENE_MAP, get_scene_node
+from ..scene_map import SCENE_MAP, get_scene_node, nodes_for
+from ..content.store import for_session
+from .. import state
 from ..state import get_scene
 
 router = APIRouter(tags=["map"])
@@ -22,12 +24,12 @@ def _resolve_session(request: Request) -> str:
     return session_id
 
 
-def _build_map_topology() -> tuple[list[MapNode], list[MapConnection]]:
+def _build_map_topology(pack=None) -> tuple[list[MapNode], list[MapConnection]]:
     """Build the complete map topology from scene map definitions."""
     nodes: list[MapNode] = []
     connections: list[MapConnection] = []
     
-    for scene_id, node in SCENE_MAP.items():
+    for scene_id, node in nodes_for(pack).items():
         # Create MapNode
         map_node = MapNode(
             id=scene_id,
@@ -83,7 +85,7 @@ async def get_map(request: Request):
         explored_nodes = explored_nodes + [current_node]
     
     # Build topology
-    nodes, connections = _build_map_topology()
+    nodes, connections = _build_map_topology(for_session(state._get_session(session_id, False)))
     
     return MapResponse(
         current_node=current_node,

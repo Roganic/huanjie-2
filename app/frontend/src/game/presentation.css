@@ -1,0 +1,82 @@
+/* Layout preference is independent of module art/theme and adventure state. */
+.adventure-view-switch { display:flex; flex-shrink:0; gap:2px; padding:3px; border:1px solid #a995665e; border-radius:6px; background:#10251f; }
+.adventure-view-switch button { min-height:32px; padding:5px 10px; border:1px solid transparent; background:transparent; color:#bfc9bc; font-size:12px; white-space:nowrap; }
+.adventure-view-switch button[aria-pressed=true] { background:#dac598; border-color:#dac598; color:#24352b; }
+.adventure-view-switch button:focus-visible { outline:2px solid #f5d58f; outline-offset:3px; }
+.adventure-text-scene { display:none; }
+
+.adventure-engine[data-presentation=text] .adventure-body { grid-template-columns:190px minmax(360px,1fr) 340px; gap:10px; padding:10px; }
+.adventure-engine[data-presentation=text] .adventure-character { grid-column:1; grid-row:1; box-shadow:none; }
+.adventure-engine[data-presentation=text] .adventure-story,
+.adventure-engine[data-presentation=text] .adventure-creation { grid-column:2; grid-row:1; background:var(--paper); box-shadow:none; }
+.adventure-engine[data-presentation=text] .adventure-landscape { grid-column:3; grid-row:1; gap:10px; }
+.adventure-engine[data-presentation=text] .adventure-identity { margin:0; padding:18px 14px 12px; text-align:left; }
+.adventure-engine[data-presentation=text] .adventure-identity h2 { font-size:22px; }
+.adventure-engine[data-presentation=text] .adventure-equipment,
+.adventure-engine[data-presentation=text] .adventure-quest-card { margin:8px 14px; }
+.adventure-engine[data-presentation=text] .adventure-character h3 { font-size:12px; }
+.adventure-engine[data-presentation=text] .adventure-scenery,
+.adventure-engine[data-presentation=text] .adventure-illustration:before,
+.adventure-engine[data-presentation=text] .adventure-illustration:after { display:none; }
+.adventure-engine[data-presentation=text] .adventure-illustration { flex:0 1 auto; min-height:0; max-height:50%; overflow:auto; padding:14px; border-color:#b99c625e; background:#203630; box-shadow:none; }
+.adventure-engine[data-presentation=text] .adventure-scenic-caption { position:static; text-shadow:none; }
+.adventure-engine[data-presentation=text] .adventure-scenic-caption h2 { font-size:22px; letter-spacing:1px; margin:5px 0 10px; }
+.adventure-engine[data-presentation=text] .adventure-text-scene { display:block; font-size:13px; line-height:1.8; color:#c4cec1; margin:10px 0; white-space:pre-line; }
+.adventure-engine[data-presentation=text] .adventure-cast { position:static; display:flex; flex-wrap:wrap; overflow:visible; gap:6px; padding:0; }
+.adventure-engine[data-presentation=text] .adventure-cast button { display:flex; min-width:0; max-width:none; min-height:34px; gap:8px; padding:6px 9px; font-size:12px; box-shadow:none; }
+.adventure-engine[data-presentation=text] .adventure-cast small { align-self:auto; }
+.adventure-engine[data-presentation=text] .adventure-stage { background-image:none; }
+.adventure-engine[data-presentation=text][data-mode=exploration] .adventure-stage { bottom:111px; }
+.adventure-engine[data-presentation=text] .adventure-selection { height:110px; overflow:auto; }
+.adventure-engine[data-presentation=text] .adventure-routes img { display:none; }
+.adventure-engine[data-presentation=text][data-world=docked] .adventure-world { flex:1; height:auto!important; }
+.adventure-engine[data-presentation=text] .adventure-heading { padding:14px 20px 10px; border-bottom-width:1px; }
+.adventure-engine[data-presentation=text] .adventure-heading h1 { font-size:23px; margin:3px 0 6px; }
+.adventure-engine[data-presentation=text] .adventure-heading:after { display:none; }
+.adventure-engine[data-presentation=text] .adventure-narrative { padding:14px 20px; }
+.adventure-engine[data-presentation=text] .adventure-prose { font:15px/1.8 system-ui,sans-serif; letter-spacing:0; padding:4px 0 12px; }
+.adventure-engine[data-presentation=text] .adventure-prose p { margin:6px 0; }
+.adventure-engine[data-presentation=text] .adventure-entry-label { margin-bottom:5px; }
+.adventure-engine[data-presentation=text] .adventure-player-line { padding:6px 10px; }
+.adventure-engine[data-presentation=text] .adventure-scene-description { font:14px/1.8 system-ui,sans-serif; }
+.adventure-engine[data-presentation=text] .adventure-actions { padding:10px 16px; }
+.adventure-engine[data-presentation=text] .adventure-action-list { gap:6px; }
+.adventure-engine[data-presentation=text] .adventure-actions button { padding:7px 10px; }
+.adventure-engine[data-presentation=text] .adventure-composer { padding:10px 16px 14px; }
+
+@media(max-width:1100px) {
+  .adventure-engine[data-presentation=text] .adventure-body { grid-template-columns:minmax(360px,1fr) 320px; }
+  .adventure-engine[data-presentation=text] .adventure-story,
+  .adventure-engine[data-presentation=text] .adventure-creation { grid-column:1; }
+  .adventure-engine[data-presentation=text] .adventure-landscape { grid-column:2; }
+}
+@media(min-width:761px) and (max-width:980px) {
+  .adventure-header { height:auto; min-height:64px; flex-wrap:wrap; padding:8px 14px; gap:6px 12px; }
+  .adventure-view-switch { margin-left:auto; }
+  .adventure-header nav { width:100%; justify-content:flex-end; }
+}
+@media(max-width:760px) {
+  .adventure-header { gap:5px 8px; }
+  .adventure-status { font-size:11px; gap:5px; }
+  .adventure-status meter { display:none; }
+  .adventure-view-switch { margin-left:auto; padding:2px; }
+  .adventure-view-switch button { padding:5px 8px; min-height:34px; }
+  .adventure-engine[data-presentation=text] .adventure-body { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,auto) minmax(0,1fr); padding:6px; gap:6px; }
+  .adventure-engine[data-presentation=text] .adventure-landscape { grid-column:1; grid-row:1; }
+  .adventure-engine[data-presentation=text] .adventure-story,
+  .adventure-engine[data-presentation=text] .adventure-creation { grid-column:1; grid-row:2; }
+  .adventure-engine[data-presentation=text] .adventure-illustration { max-height:150px; padding:10px 12px; }
+  .adventure-engine[data-presentation=text] .adventure-scenic-caption h2 { font-size:19px; margin:3px 0 7px; }
+  .adventure-engine[data-presentation=text] .adventure-text-scene { display:none; }
+  .adventure-engine[data-presentation=text] .adventure-cast { flex-wrap:nowrap; overflow:auto; }
+  .adventure-engine[data-presentation=text] .adventure-cast button { min-height:34px; }
+  .adventure-engine[data-presentation=text][data-world=docked] .adventure-world { height:min(480px,65dvh)!important; }
+  .adventure-engine[data-presentation=text][data-mode=combat] .adventure-body { grid-template-rows:28dvh minmax(0,1fr); }
+  .adventure-engine[data-presentation=text][data-mode=combat] .adventure-world { height:100%!important; }
+  .adventure-engine[data-presentation=text] .adventure-heading { padding:10px 14px 8px; }
+  .adventure-engine[data-presentation=text] .adventure-heading h1 { font-size:19px; }
+  .adventure-engine[data-presentation=text] .adventure-narrative { padding:12px 14px; }
+  .adventure-engine[data-presentation=text] .adventure-prose { font-size:16px; }
+  .adventure-engine[data-presentation=text] .adventure-actions { padding:8px 12px; }
+  .adventure-engine[data-presentation=text] .adventure-composer { padding:8px 12px 12px; }
+}

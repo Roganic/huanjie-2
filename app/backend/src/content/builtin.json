@@ -1,0 +1,1158 @@
+{
+  "schema_version": 1,
+  "id": "lantern-village",
+  "version": "1.2.0",
+  "name": "灯笼酒馆与遗忘地下城",
+  "description": "从酒馆打听消息，探索村庄与地下城，完成托尔金的委托。",
+  "starting_scene_id": "tavern-01",
+  "scenes": {
+    "village-square-01": {
+      "id": "village-square-01",
+      "name": "十字路口村庄广场",
+      "description": "村庄的中心广场，几座破旧但整洁的房屋环绕着一口古老的水井。清晨的阳光洒在鹅卵石铺就的地面上，几个村民正在忙碌地准备着新的一天。铁匠铺传来叮叮当当的敲打声，杂货店老板正在门前整理货物。",
+      "aliases": [
+        "村庄广场",
+        "广场",
+        "村庄",
+        "村里",
+        "village square",
+        "square"
+      ],
+      "exits": [
+        {
+          "direction": "north",
+          "target_scene_id": "tavern-01"
+        },
+        {
+          "direction": "east",
+          "target_scene_id": "dungeon-entrance-01"
+        },
+        {
+          "direction": "south",
+          "target_scene_id": "forest-path-01"
+        }
+      ],
+      "character_ids": [
+        "village-elder-01",
+        "blacksmith-01",
+        "merchant-02"
+      ],
+      "item_ids": [
+        "camp-supply",
+        "antidote"
+      ],
+      "safe_rest": true
+    },
+    "tavern-01": {
+      "id": "tavern-01",
+      "name": "锈迹斑斑的灯笼酒馆",
+      "description": "十字路口村庄的一家昏暗酒馆。陈年麦酒的气味混合着木柴烟雾。几个当地人默默地喝着酒，角落里传来轻柔的竖琴声。酒保老马库斯在吧台后面擦拭着酒杯，不时用独眼打量着客人。",
+      "aliases": [
+        "酒馆",
+        "灯笼酒馆",
+        "tavern"
+      ],
+      "exits": [
+        {
+          "direction": "south",
+          "target_scene_id": "village-square-01"
+        },
+        {
+          "direction": "east",
+          "target_scene_id": "dungeon-entrance-01"
+        }
+      ],
+      "character_ids": [
+        "tavern-keeper-01",
+        "tavern-bard-01",
+        "merchant-01"
+      ],
+      "item_ids": [
+        "shortsword",
+        "leather"
+      ],
+      "safe_rest": true,
+      "interactions": [
+        {
+          "id": "veteran-advice",
+          "name": "老兵的行路笔记",
+          "action_name": "阅读行路笔记",
+          "success_condition": "inspired",
+          "success_narrative": "老兵留下的经验让你更有把握。下一次攻击或技能检定获得优势。",
+          "reward_info": "村庄与酒馆可以免费长休。野外休整需要营地补给，先检查背包再出发。"
+        }
+      ]
+    },
+    "dungeon-entrance-01": {
+      "id": "dungeon-entrance-01",
+      "name": "遗忘地下城入口",
+      "description": "一座古老的石门半埋在藤蔓之中，门上刻满了风化的符文。入口旁躺着一具石像守卫的残骸，似乎经历过激烈的战斗。不远处，一个受伤的矮人靠在树干上，神情惊恐地看着地下城的方向。阴冷的风从黑暗中吹出，带来腐朽和某种更危险的气息。 石门下沿有几道新鲜刻痕，旁边放着废弃补给箱，古老碑文露出藤蔓。",
+      "aliases": [
+        "地下城入口",
+        "入口",
+        "石门",
+        "dungeon entrance",
+        "dungeon"
+      ],
+      "exits": [
+        {
+          "direction": "west",
+          "target_scene_id": "village-square-01"
+        },
+        {
+          "direction": "down",
+          "target_scene_id": "vault-01"
+        },
+        {
+          "direction": "south",
+          "target_scene_id": "ancient-temple-01"
+        },
+        {
+          "direction": "north",
+          "target_scene_id": "combat-encounter-01"
+        }
+      ],
+      "character_ids": [
+        "wounded-adventurer-01",
+        "guard-corpse-01"
+      ],
+      "item_ids": [],
+      "interactions": [
+        {
+          "id": "supply-cache",
+          "name": "废弃补给箱",
+          "action_name": "检查废弃补给箱",
+          "skill": "investigation",
+          "dc": 12,
+          "success_narrative": "你在箱底的夹层找到了一瓶封存完好的药水。",
+          "failure_narrative": "箱底扬起一阵刺激性的霉尘，你吸入后感到头晕，陷入中毒。可以使用解毒剂、长休，或等待 3 个有效行动后缓解。",
+          "reward_item": "healing_potion",
+          "failure_condition": "poisoned"
+        },
+        {
+          "id": "old-inscription",
+          "name": "古老碑文",
+          "action_name": "辨认古老碑文",
+          "skill": "history",
+          "dc": 10,
+          "success_narrative": "你认出了碑文中的古老地名。",
+          "failure_narrative": "风化的字迹难以辨认，你暂时没能读懂。",
+          "reward_info": "碑文说明石门夹层的结构：调查石门时获得优势。",
+          "set_flags": [
+            "inscription_read"
+          ]
+        },
+        {
+          "id": "stone-door",
+          "name": "石门",
+          "action_name": "调查石门",
+          "skill": "investigation",
+          "dc": 10,
+          "required_flags": [
+            "passage_briefed"
+          ],
+          "set_flags": [
+            "stone_marks"
+          ],
+          "locked_reason": "先与托尔金交谈，确认石门刻痕的位置。",
+          "success_narrative": "你沿着新鲜刻痕找到了一处石门夹层，里面露出卷起的巡逻记录。",
+          "failure_narrative": "藤蔓遮住了刻痕，你没有找到夹层。托尔金指了指石门下沿，你可以再仔细检查。",
+          "reward_info": "石门下沿的夹层藏着巡逻记录，可以直接取出。",
+          "advantage_flags": [
+            "inscription_read"
+          ]
+        },
+        {
+          "id": "patrol-report",
+          "name": "巡逻记录",
+          "action_name": "取出巡逻记录",
+          "aliases": [
+            "拿取巡逻记录",
+            "拾取巡逻记录"
+          ],
+          "required_flags": [
+            "stone_marks"
+          ],
+          "locked_reason": "先调查石门，找到藏记录的夹层。",
+          "success_narrative": "你取出了巡逻记录，上面标明哥布林和座狼占据北边通道，村民应绕行。",
+          "reward_info": "巡逻记录：将北边通道的危险带回灯笼酒馆，告诉老马库斯。示警后再找托尔金领取报酬。"
+        }
+      ]
+    },
+    "combat-encounter-01": {
+      "id": "combat-encounter-01",
+      "name": "地下城通道",
+      "description": "狭窄的地下通道，墙壁上长满了发光的苔藓，提供微弱的照明。前方传来沙沙声和低沉的念诵声。几只哥布林从阴影中窜出，挡住了去路，其中一只头戴骨饰，似乎是个施法者。一只体型巨大的座狼伴随在它们身边，獠牙外露。",
+      "aliases": [
+        "地下城通道",
+        "通道",
+        "combat encounter"
+      ],
+      "exits": [
+        {
+          "direction": "south",
+          "target_scene_id": "dungeon-entrance-01"
+        }
+      ],
+      "character_ids": [
+        "goblin-01",
+        "goblin-shaman-01",
+        "wolf-01"
+      ],
+      "item_ids": []
+    },
+    "forest-path-01": {
+      "id": "forest-path-01",
+      "name": "幽暗森林小径",
+      "description": "一条蜿蜒穿过古老森林的小径，参天大树遮蔽了大部分阳光，只有零星的光束穿透树冠。空气中弥漫着潮湿泥土和松针的气息，远处偶尔传来不明生物的叫声。小径两侧长满了各种草药植物，一个经验丰富的采集者也许能找到有价值的东西。",
+      "aliases": [
+        "幽暗森林小径",
+        "森林小径",
+        "幽暗森林",
+        "小径",
+        "forest path",
+        "森林",
+        "森林入口"
+      ],
+      "exits": [
+        {
+          "direction": "north",
+          "target_scene_id": "village-square-01"
+        },
+        {
+          "direction": "east",
+          "target_scene_id": "ancient-temple-01"
+        }
+      ],
+      "character_ids": [
+        "forest-hermit-01",
+        "forest-wolf-01"
+      ],
+      "item_ids": []
+    },
+    "ancient-temple-01": {
+      "id": "ancient-temple-01",
+      "name": "古庙废墟",
+      "description": "一座被岁月侵蚀的古老神庙，大部分屋顶已经坍塌，只剩下几根粗大的石柱矗立着。地面上散落着破碎的祭坛碎片和风化的石像。神庙深处隐约可见一个发光的祭坛，散发出神秘的蓝色光芒。",
+      "aliases": [
+        "古庙废墟",
+        "古庙",
+        "神庙",
+        "废墟",
+        "ancient temple",
+        "temple"
+      ],
+      "exits": [
+        {
+          "direction": "west",
+          "target_scene_id": "forest-path-01"
+        },
+        {
+          "direction": "north",
+          "target_scene_id": "dungeon-entrance-01"
+        },
+        {
+          "direction": "down",
+          "target_scene_id": "vault-01"
+        }
+      ],
+      "character_ids": [
+        "skeleton-warrior-01",
+        "skeleton-archer-01",
+        "ghost-priest-01"
+      ],
+      "item_ids": []
+    },
+    "vault-01": {
+      "id": "vault-01",
+      "name": "古老宝库",
+      "description": "地下深处的一间石室，墙壁上镶嵌着发出微光的水晶，照亮了整个空间。中央的石台上放着一个古老的宝箱，铁锁已经锈迹斑斑，周围散落着一些金币和珠宝碎片。空气中弥漫着古老魔法的气息，让人既兴奋又警惕。",
+      "aliases": [
+        "宝库",
+        "地下宝库",
+        "古老宝库",
+        "vault",
+        "treasure room"
+      ],
+      "exits": [
+        {
+          "direction": "up",
+          "target_scene_id": "dungeon-entrance-01"
+        },
+        {
+          "direction": "north",
+          "target_scene_id": "ancient-temple-01"
+        }
+      ],
+      "character_ids": [
+        "treasure-guardian-01"
+      ],
+      "item_ids": []
+    }
+  },
+  "characters": {
+    "village-elder-01": {
+      "id": "village-elder-01",
+      "name": "村长托马斯",
+      "description": "白发苍苍的村庄长老，对本地的历史和附近的危险了如指掌。",
+      "type": "friendly",
+      "race": "人类",
+      "occupation": "村长",
+      "role": "neutral",
+      "alive": true,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "这里是十字路口村庄广场。北边是酒馆，东边通往地下城入口，南边通往森林。先向当地人打听，再决定去哪儿。",
+      "clue": null
+    },
+    "blacksmith-01": {
+      "id": "blacksmith-01",
+      "name": "铁匠格鲁姆",
+      "description": "身材魁梧的矮人铁匠，正在铁匠铺里忙碌地打造农具。",
+      "type": "friendly",
+      "race": "矮人",
+      "occupation": "铁匠",
+      "role": "neutral",
+      "alive": true,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "装备在背包里不等于穿戴好了。出发前打开背包，确认武器和护甲已经装备。",
+      "clue": null,
+      "personality": "务实直爽，喜欢谈论武器护甲的保养。",
+      "knowledge": [
+        {
+          "id": "identity",
+          "text": "我是矮人铁匠，正在打造农具；出发前需要检查装备是否真正穿戴。",
+          "required_flags": []
+        }
+      ]
+    },
+    "merchant-02": {
+      "id": "merchant-02",
+      "name": "杂货商莉莉",
+      "description": "精明的半精灵商人，出售各种冒险必需品。",
+      "type": "neutral",
+      "race": "半精灵",
+      "occupation": "商人",
+      "role": "neutral",
+      "alive": true,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "治疗药水可以在背包里使用。先检查现有补给；我的交易功能还没有开放。",
+      "clue": null
+    },
+    "tavern-keeper-01": {
+      "id": "tavern-keeper-01",
+      "name": "老马库斯",
+      "description": "灯笼酒馆的老板，一位白发苍苍的老兵，瞎了一只眼但笑容温暖。",
+      "type": "friendly",
+      "race": "人类",
+      "occupation": "酒馆老板",
+      "role": "neutral",
+      "alive": true,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "你现在在锈迹斑斑的灯笼酒馆。想打听地下城的事？往东去遗忘地下城入口，找受伤的托尔金，他刚从里面逃出来。出发前记得检查装备。 吧台上有老兵的行路笔记，村庄广场还有一份补给和解毒剂可带走。",
+      "clue": "老马库斯：酒馆东边是遗忘地下城入口，受伤的冒险者托尔金在那里。他从地下城逃了出来，可以告诉你里面的情况。",
+      "personality": "温和务实的独眼老兵，说话简短，关心冒险者安全；不假装亲历托尔金的逃亡。",
+      "knowledge": [
+        {
+          "id": "identity",
+          "text": "我经营锈迹斑斑的灯笼酒馆，年轻时当过兵。",
+          "required_flags": []
+        },
+        {
+          "id": "limits",
+          "text": "托尔金从地下城逃出来的具体经过，我没有亲眼见过，需要问他本人。",
+          "required_flags": []
+        }
+      ]
+    },
+    "tavern-bard-01": {
+      "id": "tavern-bard-01",
+      "name": "银弦艾拉",
+      "description": "在角落演奏竖琴的吟游诗人，据说知道很多古老传说。",
+      "type": "neutral",
+      "race": "精灵",
+      "occupation": "吟游诗人",
+      "role": "neutral",
+      "alive": true,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "想听当地的消息，可以先问吧台的老马库斯。他见过许多来往的冒险者。",
+      "clue": null,
+      "personality": "说话轻柔、有韵律；可以即兴吟唱，不把虚构歌谣当成真实线索。",
+      "knowledge": [
+        {
+          "id": "identity",
+          "text": "我在酒馆里演奏竖琴；当地人的近况可以向老板老马库斯打听。",
+          "required_flags": []
+        }
+      ]
+    },
+    "merchant-01": {
+      "id": "merchant-01",
+      "name": "戴兜帽的商人",
+      "description": "独自坐在阴影中的神秘商人，时不时打量着进出的客人。",
+      "type": "neutral",
+      "race": "未知",
+      "occupation": "商人",
+      "role": "neutral",
+      "alive": true,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "出门前先打开背包，看看有没有装备好武器和护甲。现在我只能给你一些出行建议，交易还没有开放。",
+      "clue": null,
+      "personality": "谨慎少言，保持神秘，不承诺出售或赠送尚未支持的物品。",
+      "knowledge": [
+        {
+          "id": "limits",
+          "text": "我现在只能给出行建议，尚不能进行交易。",
+          "required_flags": []
+        }
+      ]
+    },
+    "wounded-adventurer-01": {
+      "id": "wounded-adventurer-01",
+      "name": "托尔金",
+      "description": "从地下城逃出来的受伤冒险者，神情惊恐。",
+      "type": "friendly",
+      "race": "矮人",
+      "occupation": "冒险者",
+      "role": "neutral",
+      "alive": true,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "我是托尔金，刚从地下城逃出来。北边通道有哥布林和座狼。你可以清理它们，也可以调查入口石门里留下的巡逻记录，拿回酒馆提醒村民绕行。两种办法我都会给你报酬。交战前先检查装备、药水和伤势。",
+      "clue": "托尔金：北边通道存在敌人。可以迎战，也可调查入口石门、取出巡逻记录，再回酒馆向老马库斯示警。",
+      "personality": "受伤而警觉，说到地下城会紧张；回答真诚，不把玩家没有完成的事当成已经完成。",
+      "knowledge": [
+        {
+          "id": "escape",
+          "text": "我刚从地下城逃出来，现在受了伤，对里面的敌人仍感到害怕。",
+          "required_flags": []
+        },
+        {
+          "id": "limits",
+          "text": "我没有掌握整个地下城的情况，不能保证更深处安全。",
+          "required_flags": []
+        }
+      ]
+    },
+    "guard-corpse-01": {
+      "id": "guard-corpse-01",
+      "name": "死去的守卫",
+      "description": "倒在地下城入口旁的石像守卫，身上布满了战斗的痕迹。",
+      "type": "neutral",
+      "race": "构造体",
+      "occupation": "守卫",
+      "role": "neutral",
+      "alive": false,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "我暂时没有更多消息。你可以查看地图，决定下一站。",
+      "clue": null
+    },
+    "goblin-01": {
+      "id": "goblin-01",
+      "name": "哥布林斥候",
+      "description": "一只瘦小的哥布林，手持锈迹斑斑的匕首，眼中闪烁着贪婪的光芒。",
+      "type": "hostile",
+      "race": "哥布林",
+      "occupation": "斥候",
+      "role": "neutral",
+      "alive": true,
+      "hp": 5,
+      "ac": 11,
+      "abilities": {
+        "str": 10,
+        "dex": 12,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "我暂时没有更多消息。你可以查看地图，决定下一站。",
+      "clue": null,
+      "xp_reward": 50,
+      "drops": [
+        {
+          "item_id": "shortsword",
+          "quantity": 1,
+          "probability": 0.3
+        },
+        {
+          "item_id": "gold_coins",
+          "quantity": 5,
+          "probability": 0.5
+        },
+        {
+          "item_id": "dagger",
+          "quantity": 1,
+          "probability": 0.2
+        }
+      ]
+    },
+    "goblin-shaman-01": {
+      "id": "goblin-shaman-01",
+      "name": "哥布林萨满",
+      "description": "头戴骨饰的哥布林施法者，正在低声念诵某种咒语。",
+      "type": "hostile",
+      "race": "哥布林",
+      "occupation": "萨满",
+      "role": "neutral",
+      "alive": true,
+      "hp": 5,
+      "ac": 11,
+      "abilities": {
+        "str": 10,
+        "dex": 12,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "我暂时没有更多消息。你可以查看地图，决定下一站。",
+      "clue": null,
+      "xp_reward": 50,
+      "drops": [
+        {
+          "item_id": "shortsword",
+          "quantity": 1,
+          "probability": 0.3
+        },
+        {
+          "item_id": "gold_coins",
+          "quantity": 5,
+          "probability": 0.5
+        },
+        {
+          "item_id": "dagger",
+          "quantity": 1,
+          "probability": 0.2
+        }
+      ]
+    },
+    "wolf-01": {
+      "id": "wolf-01",
+      "name": "座狼",
+      "description": "一只体型巨大的灰狼，獠牙外露，口水滴落在地上。",
+      "type": "hostile",
+      "race": "野兽",
+      "occupation": "战斗伙伴",
+      "role": "neutral",
+      "alive": true,
+      "hp": 5,
+      "ac": 11,
+      "abilities": {
+        "str": 10,
+        "dex": 12,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "我暂时没有更多消息。你可以查看地图，决定下一站。",
+      "clue": null,
+      "xp_reward": 50,
+      "drops": [
+        {
+          "item_id": "gold_coins",
+          "quantity": 2,
+          "probability": 0.3
+        }
+      ]
+    },
+    "forest-hermit-01": {
+      "id": "forest-hermit-01",
+      "name": "隐士阿德里安",
+      "description": "住在森林中的老隐士，精通草药知识，对森林中的秘密了如指掌。",
+      "type": "friendly",
+      "race": "人类",
+      "occupation": "隐士",
+      "role": "neutral",
+      "alive": true,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "我暂时没有更多消息。你可以查看地图，决定下一站。",
+      "clue": null
+    },
+    "forest-wolf-01": {
+      "id": "forest-wolf-01",
+      "name": "野狼",
+      "description": "一只在森林中游荡的野狼，正在警惕地打量着入侵者。",
+      "type": "hostile",
+      "race": "野兽",
+      "occupation": "野生动物",
+      "role": "neutral",
+      "alive": true,
+      "hp": 5,
+      "ac": 11,
+      "abilities": {
+        "str": 10,
+        "dex": 12,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "我暂时没有更多消息。你可以查看地图，决定下一站。",
+      "clue": null,
+      "xp_reward": 50,
+      "drops": [
+        {
+          "item_id": "gold_coins",
+          "quantity": 2,
+          "probability": 0.3
+        }
+      ]
+    },
+    "skeleton-warrior-01": {
+      "id": "skeleton-warrior-01",
+      "name": "骷髅战士",
+      "description": "一具披着锈蚀铠甲的骷髅，手持断剑，眼眶中燃烧着幽蓝色的鬼火。",
+      "type": "hostile",
+      "race": "亡灵",
+      "occupation": "守卫",
+      "role": "neutral",
+      "alive": true,
+      "hp": 5,
+      "ac": 11,
+      "abilities": {
+        "str": 10,
+        "dex": 12,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "我暂时没有更多消息。你可以查看地图，决定下一站。",
+      "clue": null,
+      "xp_reward": 50,
+      "drops": [
+        {
+          "item_id": "bones",
+          "quantity": 2,
+          "probability": 0.8
+        },
+        {
+          "item_id": "rusty_sword",
+          "quantity": 1,
+          "probability": 0.4
+        },
+        {
+          "item_id": "gold_coins",
+          "quantity": 3,
+          "probability": 0.3
+        }
+      ]
+    },
+    "skeleton-archer-01": {
+      "id": "skeleton-archer-01",
+      "name": "骷髅弓手",
+      "description": "一具骷髅弓手，手持腐朽的弓，正在废墟高处巡逻。",
+      "type": "hostile",
+      "race": "亡灵",
+      "occupation": "弓手",
+      "role": "neutral",
+      "alive": true,
+      "hp": 5,
+      "ac": 11,
+      "abilities": {
+        "str": 10,
+        "dex": 12,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "我暂时没有更多消息。你可以查看地图，决定下一站。",
+      "clue": null,
+      "xp_reward": 50,
+      "drops": [
+        {
+          "item_id": "bones",
+          "quantity": 2,
+          "probability": 0.8
+        },
+        {
+          "item_id": "rusty_sword",
+          "quantity": 1,
+          "probability": 0.4
+        },
+        {
+          "item_id": "gold_coins",
+          "quantity": 3,
+          "probability": 0.3
+        }
+      ]
+    },
+    "ghost-priest-01": {
+      "id": "ghost-priest-01",
+      "name": "幽灵祭司",
+      "description": "一个半透明的幽灵，穿着古代祭司的服装，神情悲伤地飘荡在神庙中。",
+      "type": "neutral",
+      "race": "亡灵",
+      "occupation": "祭司",
+      "role": "neutral",
+      "alive": true,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str": 10,
+        "dex": 10,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "我暂时没有更多消息。你可以查看地图，决定下一站。",
+      "clue": null
+    },
+    "treasure-guardian-01": {
+      "id": "treasure-guardian-01",
+      "name": "宝库守护傀儡",
+      "description": "守护着宝箱的魔法构造体，虽然已经残破但仍然危险。",
+      "type": "hostile",
+      "race": "构造体",
+      "occupation": "守护者",
+      "role": "neutral",
+      "alive": true,
+      "hp": 12,
+      "ac": 13,
+      "abilities": {
+        "str": 10,
+        "dex": 8,
+        "con": 10,
+        "int": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "encounter-weapon",
+      "dialogue": "我暂时没有更多消息。你可以查看地图，决定下一站。",
+      "clue": null,
+      "xp_reward": 50,
+      "drops": [
+        {
+          "item_id": "gold_coins",
+          "quantity": 2,
+          "probability": 0.3
+        }
+      ]
+    }
+  },
+  "items": {
+    "encounter-weapon": {
+      "id": "encounter-weapon",
+      "name": "简易武器",
+      "type": "weapon",
+      "damage_dice": "1d3",
+      "attack_ability": "str",
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": ""
+    },
+    "shortsword": {
+      "id": "shortsword",
+      "name": "短剑",
+      "type": "weapon",
+      "damage_dice": "1d6",
+      "attack_ability": "dex",
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "一把轻便的短剑。"
+    },
+    "leather": {
+      "id": "leather",
+      "name": "皮甲",
+      "type": "armor",
+      "damage_dice": null,
+      "attack_ability": null,
+      "base_ac": 11,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "轻便的皮革护甲。"
+    },
+    "healing_potion": {
+      "id": "healing_potion",
+      "name": "治疗药水",
+      "type": "consumable",
+      "damage_dice": null,
+      "attack_ability": null,
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "一瓶红色的治疗药水，饮用后可恢复生命值。",
+      "effect_type": "heal",
+      "effect_dice": "2d4+2"
+    },
+    "gold_coins": {
+      "id": "gold_coins",
+      "name": "金币",
+      "type": "misc",
+      "damage_dice": null,
+      "attack_ability": null,
+      "effect_type": null,
+      "effect_dice": null,
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "几枚闪闪发光的金币。"
+    },
+    "dagger": {
+      "id": "dagger",
+      "name": "匕首",
+      "type": "misc",
+      "damage_dice": null,
+      "attack_ability": null,
+      "effect_type": null,
+      "effect_dice": null,
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "一把锈迹斑斑的匕首。"
+    },
+    "bones": {
+      "id": "bones",
+      "name": "骨头",
+      "type": "misc",
+      "damage_dice": null,
+      "attack_ability": null,
+      "effect_type": null,
+      "effect_dice": null,
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "几根散落的骨头，可能有些用途。"
+    },
+    "rusty_sword": {
+      "id": "rusty_sword",
+      "name": "生锈剑",
+      "type": "misc",
+      "damage_dice": null,
+      "attack_ability": null,
+      "effect_type": null,
+      "effect_dice": null,
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": "一把锈迹斑斑的旧剑，但仍可使用。"
+    },
+    "camp-supply": {
+      "id": "camp-supply",
+      "name": "营地补给",
+      "type": "misc",
+      "description": "野外长休消耗一份；酒馆和村庄可免费整备。"
+    },
+    "antidote": {
+      "id": "antidote",
+      "name": "解毒剂",
+      "type": "consumable",
+      "effect_type": "cure_poison",
+      "description": "解除中毒；未中毒时不会消耗。"
+    }
+  },
+  "quests": {
+    "clear-passage": {
+      "id": "clear-passage",
+      "name": "地下城通道的隐患",
+      "kind": "clear_scene",
+      "giver_id": "wounded-adventurer-01",
+      "target_scene_id": "combat-encounter-01",
+      "rewards": [
+        {
+          "item_id": "healing_potion",
+          "quantity": 2
+        }
+      ],
+      "alternative_flags": [
+        "village_warned"
+      ],
+      "alternative_objective": "调查入口石门，取出巡逻记录，回酒馆向老马库斯示警，再向托尔金报告。",
+      "alternative_ready_text": "老马库斯已按巡逻记录通知村民避开通道；敌人仍在地下城内。",
+      "progress_hints": [
+        {
+          "required_flags": [],
+          "text": "可以向北迎战，也可以调查入口石门，寻找无需交战的处理办法。"
+        },
+        {
+          "required_flags": [
+            "stone_marks"
+          ],
+          "text": "石门夹层已经找到，取出巡逻记录，查明敌人的活动路线；也可选择向北迎战。"
+        },
+        {
+          "required_flags": [
+            "patrol_report"
+          ],
+          "text": "带巡逻记录回灯笼酒馆，和老马库斯说话，让村民避开危险通道。"
+        }
+      ],
+      "xp_reward": 300
+    }
+  },
+  "events": {
+    "passage-briefed": {
+      "id": "passage-briefed",
+      "on": "talk",
+      "target_id": "wounded-adventurer-01",
+      "narration": "托尔金指向石门下沿的新刻痕。",
+      "set_flags": [
+        "passage_briefed"
+      ]
+    },
+    "report-recovered": {
+      "id": "report-recovered",
+      "on": "interact",
+      "target_id": "dungeon-entrance-01:patrol-report",
+      "narration": "你已将巡逻记录收进线索笔记，可以回酒馆示警。",
+      "set_flags": [
+        "patrol_report"
+      ]
+    },
+    "warn-village": {
+      "id": "warn-village",
+      "on": "talk",
+      "target_id": "tavern-keeper-01",
+      "required_flags": [
+        "patrol_report"
+      ],
+      "narration": "老马库斯看过巡逻记录，立即通知村民避开北边通道。他请你回去告诉托尔金：警告已经送到。地下城里的敌人仍在，进入通道会发生战斗。",
+      "set_flags": [
+        "village_warned"
+      ]
+    },
+    "passage-clear": {
+      "id": "passage-clear",
+      "on": "scene_cleared",
+      "target_id": "combat-encounter-01",
+      "narration": "地下城通道重新安静下来。你已消除这里的威胁，可以回去向托尔金报告。",
+      "set_flags": [
+        "passage_cleared"
+      ]
+    }
+  },
+  "supplies": {
+    "item_id": "camp-supply",
+    "starting_quantity": 2
+  },
+  "endings": [
+    {
+      "id": "road-reopened",
+      "title": "结局 · 重开的通道",
+      "description": "你击败了通道中的敌人，托尔金终于可以放心返回。你的冒险为村庄重新打开了这条道路。",
+      "required_flags": [
+        "passage_cleared"
+      ],
+      "completed_quests": [
+        "clear-passage"
+      ]
+    },
+    {
+      "id": "warning-delivered",
+      "title": "结局 · 及时的警告",
+      "description": "你带回巡逻记录，村民及时避开危险。敌人仍盘踞地下城，但这次没有人需要为情报付出生命。",
+      "required_flags": [
+        "village_warned"
+      ],
+      "completed_quests": [
+        "clear-passage"
+      ]
+    },
+    {
+      "id": "broken-trust",
+      "title": "结局 · 破裂的信任",
+      "description": "你攻击了托尔金，委托因此中止。你失去了这份委托的报酬。已做出的调查和示警仍然保留，冒险可以继续。",
+      "failed_quests": [
+        "clear-passage"
+      ]
+    }
+  ],
+  "visuals": {
+    "theme": {
+      "id": "western-journal",
+      "name": "西境旅行志",
+      "preset": "parchment",
+      "illustrated": true
+    },
+    "scenes": {
+      "village-square-01": {
+        "builtin": "village-square",
+        "fallback": "harbor"
+      },
+      "tavern-01": {
+        "builtin": "tavern",
+        "focal_x": 42
+      },
+      "dungeon-entrance-01": {
+        "builtin": "dungeon-gate",
+        "fallback": "ruins",
+        "focal_x": 50,
+        "focal_y": 50
+      },
+      "combat-encounter-01": {
+        "builtin": "dungeon-passage",
+        "fallback": "ruins",
+        "focal_x": 50,
+        "focal_y": 50
+      },
+      "forest-path-01": {
+        "builtin": "wilds"
+      },
+      "ancient-temple-01": {
+        "builtin": "ancient-temple",
+        "fallback": "ruins",
+        "focal_x": 50,
+        "focal_y": 50
+      },
+      "vault-01": {
+        "builtin": "ancient-vault",
+        "fallback": "ruins",
+        "focal_x": 50,
+        "focal_y": 50
+      }
+    },
+    "characters": {
+      "tavern-keeper-01": {
+        "builtin": "marcus"
+      },
+      "tavern-bard-01": {
+        "builtin": "ayla"
+      },
+      "merchant-01": {
+        "builtin": "hooded-merchant"
+      }
+    },
+    "cover": {
+      "builtin": "tavern",
+      "fallback": "tavern"
+    },
+    "map_layout": {
+      "tavern-01": {
+        "x": 205,
+        "y": 125,
+        "label": "灯笼酒馆"
+      },
+      "village-square-01": {
+        "x": 225,
+        "y": 315,
+        "label": "村庄广场"
+      },
+      "dungeon-entrance-01": {
+        "x": 585,
+        "y": 265,
+        "label": "地下城入口"
+      },
+      "combat-encounter-01": {
+        "x": 790,
+        "y": 110,
+        "label": "地下城通道"
+      },
+      "forest-path-01": {
+        "x": 230,
+        "y": 510,
+        "label": "幽暗森林"
+      },
+      "ancient-temple-01": {
+        "x": 580,
+        "y": 500,
+        "label": "古庙废墟"
+      },
+      "vault-01": {
+        "x": 840,
+        "y": 460,
+        "label": "古老宝库"
+      }
+    }
+  }
+}

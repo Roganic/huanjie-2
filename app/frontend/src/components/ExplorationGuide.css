@@ -1,0 +1,38 @@
+.exploration-guide { flex-shrink: 0; padding: 20px 28px 14px; border-bottom: 1px solid var(--border); background: var(--bg-panel); color: var(--text); }
+.exploration-location { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.exploration-location span { color: var(--text-secondary); font-size: 12px; }
+.exploration-location strong { font-size: 22px; font-weight: 600; letter-spacing: .04em; }
+.scene-intro { color: var(--text-secondary); font-size: 14px; line-height: 1.75; margin: 8px 0; }
+.exploration-objective { font-size: 13px; line-height: 1.7; margin: 10px 0; }
+.exploration-objective b { color: #dcc494; margin-right: 12px; font-weight: 500; }
+.exploration-actions, .scene-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.scene-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.exploration-objects { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 10px; margin: 12px 0; }
+.exploration-object { padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.exploration-object p { color: var(--text-secondary); font-size: 12px; line-height: 1.6; margin: 8px 0; }
+.exploration-guide button { background: var(--bg-input); border: 1px solid var(--border-light); color: var(--text); border-radius: 7px; padding: 9px 12px; cursor: pointer; font: inherit; font-size: 13px; transition: background 150ms, border-color 150ms; }
+.exploration-guide button:hover:not(:disabled), .scene-tabs button[aria-expanded=true] { background: var(--bg-panel-hover); border-color: #a18b63; }
+.exploration-guide button:disabled { opacity: .5; cursor: default; }
+.scene-tabs button { background: transparent; border-color: transparent; color: #d8c49e; }
+.scene-content { max-height: 26vh; overflow-y: auto; overscroll-behavior: contain; margin-top: 12px; border-top: 1px solid var(--border); padding: 12px 2px 2px; font-size: 13px; line-height: 1.7; scrollbar-gutter: stable; }
+.scene-content h3 { font-size: 13px; margin-top: 12px; }
+.scene-content ul { padding-left: 20px; }
+.scene-content details { margin-top: 8px; color: var(--text-secondary); }
+.exploration-clues { margin: 10px 0; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+@media (max-width: 700px) { .exploration-guide { padding: 14px 16px 10px; } .exploration-location strong { font-size: 19px; } .scene-intro { display: none; } .scene-content { max-height: 24vh; } .exploration-guide button { min-height: 40px; padding: 8px 10px; } }
+
+.nearby-objects .exploration-object { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 10px 12px; }
+.nearby-objects .exploration-object p { margin: 0; }
+.nearby-objects .exploration-object > button { margin-left: auto; }
+.nearby-objects .exploration-object details { margin: 0; }
+.nearby-objects .exploration-object details[open] { flex-basis: 100%; order: 2; }
+
+@media (max-width: 700px) {
+  .scene-controls { gap: 8px; }
+  .scene-controls .exploration-exits { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .scene-controls .exploration-exits button { font-size: 12px; text-align: left; line-height: 1.5; }
+  .scene-content { margin-top: 8px; padding-top: 8px; }
+}
+
+.exploration-object label { display: grid; gap: 5px; margin: 8px 0; font-size: 13px; }
+.exploration-object select { width: 100%; min-width: 0; min-height: 36px; border: 1px solid #49465c; border-radius: 6px; color: #eee9dd; background: #20202c; padding: 6px; }

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, Literal
 
 from pydantic import BaseModel, Field, field_validator, validator
 
@@ -62,6 +62,8 @@ class InventoryItem(BaseModel):
     # For weapons
     damage_dice: str | None = None
     attack_ability: str | None = None
+    effect_type: Literal["heal", "cure_poison"] | None = None
+    effect_dice: str | None = None
     # For armor
     base_ac: int | None = None
     add_dex_modifier: bool = True
@@ -99,6 +101,8 @@ class InventoryItem(BaseModel):
             id=consumable.id,
             name=consumable.name,
             type=ItemType.CONSUMABLE,
+            effect_type=consumable.effect_type,
+            effect_dice=consumable.effect_dice,
             description=consumable.description,
         )
 
@@ -263,6 +267,7 @@ class Actor(BaseModel):
     hp_max: int
     ac: int = 10  # Armor Class, default 10 + DEX modifier
     conditions: list[str] = Field(default_factory=list)
+    condition_turns: dict[str, int] = Field(default_factory=dict)
     description: str = ""
     skills: list[Skill] = Field(default_factory=list)
     # Inventory and equipment
@@ -303,6 +308,7 @@ class NPC(BaseModel):
     description: str = Field(default="", description="Brief description of the NPC")
     race: Optional[str] = Field(default=None, description="NPC race/species")
     occupation: Optional[str] = Field(default=None, description="NPC occupation or role")
+    role: str = "neutral"
     dialogue_count: int = Field(default=0, description="Number of dialogue interactions with this NPC")
 
 
@@ -326,6 +332,8 @@ class Scene(BaseModel):
 
 
 class NarrativeHistoryEntry(BaseModel):
+    gm_narration: str = ""
+    gm_notice: str = ""
     action_summary: str
     resolution_summary: dict[str, Any] = Field(default_factory=dict)
     narration_summary: str
@@ -343,6 +351,8 @@ class SceneHistoryEntry(BaseModel):
 
 
 class BootstrapState(BaseModel):
+    journey: dict[str, Any] | None = None
+    play_status: dict[str, Any] = Field(default_factory=dict)
     session_id: str
     phase: GamePhase
     game_phase: AdventurePhase = Field(default=AdventurePhase.EXPLORATION, description="Current adventure phase: exploration, combat, or ended")

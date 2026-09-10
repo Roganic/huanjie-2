@@ -46,6 +46,9 @@ def find_item_in_inventory(actor: Actor, item_name: str) -> Optional[InventoryIt
         The InventoryItem if found, None otherwise
     """
     item_name_lower = item_name.lower().strip()
+    exact = next((item for item in actor.inventory if item.id == item_name), None)
+    if exact is not None:
+        return exact
     for item in actor.inventory:
         if item.name.lower() == item_name_lower:
             return item

@@ -1,551 +1,89 @@
-"""Player action endpoint with streamed narration output."""
-
-from __future__ import annotations
-
-import asyncio
+"""HTTP/SSE adapters for the transport-independent game command boundary."""
 import json
-import re
-from collections.abc import AsyncIterator
-
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
+from ..models.action import ActionRequest
+from ..state import DEFAULT_SESSION_ID
+from ..game.commands import GameCommand
+from ..gm.host import handle_command
+from ..gm.provider import status as gm_status
 
-from ..actions.scene_interaction import (
-    find_interactive_element,
-    handle_scene_interaction,
-    is_scene_interaction_action,
-)
-from ..agent.orchestrator import resolve_action_with_agent
-from ..module_engine import check_action_triggers, check_scene_entry_triggers
-from ..items import resolve_item_use
-from ..models.action import ActionRequest, ActionResponse, Effect, Outcome, ResolutionType
-from ..models.state import AdventurePhase
-from ..scene import get_scene_transition, build_scene_context_for_prompt, get_scene_by_id
-from ..scenes import (
-    is_movement_action,
-    handle_movement,
-    get_available_exits,
-)
-from ..state import (
-    apply_effects,
-    append_action_history,
-    get_actor,
-    has_character,
-    require_bootstrap_state,
-    reset_current_session,
-    set_combat_scene,
-    set_current_session,
-    switch_scene,
-    update_combatant_hp,
-    use_action_surge,
-    use_second_wind,
-    _get_session,
-    _resolve_session_id,
-    _save_session,
-)
-from ..game.action_handler import (
-    is_spell_cast_intent,
-    handle_spell_cast,
-    is_rest_intent,
-    handle_long_rest,
-    handle_short_rest,
-)
-
-router = APIRouter(tags=["game"])
-
-# Combat trigger keywords - if these appear in action intent, auto-trigger combat
-_COMBAT_TRIGGER_KEYWORDS = [
-    "attack", "fight", "combat", "hit", "strike", "stab", "slash", "shoot",
-    "kill", "defeat", "engage", "ambush", "assault", "battle",
-    "攻击", "战斗", "打", "杀", "砍", "刺", "射击", "开战",
-]
+router=APIRouter(tags=['game'])
 
 
-def _should_trigger_combat(intent: str, approach: str) -> bool:
-    """Check if an action should trigger combat based on keywords."""
-    text = f"{intent} {approach}".lower()
-    # Don't trigger combat for movement actions
-    if is_movement_action(intent, approach):
-        return False
-    return any(keyword in text for keyword in _COMBAT_TRIGGER_KEYWORDS)
+def _sse_event(event,data):
+    return f'event: {event}\ndata: {json.dumps(data,ensure_ascii=False)}\n\n'
 
 
-# Item use keywords
-_ITEM_USE_PREFIXES = [
-    "使用", "用", "use", "consume", "drink", "喝",
-]
+@router.post('/commands')
+async def commands(command: GameCommand, request: Request):
+    executed = await handle_command(request.headers.get('X-Session-Id') or DEFAULT_SESSION_ID,command)
+    if 'text/event-stream' in request.headers.get('accept',''):
+        raw={**executed['result'],'changes':executed['changes'],'replayed':executed['replayed']}
+        async def stream():
+            yield _sse_event('start',raw)
+            for field in ('gm_narration','narration','narrative','scene_progression','gm_prompt'):
+                if field in raw and not (field == 'narrative' and 'narration' in raw):
+                    yield _sse_event('chunk',{'field':field,'delta':raw[field]})
+            yield _sse_event('complete',raw)
+        return StreamingResponse(stream(),media_type='text/event-stream')
+    return executed
 
 
-def _is_item_use_action(intent: str, approach: str) -> bool:
-    """Check if an action is an item use action."""
-    text = f"{intent} {approach}".lower().strip()
-    for prefix in _ITEM_USE_PREFIXES:
-        if prefix.isascii():
-            # English prefixes: only match at start of text
-            if text.startswith(prefix.lower() + " ") or text == prefix.lower():
-                return True
-        else:
-            # Chinese prefixes: only match at start of text
-            if text.startswith(prefix) or text.startswith(f"{prefix}"):
-                return True
-    return False
+@router.get('/gm/status')
+def host_status():
+    return gm_status()
 
 
-def _parse_item_name(intent: str, approach: str) -> str:
-    """Parse item name from an item use action text."""
-    text = f"{intent} {approach}".strip()
-    
-    # Try Chinese "使用X"
-    if text.startswith("使用"):
-        return text[2:].strip()
-    if text.startswith("用"):
-        return text[1:].strip()
-    if text.startswith("喝"):
-        return text[1:].strip()
-    
-    # Try English "use X", "consume X", "drink X"
-    lower = text.lower()
-    for prefix in ("use ", "consume ", "drink "):
-        if lower.startswith(prefix):
-            return text[len(prefix):].strip()
-    
-    # Fallback: remove the first word/prefix and return the rest
-    parts = text.split(None, 1)
-    if len(parts) > 1:
-        return parts[1].strip()
-    return text
-
-
-def _sse_event(event: str, data: dict) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-
-def _chunk_text(text: str, size: int = 12) -> list[str]:
-    return [text[index : index + size] for index in range(0, len(text), size)] or [""]
-
-
-async def _stream_action_response(response: ActionResponse) -> AsyncIterator[str]:
-    yield _sse_event(
-        "start",
-        {
-            "action_summary": response.action_summary,
-            "resolution_type": response.resolution_type.value,
-            "outcome": response.outcome.value,
-        },
-    )
-
-    for field_name in ("narration", "scene_progression", "gm_prompt"):
-        full_text = getattr(response, field_name)
-        for chunk in _chunk_text(full_text):
-            yield _sse_event(
-                "chunk",
-                {
-                    "field": field_name,
-                    "delta": chunk,
-                },
-            )
-            await asyncio.sleep(0.02)
-
-    yield _sse_event("complete", response.model_dump(mode="json"))
-
-
-@router.post("/action")
-async def submit_action(req: ActionRequest, request: Request):
-    """Submit a player action and optionally stream the generated narration."""
-    from ..state import DEFAULT_SESSION_ID, create_character
-    from ..models.state import CharacterCreateRequest
-
-    explicit_session_id = request.headers.get("X-Session-Id") or request.query_params.get("session_id")
-    session_id = explicit_session_id or DEFAULT_SESSION_ID
-
-    if explicit_session_id:
+@router.get('/gm/history')
+def host_history(request: Request):
+    from .. import state
+    from fastapi import HTTPException
+    sid = request.headers.get('X-Session-Id')
+    if not sid:
+        raise HTTPException(400, '请先创建角色。')
+    with state._SESSION_LOCK:
         try:
-            require_bootstrap_state(session_id)
+            session = state._get_session(sid, False)
         except KeyError as exc:
-            raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
+            raise HTTPException(404, '会话不存在或已失效。') from exc
+        return {'turns': [{k: t.get(k) for k in ('id', 'player', 'reply', 'npc_id', 'scene_id', 'status', 'created_at')} for t in session.gm_turns]}
 
-    token = set_current_session(session_id)
-    try:
-        if not has_character(session_id=session_id):
-            if explicit_session_id:
-                raise HTTPException(status_code=400, detail="No character found. Please create a character before taking actions.")
-            # Auto-create a default character for the implicit default session
-            # to maintain backward compatibility with legacy tests
-            create_character(
-                CharacterCreateRequest(name="Aldric", character_class="warrior"),
-                session_id=session_id,
-            )
 
-        # Check for class feature actions before routing to agent
-        intent_lower = req.intent.strip().lower()
-        if intent_lower == "second_wind":
-            sw_result = use_second_wind(session_id=session_id)
-            if not sw_result["success"]:
-                raise HTTPException(status_code=400, detail=sw_result["error"])
-            
-            actor = get_actor(session_id=session_id) or actor
-            effects = []
-            if actor is not None:
-                effects.append(Effect(
-                    target=actor.id,
-                    field="hp",
-                    delta=sw_result["hp_healed"],
-                    description=f"Second Wind 恢复 {sw_result['hp_healed']} 点生命值",
-                ))
-                session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-                if session.game_phase == AdventurePhase.COMBAT:
-                    update_combatant_hp(actor.id, actor.hp)
-            
-            result = ActionResponse(
-                action_summary="使用 Second Wind",
-                resolution_type=ResolutionType.AUTO_SUCCESS,
-                outcome=Outcome.SUCCESS,
-                effects=effects,
-                narration=f"你集中精神，调动体内的战斗本能，恢复了 {sw_result['hp_healed']} 点生命值。",
-                scene_progression="",
-                gm_prompt="",
-            )
-            append_action_history(
-                {
-                    "action": result.action_summary,
-                    "result": result.outcome.value,
-                    "narrative_summary": result.narration,
-                },
-                session_id=session_id,
-            )
-            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
-            if not accepts_stream:
-                return result
-            return StreamingResponse(
-                _stream_action_response(result),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                },
-            )
-        
-        if intent_lower == "action_surge":
-            as_result = use_action_surge(session_id=session_id)
-            if not as_result["success"]:
-                raise HTTPException(status_code=400, detail=as_result["error"])
-            
-            actor = get_actor(session_id=session_id)
-            effects = []
-            if actor is not None:
-                effects.append(Effect(
-                    target=actor.id,
-                    field="class_features",
-                    delta="action_surge_used",
-                    description="Action Surge 已使用",
-                ))
-            
-            result = ActionResponse(
-                action_summary="使用 Action Surge",
-                resolution_type=ResolutionType.AUTO_SUCCESS,
-                outcome=Outcome.SUCCESS,
-                effects=effects,
-                narration="肾上腺素涌动，你获得了一次额外的行动机会！",
-                scene_progression="",
-                gm_prompt="",
-            )
-            # Inject extra_action_available into the raw response for non-streaming
-            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
-            if not accepts_stream:
-                raw = result.model_dump(mode="json")
-                raw["extra_action_available"] = True
-                append_action_history(
-                    {
-                        "action": result.action_summary,
-                        "result": result.outcome.value,
-                        "narrative_summary": result.narration,
-                    },
-                    session_id=session_id,
-                )
-                return raw
-            append_action_history(
-                {
-                    "action": result.action_summary,
-                    "result": result.outcome.value,
-                    "narrative_summary": result.narration,
-                },
-                session_id=session_id,
-            )
-            return StreamingResponse(
-                _stream_action_response(result),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                },
-            )
-
-        # Check for item use actions before routing to agent
-        if _is_item_use_action(req.intent, req.approach):
-            actor = get_actor(session_id=session_id)
-            if actor is None:
-                raise HTTPException(status_code=400, detail="No character found.")
-            
-            item_name = _parse_item_name(req.intent, req.approach)
-            item_result = resolve_item_use(actor, item_name)
-            
-            if not item_result.success:
-                raise HTTPException(status_code=400, detail=item_result.error_message)
-            
-            # Apply effects (HP change and inventory removal)
-            apply_effects(item_result.effects or [], session_id=session_id)
-            
-            # Refresh actor to get updated HP
-            actor = get_actor(session_id=session_id) or actor
-            
-            # Update combat state HP if in combat
-            session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-            if session.game_phase == AdventurePhase.COMBAT:
-                update_combatant_hp(actor.id, actor.hp)
-            
-            result = ActionResponse(
-                action_summary=item_result.action_summary,
-                resolution_type=ResolutionType.AUTO_SUCCESS,
-                outcome=Outcome.SUCCESS,
-                effects=item_result.effects or [],
-                item_use=item_result.item_use,
-                narration=item_result.narration,
-                scene_progression=item_result.scene_progression,
-                gm_prompt=item_result.gm_prompt,
-            )
-            
-            append_action_history(
-                {
-                    "action": result.action_summary,
-                    "result": result.outcome.value,
-                    "narrative_summary": (result.narration or "")[:400],
-                },
-                session_id=session_id,
-            )
-            
-            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
-            if not accepts_stream:
-                return result
-            
-            return StreamingResponse(
-                _stream_action_response(result),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                },
-            )
-
-        # Check for rest actions before routing to agent
-        is_rest, rest_type = is_rest_intent(req.intent)
-        if is_rest:
-            actor = get_actor(session_id=session_id)
-            if actor is None:
-                raise HTTPException(status_code=400, detail="No character found.")
-
-            if rest_type == "long":
-                rest_result = handle_long_rest(actor, session_id=session_id)
-            else:
-                rest_result = handle_short_rest(actor, session_id=session_id)
-
-            # Refresh actor after rest
-            actor = get_actor(session_id=session_id) or actor
-            _rest_session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-            if _rest_session.game_phase == AdventurePhase.COMBAT:
-                update_combatant_hp(actor.id, actor.hp)
-
-            rest_effects = [Effect(**e) for e in rest_result.get("effects", [])]
-            result = ActionResponse(
-                action_summary=f"{'长休' if rest_type == 'long' else '短休'}",
-                resolution_type=ResolutionType.AUTO_SUCCESS,
-                outcome=Outcome.SUCCESS,
-                effects=rest_effects,
-                narration=rest_result.get("narration", ""),
-                scene_progression="",
-                gm_prompt="",
-            )
-            append_action_history(
-                {
-                    "action": result.action_summary,
-                    "result": result.outcome.value,
-                    "narrative_summary": (result.narration or "")[:400],
-                },
-                session_id=session_id,
-            )
-            accepts_stream = "text/event-stream" in request.headers.get("accept", "")
-            if not accepts_stream:
-                return result
-            return StreamingResponse(
-                _stream_action_response(result),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                },
-            )
-
-        # Check for spell cast actions before routing to agent
-        if is_spell_cast_intent(req.intent):
-            actor = get_actor(session_id=session_id)
-            if actor is None:
-                raise HTTPException(status_code=400, detail="No character found.")
-
-            spell_result = handle_spell_cast(req.intent, actor, session_id=session_id)
-
-            if spell_result is not None:
-                # Refresh actor after spell cast
-                actor = get_actor(session_id=session_id) or actor
-                _spell_session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-                if _spell_session.game_phase == AdventurePhase.COMBAT:
-                    update_combatant_hp(actor.id, actor.hp)
-
-                spell_effects = [Effect(**e) for e in spell_result.get("effects", [])]
-
-                if not spell_result["success"]:
-                    spell_response = ActionResponse(
-                        action_summary=f"施放 {spell_result['spell_name']}",
-                        resolution_type=ResolutionType.AUTO_SUCCESS,
-                        outcome=Outcome.FAILURE,
-                        effects=[],
-                        narration=spell_result.get("narration", spell_result.get("error_message", "")),
-                        scene_progression="",
-                        gm_prompt="",
-                    )
-                else:
-                    spell_response = ActionResponse(
-                        action_summary=f"施放 {spell_result['spell_name']}",
-                        resolution_type=ResolutionType.AUTO_SUCCESS,
-                        outcome=Outcome.SUCCESS,
-                        effects=spell_effects,
-                        narration=spell_result.get("narration", ""),
-                        scene_progression="",
-                        gm_prompt="",
-                    )
-
-                append_action_history(
-                    {
-                        "action": spell_response.action_summary,
-                        "result": spell_response.outcome.value,
-                        "narrative_summary": (spell_response.narration or "")[:400],
-                    },
-                    session_id=session_id,
-                )
-
-                accepts_stream = "text/event-stream" in request.headers.get("accept", "")
-                if not accepts_stream:
-                    raw = spell_response.model_dump(mode="json")
-                    raw["spell_cast"] = spell_result
-                    return raw
-                return StreamingResponse(
-                    _stream_action_response(spell_response),
-                    media_type="text/event-stream",
-                    headers={
-                        "Cache-Control": "no-cache",
-                        "Connection": "keep-alive",
-                        "X-Accel-Buffering": "no",
-                    },
-                )
-
+@router.get('/gm/metrics')
+def host_metrics(request: Request):
+    from .. import state
+    from fastapi import HTTPException
+    sid = request.headers.get('X-Session-Id')
+    if not sid:
+        raise HTTPException(400, '请先创建角色。')
+    with state._SESSION_LOCK:
         try:
-            # Check if this is a scene interaction action
-            session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-            element = find_interactive_element(req.intent, session.scene.id)
+            turns = state._get_session(sid, False).gm_turns
+        except KeyError:
+            raise HTTPException(404, '会话不存在或已失效。') from None
+        completed = [t for t in turns if 'elapsed_ms' in t]
+        times = sorted(t['elapsed_ms'] for t in completed)
+        import math
+        percentile = lambda p: times[max(0, math.ceil(len(times)*p)-1)] if times else None
+        return {'window': 40, 'turns': len(completed), 'calls': sum(t.get('calls', 0) for t in completed),
+                'fallbacks': sum(t['status'] == 'fallback' for t in completed),
+                'input_tokens': sum(u.get('input_tokens') or 0 for t in completed for u in t.get('usage', [])),
+                'output_tokens': sum(u.get('output_tokens') or 0 for t in completed for u in t.get('usage', [])),
+                'p50_ms': percentile(.5), 'p95_ms': percentile(.95),
+                'models': list(dict.fromkeys(t.get('model', '') for t in completed))}
 
-            if element is not None:
-                # Handle scene interaction with skill check
-                result, _ = handle_scene_interaction(req, element)
-            else:
-                # Use agent orchestrator for non-scene interactions
-                result = await asyncio.to_thread(resolve_action_with_agent, req)
-        except Exception as exc:  # pragma: no cover - surfaced to client as SSE error
-            error_message = str(exc)
 
-            async def error_stream() -> AsyncIterator[str]:
-                yield _sse_event("error", {"message": error_message})
-
-            return StreamingResponse(error_stream(), media_type="text/event-stream")
-
-        # Persist action summary to session memory
-        append_action_history(
-            {
-                "action": result.action_summary,
-                "result": result.outcome.value,
-                "narrative_summary": (result.narration or "")[:400],
-            },
-            session_id=session_id,
-        )
-
-        # Check for scene transitions based on action intent
-        session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-        if session.game_phase == AdventurePhase.EXPLORATION:
-            # Check if this is a movement action
-            if is_movement_action(req.intent, req.approach):
-                # Use the new movement handler
-                movement_result = handle_movement(req.intent, req.approach, session_id)
-                
-                if movement_result.success:
-                    # Movement successful - refresh session state
-                    session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-                    
-                    # Append movement to action history
-                    append_action_history(
-                        {
-                            "action": f"移动: {req.intent}",
-                            "result": "success",
-                            "narrative_summary": movement_result.message,
-                        },
-                        session_id=session_id,
-                    )
-                else:
-                    # Movement failed - still record it
-                    append_action_history(
-                        {
-                            "action": f"尝试移动: {req.intent}",
-                            "result": "failure",
-                            "narrative_summary": movement_result.message,
-                        },
-                        session_id=session_id,
-                    )
-                    # Don't return error - let the agent provide narrative context
-            # Check if this action should trigger combat (only if not a movement action)
-            elif _should_trigger_combat(req.intent, req.approach):
-                # Transition to combat
-                set_combat_scene(session_id)
-                # Re-fetch session to get updated state
-                session = _get_session(_resolve_session_id(session_id), create_if_missing=True)
-
-        # Evaluate module triggers and attach module_event if story advanced
-        module_result = check_action_triggers(req.intent, req.approach, session_id)
-        if not module_result.triggered:
-            # Also check scene entry triggers in case the scene itself drives progression
-            module_result = check_scene_entry_triggers(session_id)
-        
-        if module_result.triggered:
-            result_dict = result.model_dump(mode="json")
-            result_dict["module_event"] = {
-                "triggered_node": module_result.triggered_node_id,
-                "previous_node": module_result.previous_node_id,
-                "description": module_result.description,
-            }
-            # Re-build ActionResponse from dict for streaming compatibility
-            result = ActionResponse(**result_dict)
-        
-        accepts_stream = "text/event-stream" in request.headers.get("accept", "")
-        if not accepts_stream:
-            return result
-
-        return StreamingResponse(
-            _stream_action_response(result),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
-    finally:
-        reset_current_session(token)
+@router.post('/action')
+async def submit_action(req: ActionRequest, request: Request):
+    sid=request.headers.get('X-Session-Id') or request.query_params.get('session_id') or DEFAULT_SESSION_ID
+    executed=await handle_command(sid,GameCommand(kind='text',text=req,request_id=req.request_id))
+    raw={**executed['result'],'changes':executed['changes'],'replayed':executed['replayed']}
+    if 'text/event-stream' not in request.headers.get('accept',''):
+        return raw
+    async def stream():
+        yield _sse_event('start',{k:raw[k] for k in ('action_summary','resolution_type','outcome') if k in raw})
+        for field in ('narration','scene_progression','gm_prompt'):
+            yield _sse_event('chunk',{'field':field,'delta':raw.get(field,'')})
+        yield _sse_event('complete',raw)
+    return StreamingResponse(stream(),media_type='text/event-stream',headers={'Cache-Control':'no-cache'})

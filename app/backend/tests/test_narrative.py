@@ -82,62 +82,32 @@ async def test_narration_includes_character_and_scene_context(client):
 
 
 @pytest.mark.asyncio
-async def test_narration_reflects_success_vs_failure(client):
-    """Success and failure should produce different narrative tones."""
-    # This test verifies the fallback narrative at least differentiates outcomes
-    async with client as c:
-        resp = await c.post("/action", json={
-            "scene_id": "tavern-01",
-            "actor": "Aldric",
-            "intent": "climb the wall",
-            "approach": "scale it quickly",
-            "ability": "str",
-            "dc": 5,  # Low DC to likely succeed
-        })
-        success_data = resp.json()
-        
-        # Reset state between requests
-        from src.state import reset_state
-        reset_state()
-        
-        resp = await c.post("/action", json={
-            "scene_id": "tavern-01",
-            "actor": "Aldric",
-            "intent": "climb the wall",
-            "approach": "scale it quickly",
-            "ability": "str",
-            "dc": 30,  # Impossibly high DC to likely fail
-        })
-        failure_data = resp.json()
-    
-    # Both should have narration
-    assert len(success_data["narration"]) > 0
-    assert len(failure_data["narration"]) > 0
-    
-    # Success should have positive language, failure negative
-    # (Exact words depend on fallback vs AI, but they should differ)
-    assert success_data["narration"] != failure_data["narration"]
+async def test_authored_success_and_failure_have_distinct_narration(client,monkeypatch):
+    from tests.conftest import create_session_and_character
+    sid=await create_session_and_character(client)
+    h={"X-Session-Id":sid}
+    await client.post("/map/move",headers=h,json={"target_scene_id":"dungeon-entrance-01"})
+    payload=dict(scene_id="ignored",actor="ignored",intent="检查废弃补给箱",approach="")
+    monkeypatch.setattr("src.engine.dice.roll_d20",lambda:1)
+    failure=(await client.post("/action",headers=h,json=payload)).json()
+    monkeypatch.setattr("src.engine.dice.roll_d20",lambda:20)
+    success=(await client.post("/action",headers=h,json=payload)).json()
+    assert failure["outcome"]=="failure" and success["outcome"]=="success"
+    assert failure["narration"] != success["narration"]
+    assert "药水" in success["narration"]
 
 
 @pytest.mark.asyncio
-async def test_combat_narrative_includes_action_details(client):
-    """Combat narration should reference weapon and target."""
-    async with client as c:
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the goblin",
-            "approach": "swing my longsword",
-            "weapon": "longsword",
-            "target": "goblin-01",
-        })
-    assert resp.status_code == 200
-    data = resp.json()
-    narration = data["narration"].lower()
-    
-    # Should mention combat elements
-    assert "longsword" in narration or "sword" in narration
-    assert "goblin" in narration or "scout" in narration or "哥布林" in narration
+async def test_combat_narrative_includes_action_details(client, predictable_combat):
+    from tests.conftest import create_session_and_character, enter_passage
+    sid = await create_session_and_character(client)
+    await enter_passage(client,sid)
+    response = await client.post("/combat/action",headers={"X-Session-Id":sid},json={"action_type":"attack","target_id":"goblin-01"})
+    assert response.status_code == 200,response.text
+    data = response.json()
+    assert data["hit"] is True
+    assert not any(e["type"] == "saving_throw" for e in data["events"])
+    assert "长剑" in data["narrative"] and "哥布林" in data["narrative"]
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,194 @@
+{
+  "model": "qwen3.8-max",
+  "usage": {
+    "input_tokens": 29711,
+    "output_tokens": 17062,
+    "calls": 3
+  },
+  "questions": [
+    "原稿未说明玩家同时完成亮灯与敲钟时应取哪个结局；本轮按“及时亮灯优先”处理（ending_bell 排除 light_success），若设计意图相反请确认。",
+    "原稿未说明交涉失败后能否反复重试安抚阿禾；当前按可重复检定处理，未额外加次数限制。"
+  ],
+  "assumptions": [
+    "检定统一采用原稿给定的 DC 10：安抚阿禾用魅力（说服），调查维修匣用智力（调查）。",
+    "复原湿纸/匣盖浮雕按原稿『花更多时间』设为 interact，time_cost=3，不再掷骰，保证失败路线不堵死。",
+    "点亮灯光与敲钟引航均为明确操作、自动结算，不设检定，符合原稿『两种明确操作都不会无故掷骰』。",
+    "雾封港在接取委托（与岑婆交谈）后 10 格时间到期，scope=story；完成任一引航即取消，不直接处死乘客。",
+    "潮汐纸、校准图、维修记录、校准信息均以线索（clue）形式发放，不作为实体物品；渡口纪念章为任务奖励物品，80 经验填入任务 xp_reward，不在报告事件中重复发放。",
+    "与岑婆的报告/交付由系统按任务条件自动处理；『阿禾站出来』『送油人的清白』为交付后同场景的后续对白事件，不提前完成任务目标。",
+    "地点连接设为：渡口↔修灯棚、渡口↔潮阶、渡口↔灯塔、潮阶↔灯塔，出口双向填写。",
+    "结局互斥关系：『雾里的光』排除钟声路线与雾封港；『听见归航』排除亮灯路线与雾封港；『等到天亮』要求雾封港已发生且救援完成。",
+    "复原匣盖纹样的耗时原稿未给数值，按“花更多时间”设为 time_cost=3。",
+    "浓雾封港倒计时 10 格、DC 10、80 经验均为原稿明确数值，直接沿用。",
+    "若玩家先点灯又敲钟（两个及时事实都成立），约定以钟声结局“听见归航”为准：ending_light 排除 bell_success，ending_bell 只排除 fog_lock，保证任意操作组合下恰有一个结局可选。",
+    "persuade_ahe 失败后可再次尝试交涉（check beat 可重复触发），符合原稿“失败后仍可交谈”。",
+    "原稿未给 time_cost 数值：复原湿纸按“花更多时间”设为 3 格，其余查看/引航操作按默认 1 格。",
+    "原稿未给检定属性：安抚阿禾用 cha/persuasion，调查维修匣用 int/investigation，DC 均按原稿明确值 10。",
+    "原稿未给关系变化数值：persuade_ahe 成功、ahe_steps_forward、prove_oilman 各 +1。",
+    "渡口纪念章按原稿作为任务奖励物品（type=misc），不预置于任何地点。",
+    "浓雾封港倒计时按原稿“接取后 10 格”挂在首次与岑婆交谈的延迟后果上，scope=story、priority=urgent，使其不受玩家所在地点限制。"
+  ],
+  "coverage": [
+    {
+      "source_excerpt": "守灯人岑婆把一张潮汐纸摊在你的掌心",
+      "references": [
+        "beats:talk_cen",
+        "quests:quest_ferry_home"
+      ],
+      "note": "talk_cen 为与岑婆交谈的立即后果，发放 clue tide_paper（三短一长钟声与货物浸坏代价），任务由 giver_id=cen_po 自动接取，不另造接取事件。"
+    },
+    {
+      "source_excerpt": "亮灯，或者敲出正确的钟声。船上的人不能等我们追究谁的错。",
+      "references": [
+        "beats:light_success",
+        "beats:bell_success",
+        "quests:quest_ferry_home"
+      ],
+      "note": "两条救援方式分别实现为灯塔 interact：light_success（需校准信息）与 bell_success（需 talk_cen 得到的潮汐纸）；任务 requires_any 两者之一，玩家不必都走。"
+    },
+    {
+      "source_excerpt": "玩家可以安抚阿禾，让他交出校准图",
+      "references": [
+        "beats:persuade_ahe",
+        "people:a_he"
+      ],
+      "note": "persuade_ahe 为 cha/persuasion DC 10 检定，成功发放 clue calibration_chart 并 +1 关系；阿禾动机（怕承认弄断螺栓、以为修好就不算犯错）写在 personality/description，未剧透到初始 dialogue。"
+    },
+    {
+      "source_excerpt": "也可以去潮阶查看维修匣",
+      "references": [
+        "beats:investigate_box"
+      ],
+      "note": "investigate_box 为 int/investigation DC 10 检定，成功发放 repair_record 与 calibration_info 两条 clue，构成第二条获取校准信息的路线。"
+    },
+    {
+      "source_excerpt": "检定失败不会堵死故事：潮水会打湿图纸、耗去时间，但匣盖的浮雕仍能让玩家花更多时间复原操作顺序",
+      "references": [
+        "beats:investigate_box",
+        "beats:restore_wet_paper",
+        "beats:light_success"
+      ],
+      "note": "investigate_box.failure 只给 wet_paper 线索；restore_wet_paper 依赖该 failure，time_cost=3 表示花更多时间（非 delay），成功后 light_success 的 requires_any 接受它，失败路线仍可通关。"
+    },
+    {
+      "source_excerpt": "回到灯塔，持有校准信息就能稳妥调整灯光",
+      "references": [
+        "beats:light_success"
+      ],
+      "note": "light_success 为 interact 自动结算、不掷骰，requires_any 覆盖三条校准信息来源（交涉成功／维修匣成功／复原湿纸），scene_id=lighthouse。"
+    },
+    {
+      "source_excerpt": "没有修灯条件时，玩家可依照岑婆提供的潮汐纸敲出三短一长的渡钟，指引渡船靠近避风的小码头",
+      "references": [
+        "beats:bell_success"
+      ],
+      "note": "bell_success 为灯塔 interact，requires talk_cen 成功（即已拿到潮汐纸），不要求缺少校准信息，保持免检定备选路线可走。"
+    },
+    {
+      "source_excerpt": "这条路线同样救下乘客，却意味着货物被海水浸坏",
+      "references": [
+        "beats:bell_success",
+        "endings:ending_bell"
+      ],
+      "note": "bell_success 叙述与 ending_bell 描述均写明乘客平安、货物浸坏；ending_bell 现排除 light_success，避免亮灯后又敲钟时误用钟声结局。"
+    },
+    {
+      "source_excerpt": "若拖延到浓雾完全封港，救援仍能完成，只是船必须等待拖船协助",
+      "references": [
+        "beats:fog_lock",
+        "endings:ending_dawn"
+      ],
+      "note": "fog_lock 为 talk 触发的延迟后果（delay=10，scope=story），不造成伤害；ending_dawn requires fog_lock 且 requires_any 两种引航方式，保证亮灯与敲钟两条路线延误后都能进入该结局。"
+    },
+    {
+      "source_excerpt": "雾封港事件在接取后 10 格时间到期；完成引航后取消，不直接处死乘客",
+      "references": [
+        "beats:fog_lock"
+      ],
+      "note": "倒计时挂在首次与岑婆交谈（接取当次 talk）的 success.delay=10；cancel_after 引用 light_success 与 bell_success，任一引航完成即取消。"
+    },
+    {
+      "source_excerpt": "结尾，阿禾主动站到岑婆面前",
+      "references": [
+        "beats:ahe_steps_forward",
+        "people:cen_po"
+      ],
+      "note": "ahe_steps_forward 为渡口对岑婆的 talk，requires_any 两种引航结果，与任务报告同次 talk 执行；阿禾 scene_id 仍固定为 repair_shed，仅叙述其走到渡口，未修改人物所在地点。"
+    },
+    {
+      "source_excerpt": "玩家若找到维修记录，便能证明送油人清白",
+      "references": [
+        "beats:prove_oilman",
+        "people:cen_po"
+      ],
+      "note": "prove_oilman requires investigate_box 成功（真实持有 repair_record 证据）并要求引航已完成，符合结尾时序；岑婆 knowledge cen_oilman_clear 同样以该检定成功为前置，不凭空发放。"
+    },
+    {
+      "source_excerpt": "岑婆没有立刻原谅学徒，却把旧螺栓交给他：“明天开始，你学的第一件事是求助。”",
+      "references": [
+        "beats:ahe_steps_forward",
+        "people:cen_po"
+      ],
+      "note": "该对白由 ahe_steps_forward 叙述承载，并写入岑婆 knowledge cen_aher_bolt（requires_any 引航结果），保留“不立刻原谅”的人物态度。"
+    },
+    {
+      "source_excerpt": "与岑婆交谈接取“让渡船回家”",
+      "references": [
+        "quests:quest_ferry_home",
+        "beats:talk_cen"
+      ],
+      "note": "quest giver_id=cen_po，接取与报告由系统处理；requires_any 为 light_success/bell_success，ready_text 提示回渡口报告，未另造“交付成功”中间事件。"
+    },
+    {
+      "source_excerpt": "交涉与调查采用 DC 10 鉴定，有明确成败后果",
+      "references": [
+        "beats:persuade_ahe",
+        "beats:investigate_box"
+      ],
+      "note": "两个检定 dc 均为 10，各自带 stakes 与 failure 后果（阿禾继续沉默／图纸被打湿），失败均可推进而非堵死。"
+    },
+    {
+      "source_excerpt": "查看/移动/引航按规则自动结算",
+      "references": [
+        "beats:light_success",
+        "beats:bell_success",
+        "beats:restore_wet_paper",
+        "beats:arrive_dock"
+      ],
+      "note": "引航与复原均为 interact 自动结算（AutomaticBeat，无 dc），arrive_dock 仅在进入渡口时触发开场信息，不被 talk/interact 代替。"
+    },
+    {
+      "source_excerpt": "及时亮灯“雾里的光”；使用钟声“听见归航”；延误后救援“等到天亮”",
+      "references": [
+        "endings:ending_light",
+        "endings:ending_bell",
+        "endings:ending_dawn"
+      ],
+      "note": "三个结局均依赖 completed_quests=quest_ferry_home；ending_light 排除 fog_lock，ending_bell 排除 fog_lock 与 light_success，ending_dawn 要求 fog_lock，互斥关系全部由 excludes/requires 显式表达，不依赖数组顺序。"
+    },
+    {
+      "source_excerpt": "完成救援并向岑婆报告得到 80 经验与渡口纪念章",
+      "references": [
+        "quests:quest_ferry_home",
+        "items:ferry_medal"
+      ],
+      "note": "xp_reward=80、rewards 含 ferry_medal×1，仅在任务交付时发放一次；prove_oilman 与 ahe_steps_forward 只给关系变化，不重复发奖。"
+    },
+    {
+      "source_excerpt": "修灯学徒阿禾发现镜框裂开，擅自拆下加固，又怕承认自己弄断了一颗螺栓，将维修记录藏了起来",
+      "references": [
+        "people:a_he",
+        "beats:investigate_box"
+      ],
+      "note": "真相写在阿禾 description/personality 与 investigate_box 成功叙述及 repair_record clue 中；初始 dialogue 保持回避，不提前泄露。"
+    },
+    {
+      "source_excerpt": "送油人早早离开，众人便把嫌疑推给了他",
+      "references": [
+        "beats:investigate_box",
+        "beats:prove_oilman"
+      ],
+      "note": "investigate_box 成功叙述与 repair_record clue 记录“送油人离开时灯还完好”，prove_oilman 据此洗清嫌疑，形成可验证的证据链。"
+    }
+  ]
+}

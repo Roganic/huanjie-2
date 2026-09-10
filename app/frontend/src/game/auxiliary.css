@@ -1,0 +1,4 @@
+/* Auxiliary tools share tokens with the engine; the retired page layouts aren't loaded. */
+.module-panel-overlay{position:fixed;inset:0;background:#071018bd;z-index:1000;display:flex;justify-content:flex-end;backdrop-filter:blur(3px)}
+.module-panel-overlay>.module-dialog{width:460px;max-width:100%;height:100%;background:var(--bg-panel);overflow:auto}
+.module-dialog:focus{outline:none}.module-dialog>[role=status]{padding:16px;color:#e6b899}

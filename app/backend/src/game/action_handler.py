@@ -150,12 +150,12 @@ def handle_spell_cast(
         target = get_enemy(session_id=session_id)
 
     # 施放法术（消耗法术槽）
-    result = cast_spell(actor, spell_name, target)
+    result = cast_spell(actor, lookup_name, target)
 
     if not result.success:
         return {
             "spell_name": result.spell_name,
-            "spell_level": result.slot_level,
+            "spell_level": spell.level,
             "slot_used": 0,
             "damage_roll": [],
             "damage_total": 0,
@@ -216,11 +216,11 @@ def handle_spell_cast(
 
     return {
         "spell_name": result.spell_name,
-        "spell_level": result.slot_level,
+        "spell_level": spell.level,
         "effect_type": effect_type,
         "slot_used": result.slot_level,
         "damage_roll": result.damage_rolls,
-        "damage_total": damage_total if not is_healing_spell else 0,
+        "damage_total": damage_total,
         "success": True,
         "error_message": None,
         "narration": result.narrative,
@@ -270,103 +270,39 @@ _SPELL_NAME_TO_ID: dict[str, str] = {
 # 长休处理
 # ---------------------------------------------------------------------------
 
-def handle_long_rest(
-    actor,
-    session_id: Optional[str] = None,
-) -> dict:
-    """处理长休动作，恢复所有法术槽和HP。
+def _handle_rest(session_id: Optional[str], long: bool) -> dict:
+    from ..state import _get_session, _resolve_session_id, _save_session, _SESSION_LOCK
+    from ..rest_system import can_rest_in_current_phase, perform_long_rest, perform_short_rest
 
-    Args:
-        actor: 执行长休的 Actor 对象
-        session_id: 会话 ID
-
-    Returns:
-        包含长休结果的字典：
-        - success: 是否成功
-        - hp_restored: 恢复的HP
-        - spell_slots_restored: 是否有法术槽被恢复
-        - narration: 叙事文本
-        - effects: 效果列表
-    """
-    try:
-        from ..game.state import restore_all_spell_slots
-        from ..state import _get_session, _resolve_session_id, _save_session
-        from ..models.action import Effect
-    except ImportError as e:
-        return {
-            "success": False,
-            "hp_restored": 0,
-            "spell_slots_restored": False,
-            "narration": f"长休失败: {e}",
-            "effects": [],
-        }
-
-    effects = []
-
-    # 恢复 HP 到最大值
-    hp_restored = actor.hp_max - actor.hp
-    if hp_restored > 0:
-        effects.append(Effect(
-            target=actor.id,
-            field="hp",
-            delta=hp_restored,
-            description=f"长休恢复 {hp_restored} 点生命值",
-        ))
-
-    # 恢复法术槽
-    spell_slots_restored = restore_all_spell_slots(session_id or "")
-
-    if spell_slots_restored:
-        effects.append(Effect(
-            target=actor.id,
-            field="spell_slots_restored",
-            delta=1,
-            description="所有法术位已恢复",
-        ))
-
-    # 应用 HP 效果
-    if hp_restored > 0:
-        try:
-            from ..state import apply_effects
-            apply_effects(effects[:1], session_id=session_id)
-        except Exception:
-            pass
-
-    # 构建叙事
-    parts = [f"{actor.name} 完成长休。"]
-    if hp_restored > 0:
-        parts.append(f"HP 恢复至满值。")
-    if spell_slots_restored:
-        parts.append("所有法术位已恢复。")
-
-    narration = " ".join(parts)
-
-    return {
-        "success": True,
-        "hp_restored": hp_restored,
-        "spell_slots_restored": spell_slots_restored,
-        "narration": narration,
-        "effects": [e.model_dump() for e in effects],
-    }
+    with _SESSION_LOCK:
+        session = _get_session(_resolve_session_id(session_id), create_if_missing=False)
+        allowed, error = can_rest_in_current_phase(session.game_phase.value)
+        actor = session.actor
+        if not allowed or actor is None or actor.hp <= 0:
+            return {"success": False, "hp_restored": 0, "spell_slots_restored": False,
+                    "narration": error or "当前角色无法休息。", "effects": []}
+        updated, info = (perform_long_rest if long else perform_short_rest)(actor)
+        if not info["success"] and not long and (actor.class_features.second_wind_used or actor.class_features.action_surge_used):
+            updated = actor.model_copy(deep=True)
+            info = {"success": True, "hp_gained": 0, "hit_dice_used": 0, "message": "短休完成，职业能力已恢复"}
+        if info["success"]:
+            updated.class_features = updated.class_features.model_copy(update={
+                "second_wind_used": False, "action_surge_used": False,
+            })
+            session.actor = updated
+            from .conditions import advance_time
+            advance_time(session, 8 if long else 1)
+            _save_session(session)
+        return {**info, "hp_restored": info.get("hp_gained", 0),
+                "spell_slots_restored": info.get("spell_slots_restored", False),
+                "narration": info["message"], "effects": []}
 
 
-def handle_short_rest(
-    actor,
-    session_id: Optional[str] = None,
-) -> dict:
-    """处理短休动作（不恢复法术槽）。
+def handle_long_rest(actor, session_id: Optional[str] = None) -> dict:
+    """Restore HP, hit dice, spell slots and rest-based class features."""
+    return _handle_rest(session_id, long=True)
 
-    Args:
-        actor: 执行短休的 Actor 对象
-        session_id: 会话 ID
 
-    Returns:
-        包含短休结果的字典
-    """
-    return {
-        "success": True,
-        "hp_restored": 0,
-        "spell_slots_restored": False,
-        "narration": f"{actor.name} 完成短休。法师的法术位只能通过长休恢复。",
-        "effects": [],
-    }
+def handle_short_rest(actor, session_id: Optional[str] = None) -> dict:
+    """Spend one hit die to recover HP and restore rest-based class features."""
+    return _handle_rest(session_id, long=False)

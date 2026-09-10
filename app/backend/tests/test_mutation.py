@@ -1,5 +1,7 @@
 """Tests for in-memory state mutation after action resolution."""
 
+from tests.compatibility_rules import resolve_compatibility_action
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -223,7 +225,7 @@ def test_narrative_context_applies_entry_and_char_limits():
 async def test_action_check_advances_time(client):
     """Any check (not auto-success) should advance scene time by 1."""
     async with client as c:
-        await c.post("/action", json={
+        resolve_compatibility_action(json={
             "scene_id": "tavern-01",
             "actor": "Aldric",
             "intent": "arm wrestle the barkeep",
@@ -239,7 +241,7 @@ async def test_failed_physical_check_reduces_hp(client):
     """A failed STR/DEX/CON check should cost 1 HP."""
     async with client as c:
         # Force failure with impossibly high DC
-        resp = await c.post("/action", json={
+        resp = resolve_compatibility_action(json={
             "scene_id": "tavern-01",
             "actor": "Aldric",
             "intent": "lift the immovable boulder",
@@ -247,7 +249,7 @@ async def test_failed_physical_check_reduces_hp(client):
             "ability": "str",
             "dc": 99,
         })
-    assert resp.json()["outcome"] == "failure"
+    assert resp.model_dump(mode="json")["outcome"] == "failure"
     assert get_actor().hp == 11  # 12 - 1
 
 
@@ -271,7 +273,7 @@ async def test_bootstrap_endpoint_shows_live_state(client):
     async with client as c:
         # Use default session for backward compatibility
         # Deal damage
-        await c.post("/action", json={
+        resolve_compatibility_action(json={
             "scene_id": "tavern-01",
             "actor": "Aldric",
             "intent": "lift the immovable boulder",
@@ -298,7 +300,7 @@ async def test_reset_endpoint_restores_initial_state(client):
     async with client as c:
         # Use default session for backward compatibility
         # Mutate state: damage HP, add condition, advance time
-        await c.post("/action", json={
+        resolve_compatibility_action(json={
             "scene_id": "tavern-01",
             "actor": "Aldric",
             "intent": "lift the immovable boulder",
@@ -356,7 +358,7 @@ async def test_reset_clears_accumulated_mutations(client):
     async with client as c:
         # Use default session for backward compatibility
         # Apply multiple mutations
-        await c.post("/action", json={
+        resolve_compatibility_action(json={
             "scene_id": "tavern-01",
             "actor": "Aldric",
             "intent": "arm wrestle",
@@ -364,7 +366,7 @@ async def test_reset_clears_accumulated_mutations(client):
             "ability": "str",
             "dc": 10,
         })
-        await c.post("/action", json={
+        resolve_compatibility_action(json={
             "scene_id": "tavern-01",
             "actor": "Aldric",
             "intent": "another action",

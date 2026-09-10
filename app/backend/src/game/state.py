@@ -32,10 +32,8 @@ def get_character_rest_status(session_id: str) -> Optional[dict]:
     if actor is None:
         return None
 
-    # 生命骰（按等级计算，简化实现）
-    hit_dice_total = actor.level
-    # 生命骰剩余：默认等于总数（简化：不追踪消耗）
-    hit_dice_remaining = hit_dice_total
+    hit_dice_total = actor.hit_dice_total
+    hit_dice_remaining = actor.hit_dice_remaining
 
     # 法术槽信息
     spell_slots = [

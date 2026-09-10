@@ -585,7 +585,7 @@ class GMAgent:
         # Determine check parameters
         ability = req.ability or self._infer_ability(req.approach)
         modifier = actor.abilities.modifier(ability)
-        prof = actor.proficiency_bonus  # Generic checks add full prof for simplicity
+        prof = 0  # Generic ability checks do not automatically gain skill proficiency.
         dc = req.dc or self._pick_dc(req.intent)
         advantage = req.advantage
         
@@ -1057,61 +1057,23 @@ class GMAgent:
     
     @staticmethod
     def _is_auto_success(intent: str, approach: str) -> bool:
-        """Check if action should auto-succeed (trivial actions only)."""
-        trivial_phrases = [
-            "look around", "look at", "walk to", "walk over",
-            "sit down", "stand up", "put down", "pick up",
-        ]
-        disqualifiers = [
-            "locked", "trapped", "guard", "convince", "persuade",
-            "deceive", "lie", "trick", "sneak", "steal", "force",
-            "break", "dangerous", "difficult", "careful", "secret", "hidden",
-        ]
-        
-        lower = f"{intent} {approach}".lower()
-        has_trivial = any(p in lower for p in trivial_phrases)
-        has_disqualifier = any(d in lower for d in disqualifiers)
-        return has_trivial and not has_disqualifier
+        from ..engine.resolver import _is_auto_success
+        return _is_auto_success(intent, approach)
     
     @staticmethod
     def _infer_ability(approach: str) -> str:
-        """Infer ability from approach description."""
-        hints = {
-            "str": ["push", "lift", "force", "break", "climb", "grapple", "shove"],
-            "dex": ["dodge", "sneak", "hide", "pick", "steal", "acrobat", "tumble"],
-            "con": ["endure", "resist", "hold breath", "withstand", "tough"],
-            "int": ["recall", "investigate", "analyze", "decipher", "study", "know"],
-            "wis": ["perceive", "sense", "insight", "track", "notice", "spot", "listen"],
-            "cha": ["persuade", "deceive", "intimidate", "perform", "charm", "bluff"],
-        }
-        
-        lower = approach.lower()
-        for ability, keywords in hints.items():
-            for kw in keywords:
-                if kw in lower:
-                    return ability
-        return "str"
+        from ..engine.resolver import _infer_ability
+        return _infer_ability(approach)
     
     @staticmethod
     def _pick_dc(intent: str) -> int:
-        """Pick difficulty class based on intent."""
-        lower = intent.lower()
-        if any(w in lower for w in ["hard", "difficult", "dangerous", "impossible"]):
-            return DC_HARD
-        if any(w in lower for w in ["careful", "tricky", "complex"]):
-            return DC_MEDIUM
-        return DC_MEDIUM
+        from ..engine.resolver import _pick_dc
+        return _pick_dc(intent)
     
     @staticmethod
     def _infer_attack_ability(weapon: str) -> str:
-        """Infer ability for attack based on weapon type."""
-        finesse_weapons = {"dagger", "rapier", "scimitar", "shortsword"}
-        ranged_weapons = {"shortbow", "longbow", "light_crossbow", "heavy_crossbow"}
-        
-        weapon_lower = weapon.lower()
-        if weapon_lower in finesse_weapons or weapon_lower in ranged_weapons:
-            return "dex"
-        return "str"
+        from ..engine.resolver import _infer_attack_ability
+        return _infer_attack_ability(weapon)
     
     @staticmethod
     def _get_weapon_damage(weapon: str) -> str:

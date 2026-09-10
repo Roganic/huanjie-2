@@ -1,0 +1,821 @@
+{
+  "id": "city-beneath-the-tide",
+  "version": "1.0.0",
+  "name": "潮汐之下的城",
+  "description": "中篇 · 2–3 小时。被挪走的铜材、不断上涨的盐水和一台仍忠实执行旧命令的水机。三幕调查、可选遭遇与四类结局。",
+  "starting_scene_id": "water-hall",
+  "scenes": {
+    "water-hall": {
+      "id": "water-hall",
+      "name": "巡水厅",
+      "description": "水位刻痕爬过门槛。陆衡将一张调拨单翻扣在桌上。",
+      "character_ids": [
+        "lu"
+      ],
+      "exits": [
+        {
+          "direction": "前往·旧档案馆",
+          "target_scene_id": "archive"
+        },
+        {
+          "direction": "前往·旧市集",
+          "target_scene_id": "market"
+        }
+      ],
+      "challenges": [],
+      "safe_rest": true
+    },
+    "archive": {
+      "id": "archive",
+      "name": "旧档案馆",
+      "description": "童谣集比账册更厚。宋芷正在给焦黑的纸页编号。",
+      "character_ids": [
+        "song"
+      ],
+      "exits": [
+        {
+          "direction": "返回·巡水厅",
+          "target_scene_id": "water-hall"
+        },
+        {
+          "direction": "前往·玻璃工坊",
+          "target_scene_id": "glassworks"
+        }
+      ],
+      "challenges": [
+        {
+          "id": "read-ledger",
+          "name": "核实铜材账册",
+          "target_id": "archive",
+          "description": "比对童谣集夹页上的数量与签字。",
+          "stakes": "1 格；成功得到准确账册，失败焦页碎裂但出现抄本索引。",
+          "check_kind": "ability",
+          "skill": "investigation",
+          "dc": 10,
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [],
+          "time_cost": 1,
+          "on_success": [
+            {
+              "title": "签字与数字",
+              "narration": "铜材被调去高城花园，陆衡在调拨单上签过字。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "ledger"
+                },
+                {
+                  "kind": "item",
+                  "target_id": "ledger-copy"
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "碎裂的页角",
+              "narration": "焦黑的页角碎裂，背面的抄本索引露出来。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "ledger-index"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "recover-ledger",
+          "name": "按索引复原账册",
+          "target_id": "archive",
+          "description": "逐张核对登记卡中的抄本。",
+          "stakes": "花 2 格时间，确定取得账册。",
+          "check_kind": "automatic",
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [
+            "ledger-index"
+          ],
+          "time_cost": 2,
+          "on_success": [
+            {
+              "title": "补齐的记录",
+              "narration": "登记卡补齐了铜材数量与签名，结论与完整账册一致。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "ledger"
+                },
+                {
+                  "kind": "item",
+                  "target_id": "ledger-copy"
+                }
+              ]
+            }
+          ],
+          "on_failure": []
+        }
+      ],
+      "safe_rest": false
+    },
+    "glassworks": {
+      "id": "glassworks",
+      "name": "玻璃工坊",
+      "description": "墙上铺满旧管线图，季安磨着一块透光玻璃。",
+      "character_ids": [
+        "ji"
+      ],
+      "exits": [
+        {
+          "direction": "返回·旧档案馆",
+          "target_scene_id": "archive"
+        },
+        {
+          "direction": "前往·旧闸门",
+          "target_scene_id": "sluice"
+        },
+        {
+          "direction": "返回·蓄水池",
+          "target_scene_id": "cistern"
+        }
+      ],
+      "challenges": [
+        {
+          "id": "ask-engineer",
+          "name": "向季安说明救援计划",
+          "target_id": "ji",
+          "description": "说明如何优先保护低城居民，争取季安协助读图。",
+          "stakes": "1 格；成功获得管线图，失败仍可自行抄图。",
+          "check_kind": "ability",
+          "skill": "persuasion",
+          "dc": 10,
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [],
+          "time_cost": 1,
+          "on_success": [
+            {
+              "title": "匠人的协助",
+              "narration": "季安指明泄压管与净水槽的位置，给你一份可读的示意图。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "pipe-map"
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "先做再说",
+              "narration": "季安没有答应协助，指了指墙上的旧图，让你自行核对。",
+              "effects": [
+                {
+                  "kind": "relationship",
+                  "target_id": "ji",
+                  "amount": -1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "copy-map",
+          "name": "逐段抄录墙上管线图",
+          "target_id": "glassworks",
+          "description": "沿管线标识核对图纸，记录通往闸门的泄压结构。",
+          "stakes": "花 3 格时间，确定得到管线图。",
+          "check_kind": "automatic",
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [],
+          "time_cost": 3,
+          "on_success": [
+            {
+              "title": "抄好的图",
+              "narration": "你核对了关键管线和闸门编号。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "pipe-map"
+                }
+              ]
+            }
+          ],
+          "on_failure": []
+        }
+      ],
+      "safe_rest": false
+    },
+    "market": {
+      "id": "market",
+      "name": "旧市集",
+      "description": "闻笙的诊桌旁摆着一排空水壶。",
+      "character_ids": [
+        "wen"
+      ],
+      "exits": [
+        {
+          "direction": "返回·巡水厅",
+          "target_scene_id": "water-hall"
+        },
+        {
+          "direction": "前往·蓄水池",
+          "target_scene_id": "cistern"
+        },
+        {
+          "direction": "前往·桥下走廊",
+          "target_scene_id": "underpass"
+        }
+      ],
+      "challenges": [],
+      "safe_rest": true
+    },
+    "cistern": {
+      "id": "cistern",
+      "name": "蓄水池",
+      "description": "盐泥堵住滤层，一道干燥裂缝通向备用水槽。",
+      "character_ids": [],
+      "exits": [
+        {
+          "direction": "返回·旧市集",
+          "target_scene_id": "market"
+        },
+        {
+          "direction": "前往·玻璃工坊",
+          "target_scene_id": "glassworks"
+        }
+      ],
+      "challenges": [
+        {
+          "id": "repair-filter",
+          "name": "清理净水滤层",
+          "target_id": "cistern",
+          "description": "辨认盐泥与滤材分层，恢复净水。",
+          "stakes": "1 格；成功恢复供水，失败擦伤 1 点但发现备用槽。",
+          "check_kind": "ability",
+          "skill": "nature",
+          "dc": 10,
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [],
+          "time_cost": 1,
+          "on_success": [
+            {
+              "title": "清水重新流出",
+              "narration": "滤层恢复工作，市集可取用干净的水。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "clean-water"
+                },
+                {
+                  "kind": "item",
+                  "target_id": "filter-record"
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "裂缝之后",
+              "narration": "你被滤槽边缘擦伤，发现一条通向备用槽的干燥通道。",
+              "effects": [
+                {
+                  "kind": "damage",
+                  "amount": 1
+                },
+                {
+                  "kind": "flag",
+                  "value": "spare-filter"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "clean-spare",
+          "name": "清洗备用水槽",
+          "target_id": "cistern",
+          "description": "按裂缝通道找到备用滤槽，耐心清洗。",
+          "stakes": "花 2 格时间，确定恢复净水。",
+          "check_kind": "automatic",
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [
+            "spare-filter"
+          ],
+          "time_cost": 2,
+          "on_success": [
+            {
+              "title": "备用槽启用",
+              "narration": "干净的水流向市集，你记下检查结果。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "clean-water"
+                },
+                {
+                  "kind": "item",
+                  "target_id": "filter-record"
+                }
+              ]
+            }
+          ],
+          "on_failure": []
+        }
+      ],
+      "safe_rest": false
+    },
+    "underpass": {
+      "id": "underpass",
+      "name": "桥下走廊",
+      "description": "两只锈甲蟹守着泄压管，甲壳发出刺耳的摩擦声。",
+      "character_ids": [
+        "crab-a",
+        "crab-b"
+      ],
+      "exits": [
+        {
+          "direction": "返回·旧市集",
+          "target_scene_id": "market"
+        },
+        {
+          "direction": "前往·旧闸门",
+          "target_scene_id": "sluice"
+        }
+      ],
+      "challenges": [],
+      "safe_rest": false
+    },
+    "sluice": {
+      "id": "sluice",
+      "name": "旧闸门",
+      "description": "杜婆坐在生锈的操作杆旁，每听到一次闸轮转动便抬头看水位。",
+      "character_ids": [
+        "du"
+      ],
+      "exits": [
+        {
+          "direction": "返回·玻璃工坊",
+          "target_scene_id": "glassworks"
+        },
+        {
+          "direction": "前往·潮心室",
+          "target_scene_id": "tide-heart"
+        },
+        {
+          "direction": "返回·桥下走廊",
+          "target_scene_id": "underpass"
+        }
+      ],
+      "challenges": [
+        {
+          "id": "trace-valve",
+          "name": "核对旧闸门泄压方案",
+          "target_id": "sluice",
+          "description": "结合账册与管线图判断铜材缺失后该怎样重新分流。",
+          "stakes": "1 格；成功找到安全泄压方案，失败齿轮卡住造成 1 点伤害，但可重置。",
+          "check_kind": "ability",
+          "skill": "investigation",
+          "dc": 10,
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [
+            "ledger",
+            "pipe-map"
+          ],
+          "time_cost": 1,
+          "on_success": [
+            {
+              "title": "手动分流方案",
+              "narration": "杜婆确认你的判断：卸开旁路压力，就能安全改变优先供水次序。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "valve-plan"
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "卡住的齿轮",
+              "narration": "齿轮擦伤你的手，杜婆教你先卸力再重置。",
+              "effects": [
+                {
+                  "kind": "damage",
+                  "amount": 1
+                },
+                {
+                  "kind": "flag",
+                  "value": "valve-stuck"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "reset-valve",
+          "name": "按顺序重置闸轮",
+          "target_id": "sluice",
+          "description": "依杜婆说明卸力，再逐个重置卡住的机械部件。",
+          "stakes": "花 2 格时间，确定得到安全泄压方案。",
+          "check_kind": "automatic",
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [
+            "valve-stuck"
+          ],
+          "time_cost": 2,
+          "on_success": [
+            {
+              "title": "闸轮复位",
+              "narration": "闸轮恢复自由转动，手动分流方案可以执行了。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "valve-plan"
+                }
+              ]
+            }
+          ],
+          "on_failure": []
+        }
+      ],
+      "safe_rest": false
+    },
+    "tide-heart": {
+      "id": "tide-heart",
+      "name": "潮心室",
+      "description": "巨大的铜轮缓慢转动，铭牌写着：优先保证高城水压。",
+      "character_ids": [],
+      "exits": [
+        {
+          "direction": "返回·旧闸门",
+          "target_scene_id": "sluice"
+        }
+      ],
+      "challenges": [
+        {
+          "id": "publish",
+          "name": "公开账册并手动分流",
+          "target_id": "tide-heart",
+          "description": "修复水路，同时将包括陆衡签名的账册作为公开记录。",
+          "stakes": "最终选择；1 格时间，三种处置只能选一种。",
+          "check_kind": "automatic",
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [
+            "ledger",
+            "pipe-map",
+            "clean-water",
+            "valve-plan"
+          ],
+          "time_cost": 1,
+          "on_success": [
+            {
+              "title": "潮心的处置",
+              "narration": "低城重新获得稳定供水，完整账册已整理为公开记录。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "decision"
+                },
+                {
+                  "kind": "flag",
+                  "value": "public-record"
+                }
+              ]
+            }
+          ],
+          "on_failure": [],
+          "goal_id": "tide-decision",
+          "completed_flags": [
+            "decision"
+          ]
+        },
+        {
+          "id": "seal",
+          "name": "先修水路，封存账册",
+          "target_id": "tide-heart",
+          "description": "完成救援，暂时封存账册，待应急结束再讨论责任。",
+          "stakes": "最终选择；1 格时间，三种处置只能选一种。",
+          "check_kind": "automatic",
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [
+            "ledger",
+            "pipe-map",
+            "clean-water",
+            "valve-plan"
+          ],
+          "time_cost": 1,
+          "on_success": [
+            {
+              "title": "潮心的处置",
+              "narration": "水路恢复，账册暂时封存，责任问题留待之后处理。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "decision"
+                },
+                {
+                  "kind": "flag",
+                  "value": "sealed-record"
+                }
+              ]
+            }
+          ],
+          "on_failure": [],
+          "goal_id": "tide-decision",
+          "completed_flags": [
+            "decision"
+          ]
+        },
+        {
+          "id": "stop",
+          "name": "停止潮心，启用应急水槽",
+          "target_id": "tide-heart",
+          "description": "以已经恢复的净水槽保障居民，停机检查旧水路。",
+          "stakes": "最终选择；1 格时间，三种处置只能选一种。",
+          "check_kind": "automatic",
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [
+            "ledger",
+            "pipe-map",
+            "clean-water",
+            "valve-plan"
+          ],
+          "time_cost": 1,
+          "on_success": [
+            {
+              "title": "潮心的处置",
+              "narration": "潮心安全停机，净水槽供居民取水，稳定管网供水暂时中断。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "decision"
+                },
+                {
+                  "kind": "flag",
+                  "value": "stopped-heart"
+                }
+              ]
+            }
+          ],
+          "on_failure": [],
+          "goal_id": "tide-decision",
+          "completed_flags": [
+            "decision"
+          ]
+        }
+      ],
+      "safe_rest": false
+    }
+  },
+  "characters": {
+    "lu": {
+      "id": "lu",
+      "name": "陆衡",
+      "type": "friendly",
+      "description": "疲惫的巡水官，手背留着铜锈。",
+      "dialogue": "请去旧档案馆核实铜材账册，再到市集找闻笙。低城的水已经涨进人家。",
+      "personality": "愿意承担眼前救援，却害怕自己的签字被公开。不要在账册未核实前承认具体数字。",
+      "clue": "宋芷保存着账册，季安知道潮心的构造。"
+    },
+    "song": {
+      "id": "song",
+      "name": "宋芷",
+      "type": "friendly",
+      "description": "档案管理员，指尖沾满纸灰。",
+      "dialogue": "真正的账页夹在童谣集里。我可以解释旧编号，但需要你亲自核实。最后把潮心处置结果带回来，我会记录它。",
+      "personality": "相信完整记录比完美英雄更可靠。"
+    },
+    "ji": {
+      "id": "ji",
+      "name": "季安",
+      "type": "friendly",
+      "description": "老玻璃匠，左耳听力不好。",
+      "dialogue": "潮心的旧图就在墙上。你若先说明怎样保护低城，我愿意帮你读；否则你可以慢慢抄。",
+      "personality": "不信空话，愿意支持具体可执行的救援方案。"
+    },
+    "wen": {
+      "id": "wen",
+      "name": "闻笙",
+      "type": "friendly",
+      "description": "医师，衣袖被盐水浸出白边。",
+      "dialogue": "请修好蓄水池滤层。追责可以等，病人不能等。",
+      "personality": "先救人，拒绝没有替代供水就毁掉机器。"
+    },
+    "du": {
+      "id": "du",
+      "name": "杜婆",
+      "type": "friendly",
+      "description": "退休机师，腰间挂着一把不再合锁的旧钥匙。",
+      "dialogue": "机器一直听旧命令。你得同时看账册和管线图，才能知道该从哪边泄压。卡住时先卸力，再按顺序重置。",
+      "personality": "理解机器却后悔当年没有反对不公平的水路。"
+    },
+    "crab-a": {
+      "id": "crab-a",
+      "name": "锈甲蟹·钳爪",
+      "type": "hostile",
+      "description": "受盐泥刺激，攻击靠近泄压管的人。",
+      "hp": 8,
+      "ac": 10,
+      "xp_reward": 60,
+      "weapon_id": "rust-claw",
+      "drops": [
+        {
+          "item_id": "tide-knife"
+        },
+        {
+          "item_id": "water-tonic"
+        }
+      ]
+    },
+    "crab-b": {
+      "id": "crab-b",
+      "name": "锈甲蟹·硬壳",
+      "type": "hostile",
+      "description": "受盐泥刺激，攻击靠近泄压管的人。",
+      "hp": 8,
+      "ac": 10,
+      "xp_reward": 60,
+      "weapon_id": "rust-claw"
+    }
+  },
+  "items": {
+    "ledger-copy": {
+      "id": "ledger-copy",
+      "name": "账册摘录",
+      "type": "misc",
+      "description": "包含铜材流向与陆衡签名的准确摘录。"
+    },
+    "filter-record": {
+      "id": "filter-record",
+      "name": "净水记录",
+      "type": "misc",
+      "description": "备用滤槽与盐泥样本的检查记录。"
+    },
+    "water-tonic": {
+      "id": "water-tonic",
+      "name": "医馆药水",
+      "type": "consumable",
+      "effect_type": "heal",
+      "effect_dice": "2d4+2",
+      "description": "闻笙调配的恢复药水。"
+    },
+    "tide-knife": {
+      "id": "tide-knife",
+      "name": "潮工短刀",
+      "type": "weapon",
+      "damage_dice": "1d6",
+      "attack_ability": "dex",
+      "description": "适合切断缠绕水管的旧绳索。"
+    },
+    "rust-claw": {
+      "id": "rust-claw",
+      "name": "锈甲蟹钳",
+      "type": "weapon",
+      "damage_dice": "1d4",
+      "attack_ability": "str"
+    },
+    "copper-badge": {
+      "id": "copper-badge",
+      "name": "巡水铜徽",
+      "type": "misc",
+      "description": "盐河城为这次救援留下的见证。"
+    }
+  },
+  "quests": {
+    "ledger": {
+      "id": "ledger",
+      "name": "空白的账页",
+      "kind": "flags",
+      "giver_id": "lu",
+      "target_scene_id": "archive",
+      "objective": "核实旧档案馆的铜材账册，再向陆衡报告。",
+      "required_flags": [
+        "ledger"
+      ],
+      "ready_text": "铜材调拨数量与签字已核实。",
+      "xp_reward": 80,
+      "rewards": [
+        {
+          "item_id": "water-tonic"
+        }
+      ]
+    },
+    "water": {
+      "id": "water",
+      "name": "先给人干净的水",
+      "kind": "flags",
+      "giver_id": "wen",
+      "target_scene_id": "cistern",
+      "objective": "修复蓄水池滤层或备用水槽，再向闻笙报告。",
+      "required_flags": [
+        "clean-water"
+      ],
+      "ready_text": "可靠的净水已经恢复。",
+      "xp_reward": 100,
+      "rewards": [
+        {
+          "item_id": "water-tonic"
+        }
+      ]
+    },
+    "resolution": {
+      "id": "resolution",
+      "name": "潮心的命令",
+      "kind": "flags",
+      "giver_id": "song",
+      "target_scene_id": "tide-heart",
+      "objective": "取得账册、管线图、净水与泄压方案，选择潮心的处置方式，向宋芷提交记录。",
+      "required_flags": [
+        "decision"
+      ],
+      "ready_text": "潮心的处置已经完成，等待归档。",
+      "xp_reward": 180,
+      "rewards": [
+        {
+          "item_id": "copper-badge"
+        }
+      ]
+    }
+  },
+  "events": {
+    "flood": {
+      "id": "flood",
+      "on": "talk",
+      "target_id": "lu",
+      "title": "水漫低城",
+      "narration": "盐水漫过低城门槛。居民转移到高处，家园已经受损，但救援仍可继续。",
+      "scope": "story",
+      "priority": "critical",
+      "delay": 24,
+      "cancel_flags": [
+        "decision"
+      ],
+      "set_flags": [
+        "flooded"
+      ]
+    }
+  },
+  "endings": [
+    {
+      "id": "after-flood",
+      "title": "退潮后的家园",
+      "description": "救援保住了居民，盐水仍毁坏了许多家园。宋芷把损失与每个人的选择一同写进记录。",
+      "required_flags": [
+        "flooded"
+      ],
+      "completed_quests": [
+        "ledger",
+        "water",
+        "resolution"
+      ]
+    },
+    {
+      "id": "names",
+      "title": "水位线以下的名字",
+      "description": "低城重新得到水，公开账册留下了陆衡的签字。城市第一次把低处的人也写进水机的命令。",
+      "required_flags": [
+        "public-record"
+      ],
+      "completed_quests": [
+        "ledger",
+        "water",
+        "resolution"
+      ]
+    },
+    {
+      "id": "sealed",
+      "title": "暂存的账页",
+      "description": "水位退下，居民渡过难关。封存的账册仍在宋芷柜中，下一次讨论将无法再说没人知道。",
+      "required_flags": [
+        "sealed-record"
+      ],
+      "completed_quests": [
+        "ledger",
+        "water",
+        "resolution"
+      ]
+    },
+    {
+      "id": "still",
+      "title": "停机的清晨",
+      "description": "潮心停了，人们排队领取净水。杜婆带着年轻匠人开始检查旧水路，一座城市学习改变习惯。",
+      "required_flags": [
+        "stopped-heart"
+      ],
+      "completed_quests": [
+        "ledger",
+        "water",
+        "resolution"
+      ]
+    }
+  ]
+}

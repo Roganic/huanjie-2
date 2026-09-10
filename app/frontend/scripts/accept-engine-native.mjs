@@ -1,0 +1,87 @@
+/** Native end-to-end AI/recovery acceptance; creates only independent test adventures. */
+import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+const base = 'http://127.0.0.1:5173';
+const budgetBefore = await (await fetch('http://127.0.0.1:8000/gm/budget')).json();
+const output = await fs.mkdtemp(path.join(os.tmpdir(), 'huanjie-engine-native-'));
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1360, height: 920 } });
+page.setDefaultTimeout(45000);
+const report = { complete: false, checks: [], errors: [], budgetBefore };
+page.on('pageerror', error => report.errors.push(error.message));
+const read = route => page.evaluate(async route => (await fetch('/api' + route, { headers: { 'X-Session-Id': localStorage.getItem('huanjie.session_id') } })).json(), route);
+const idle = () => page.waitForFunction(() => !document.querySelector('.adventure-feedback')?.innerText.includes('正在'));
+try {
+  await page.goto(base);
+  const name = `引擎验收法师${Date.now().toString().slice(-5)}`;
+  await page.getByRole('textbox', { name: '角色名', exact: true }).fill(name);
+  await page.getByRole('combobox', { name: '职业', exact: true }).selectOption('mage');
+  await page.getByRole('combobox', { name: '属性生成', exact: true }).selectOption('random_4d6');
+  await page.getByRole('button', { name: '重新掷骰', exact: true }).click();
+  await page.getByRole('combobox', { name: '属性生成', exact: true }).selectOption('standard_array');
+  await page.getByRole('button', { name: '开始冒险 →', exact: true }).click(); await idle();
+  const fresh = await read('/state'); assert.notEqual(fresh.session_id, 'default'); assert.equal(fresh.actor.character_class, 'mage'); assert.equal(fresh.actor.abilities.int, 15);
+  report.checks.push('独立会话、法师创建、属性生成与法术位');
+  await page.getByRole('button', { name: '角色', exact: true }).click(); await page.getByRole('dialog').getByRole('heading', { name: '法术位', exact: true }).waitFor(); await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '模组', exact: true }).click();
+  await page.getByRole('button').filter({ has: page.getByText('最后一盏渡灯', { exact: true }) }).click();
+  await page.getByRole('button', { name: /以此模组开始新冒险|以最新内容开始新冒险/ }).click();
+  await page.locator('.module-panel-overlay').waitFor({ state: 'detached' }); await idle();
+  if (!process.argv.includes('--no-ai')) {
+  const started = Date.now();
+  await page.getByRole('button', { name: '交谈 · 岑婆', exact: true }).click(); await idle();
+  const first = (await read('/state')).narrative_history.at(-1); assert.ok(first.gm_narration); assert.ok(!first.gm_notice);
+  report.talkMs = Date.now() - started;
+  const input = page.getByRole('textbox', { name: '你的行动', exact: true });
+  await input.fill('岑婆，你刚才说的钟声要怎样敲？先告诉我，我还没有动身。');
+  const followStarted = Date.now(); await page.getByRole('button', { name: '行动 →', exact: true }).click(); await idle();
+  const followed = await read('/state'), latest = followed.narrative_history.at(-1);
+  assert.ok(latest.gm_narration); assert.ok(!latest.gm_notice); assert.equal(followed.scene.id, 'ferry'); assert.ok(latest.resolution_summary.check == null);
+  assert.equal(await input.inputValue(), ''); report.followMs = Date.now() - followStarted; report.prose = latest.gm_narration;
+  report.checks.push('真实 AI 交谈与连续追问，问方法未擅自移动或检定');
+  }
+  await page.getByRole('button', { name: '菜单', exact: true }).click(); await page.getByRole('button', { name: '保存冒险', exact: true }).click(); await idle();
+  const beforeMove = await read('/state'); let committed;
+  await page.route('**/api/commands', async route => {
+    committed = await (await route.fetch()).json(); await route.abort('failed');
+  }, { times: 1 });
+  await page.getByRole('button', { name: '修灯棚', exact: true }).click();
+  await page.getByRole('button', { name: '前往这里 →', exact: true }).click();
+  await page.getByRole('button', { name: '恢复上次结果', exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: '行动 →', exact: true }).isEnabled(), false);
+  await page.getByRole('button', { name: '恢复上次结果', exact: true }).click(); await idle();
+  assert.ok(committed); const recovered = await read('/state'); assert.equal(recovered.scene.id, 'workshop'); assert.equal(recovered.scene.time, beforeMove.scene.time + 1);
+  report.checks.push('提交已结算但响应丢失后，原请求恢复且时间只推进一次');
+  await page.getByRole('button', { name: '菜单', exact: true }).click(); await page.getByRole('button', { name: '读取存档', exact: true }).click();
+  await page.getByRole('dialog', { name: '读取存档', exact: true }).getByRole('button').filter({ hasText: name }).filter({ hasText: '暮潮渡口' }).first().click(); await idle();
+  assert.equal((await read('/state')).scene.id, 'ferry');
+  await page.getByRole('button', { name: '创作', exact: true }).click(); await page.getByRole('dialog', { name: '模组创作工坊', exact: true }).waitFor();
+  await page.getByRole('button', { name: '返回游戏', exact: true }).click();
+  await page.getByRole('button', { name: '浮窗 / 归位', exact: true }).click();
+  const handle = page.getByRole('button', { name: '移动地图', exact: true }); const initial = await page.locator('.adventure-world').boundingBox();
+  await handle.focus(); await page.keyboard.press('ArrowRight');
+  assert.ok((await page.locator('.adventure-world').boundingBox()).x > initial.x);
+  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  assert.equal(await page.locator('.adventure-world').isVisible(), false);
+  await page.getByRole('button', { name: '地图', exact: true }).click();
+  await page.screenshot({ path: path.join(output, 'desktop-ai.png'), fullPage: true });
+  report.checks.push('读取存档恢复原地点，工坊入口与浮窗地图关闭/移动/重新打开');
+  await page.getByRole('button', { name: '背包', exact: true }).click();
+  let release;
+  const hold = new Promise(resolve => { release = resolve; });
+  let unequipCommitted;
+  await page.route('**/api/commands', async route => { unequipCommitted = await (await route.fetch()).json(); await hold; await route.abort('failed'); }, { times: 1 });
+  await page.getByRole('button', { name: '卸下武器', exact: true }).click();
+  await page.getByRole('button', { name: '关闭行囊与成长', exact: true }).click();
+  release();
+  await page.getByRole('button', { name: '恢复上次结果', exact: true }).waitFor();
+  assert.ok(unequipCommitted);
+  await page.getByRole('button', { name: '恢复上次结果', exact: true }).click(); await idle();
+  assert.equal((await read('/inventory')).equipped.weapon, null);
+  report.checks.push('背包操作中关闭面板，丢失的响应仍可从主界面恢复');
+  assert.deepEqual(report.errors, []); report.complete = true;
+} catch (error) { report.failure = String(error); await page.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }).catch(() => {}); process.exitCode = 1; }
+finally { report.budgetAfter = await (await fetch('http://127.0.0.1:8000/gm/budget')).json(); await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify({ output, ...report })); await browser.close(); }

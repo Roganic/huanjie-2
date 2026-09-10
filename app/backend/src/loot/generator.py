@@ -46,6 +46,7 @@ def generate_loot_for_enemy(
     enemy_id: str,
     enemy_name: str,
     random_gen: RandomGenerator | None = None,
+    *, pack=None,
 ) -> LootGained:
     """Generate loot drops for a defeated enemy.
     
@@ -57,10 +58,16 @@ def generate_loot_for_enemy(
     Returns:
         LootGained containing all dropped items
     """
-    loot_table = get_loot_table(enemy_id, enemy_name)
+    if pack is not None:
+        definition = pack.characters.get(enemy_id)
+        drops = [LootItem(item_id=d.item_id, name=pack.items[d.item_id].name, quantity=d.quantity,
+                          probability=d.probability, description=pack.items[d.item_id].description)
+                 for d in definition.drops] if definition else []
+    else:
+        drops = get_loot_table(enemy_id, enemy_name).drops
     dropped_items: list[LootItem] = []
     
-    for item in loot_table.drops:
+    for item in drops:
         if roll_loot_item(item, random_gen):
             # Create a copy of the item for this drop
             dropped_items.append(LootItem(
@@ -81,6 +88,7 @@ def generate_loot_for_enemy(
 def generate_combat_loot(
     defeated_enemies: list[tuple[str, str]],
     random_gen: RandomGenerator | None = None,
+    *, pack=None,
 ) -> GeneratedLoot:
     """Generate loot for all defeated enemies in a combat encounter.
     
@@ -94,7 +102,7 @@ def generate_combat_loot(
     loot_entries: list[LootGained] = []
     
     for enemy_id, enemy_name in defeated_enemies:
-        loot = generate_loot_for_enemy(enemy_id, enemy_name, random_gen)
+        loot = generate_loot_for_enemy(enemy_id, enemy_name, random_gen, pack=pack)
         if loot.items:  # Only add if there are drops
             loot_entries.append(loot)
     

@@ -33,8 +33,11 @@ def _find_item_in_inventory(actor: Actor, item_name: str) -> tuple[int, Inventor
     Returns (index, item) if found, None otherwise.
     """
     item_name_lower = item_name.lower().strip()
+    exact = next(((idx, item) for idx, item in enumerate(actor.inventory) if item.id == item_name), None)
+    if exact is not None:
+        return exact
     for idx, item in enumerate(actor.inventory):
-        if item.name.lower() == item_name_lower:
+        if item.id == item_name or item.name.lower() == item_name_lower:
             return idx, item
     return None
 
@@ -84,10 +87,18 @@ def resolve_item_use(actor: Actor, item_name: str) -> ItemUseResult:
 
     idx, item = found
 
+    if item.type == ItemType.CONSUMABLE and item.effect_type == "cure_poison":
+        if "poisoned" not in actor.conditions:
+            return ItemUseResult(success=False, error_message="当前没有中毒，无需消耗解毒剂。")
+        return ItemUseResult(success=True, action_summary=f"使用{item.name}", narration=f"{actor.name}使用{item.name}，中毒已解除。",
+            effects=[Effect(target=actor.id, field="conditions_remove", delta="poisoned", description="解除中毒"),
+                     Effect(target=actor.id, field="inventory_remove", delta=item.id, description="消耗解毒剂")],
+            item_use=ItemUseDetail(item_name=item.name, effect_type="cure_poison", roll_result=0, hp_change=0))
+
     # Resolve based on item type and identity
-    if _match_healing_potion(item.name):
-        # Healing potion: restore 2d4+2 HP, capped at hp_max
-        total, rolls = roll_damage("2d4+2")
+    if item.type == ItemType.CONSUMABLE and (item.effect_type == "heal" or item.id == "healing_potion"):
+        # The ID fallback migrates old inventory snapshots without effect metadata.
+        total, rolls = roll_damage(item.effect_dice or "2d4+2")
         hp_before = actor.hp
         hp_after = min(actor.hp_max, actor.hp + total)
         hp_change = hp_after - hp_before
@@ -106,7 +117,7 @@ def resolve_item_use(actor: Actor, item_name: str) -> ItemUseResult:
             Effect(
                 target=actor.id,
                 field="inventory_remove",
-                delta=item.name,
+                delta=item.id,
                 description=f"{item.name} 已从背包中移除。",
             )
         )

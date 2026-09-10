@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "id": "event-workshop",
+  "version": "1.0.0",
+  "name": "月桥：事件与裁定示例",
+  "description": "一个可编辑的独立冒险。",
+  "starting_scene_id": "home",
+  "scenes": {
+    "home": {
+      "id": "home",
+      "name": "桥头",
+      "description": "守桥人在此等候。",
+      "aliases": [
+        "月桥桥头"
+      ],
+      "exits": [
+        {
+          "direction": "east",
+          "target_scene_id": "den"
+        }
+      ],
+      "character_ids": [
+        "guide"
+      ],
+      "item_ids": [
+        "blade",
+        "coat"
+      ],
+      "interactions": [],
+      "safe_rest": false,
+      "challenges": [
+        {
+          "id": "decode-note",
+          "name": "解读旧便笺",
+          "description": "尝试辨认便笺上模糊的记号",
+          "target_id": "home",
+          "check_kind": "ability",
+          "skill": "investigation",
+          "ability": null,
+          "dc": 10,
+          "time_cost": 1,
+          "risk": "minor",
+          "stakes": "消耗一格时间；成功获得线索，失败也能等待新的提示",
+          "retry": "once",
+          "retry_delay": 0,
+          "required_flags": [],
+          "on_success": [
+            {
+              "title": "辨认记号",
+              "narration": "便笺上的记号指向现有的巢穴。",
+              "category": "quest",
+              "scope": "scene",
+              "priority": "normal",
+              "clock": "world",
+              "delay": 0,
+              "after_combat": "continue",
+              "required_flags": [],
+              "cancel_flags": [],
+              "scene_id": null,
+              "cancel_on_leave": false,
+              "visible": true,
+              "effects": [
+                {
+                  "kind": "clue",
+                  "target_id": "note-clue",
+                  "value": "便笺指向地图上已有的巢穴。",
+                  "amount": 1
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "线索暂时中断",
+              "narration": "记号仍然难以辨认。",
+              "category": "quest",
+              "scope": "scene",
+              "priority": "normal",
+              "clock": "world",
+              "delay": 0,
+              "after_combat": "continue",
+              "required_flags": [],
+              "cancel_flags": [],
+              "scene_id": null,
+              "cancel_on_leave": false,
+              "visible": true,
+              "effects": []
+            },
+            {
+              "title": "回想便笺",
+              "narration": "经过一番回想，你终于认出了便笺上的记号。",
+              "category": "quest",
+              "scope": "scene",
+              "priority": "normal",
+              "clock": "world",
+              "delay": 2,
+              "after_combat": "continue",
+              "required_flags": [],
+              "cancel_flags": [],
+              "scene_id": null,
+              "cancel_on_leave": false,
+              "visible": true,
+              "effects": [
+                {
+                  "kind": "clue",
+                  "target_id": "note-clue",
+                  "value": "便笺指向地图上已有的巢穴。",
+                  "amount": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "den": {
+      "id": "den",
+      "name": "巢穴",
+      "description": "两只小怪占据了巢穴。",
+      "aliases": [],
+      "exits": [
+        {
+          "direction": "west",
+          "target_scene_id": "home"
+        }
+      ],
+      "character_ids": [
+        "foe",
+        "foe2"
+      ],
+      "item_ids": [],
+      "interactions": [],
+      "safe_rest": false,
+      "challenges": []
+    }
+  },
+  "characters": {
+    "guide": {
+      "id": "guide",
+      "name": "守桥人",
+      "description": "",
+      "type": "friendly",
+      "race": null,
+      "occupation": null,
+      "role": "neutral",
+      "alive": true,
+      "hp": 8,
+      "ac": 10,
+      "abilities": {
+        "str_": 10,
+        "dex": 10,
+        "con": 10,
+        "int_": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": null,
+      "dialogue": "清理巢穴后回来。",
+      "clue": null,
+      "personality": "",
+      "knowledge": [],
+      "xp_reward": 0,
+      "drops": []
+    },
+    "foe": {
+      "id": "foe",
+      "name": "巢穴小怪",
+      "description": "",
+      "type": "hostile",
+      "race": null,
+      "occupation": null,
+      "role": "neutral",
+      "alive": true,
+      "hp": 4,
+      "ac": 10,
+      "abilities": {
+        "str_": 10,
+        "dex": 10,
+        "con": 10,
+        "int_": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "blade",
+      "dialogue": "我暂时没有更多消息。",
+      "clue": null,
+      "personality": "",
+      "knowledge": [],
+      "xp_reward": 30,
+      "drops": [
+        {
+          "item_id": "blade",
+          "quantity": 1,
+          "probability": 1.0
+        }
+      ]
+    },
+    "foe2": {
+      "id": "foe2",
+      "name": "巢穴头目",
+      "description": "",
+      "type": "hostile",
+      "race": null,
+      "occupation": null,
+      "role": "neutral",
+      "alive": true,
+      "hp": 4,
+      "ac": 10,
+      "abilities": {
+        "str_": 10,
+        "dex": 10,
+        "con": 10,
+        "int_": 10,
+        "wis": 10,
+        "cha": 10
+      },
+      "weapon_id": "blade",
+      "dialogue": "我暂时没有更多消息。",
+      "clue": null,
+      "personality": "",
+      "knowledge": [],
+      "xp_reward": 0,
+      "drops": []
+    }
+  },
+  "items": {
+    "blade": {
+      "id": "blade",
+      "name": "月牙刃",
+      "type": "weapon",
+      "damage_dice": "1d6",
+      "attack_ability": "dex",
+      "effect_type": null,
+      "effect_dice": null,
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": ""
+    },
+    "coat": {
+      "id": "coat",
+      "name": "护桥甲",
+      "type": "armor",
+      "damage_dice": null,
+      "attack_ability": null,
+      "effect_type": null,
+      "effect_dice": null,
+      "base_ac": 15,
+      "add_dex_modifier": false,
+      "max_dex_bonus": null,
+      "description": ""
+    },
+    "tea": {
+      "id": "tea",
+      "name": "月光茶",
+      "type": "consumable",
+      "damage_dice": null,
+      "attack_ability": null,
+      "effect_type": "heal",
+      "effect_dice": "1d1+2",
+      "base_ac": null,
+      "add_dex_modifier": true,
+      "max_dex_bonus": null,
+      "description": ""
+    }
+  },
+  "quests": {
+    "bridge": {
+      "id": "bridge",
+      "name": "清理巢穴",
+      "kind": "clear_scene",
+      "giver_id": "guide",
+      "target_scene_id": "den",
+      "rewards": [
+        {
+          "item_id": "tea",
+          "quantity": 2
+        }
+      ],
+      "alternative_flags": [],
+      "alternative_objective": "",
+      "alternative_ready_text": "",
+      "progress_hints": [],
+      "xp_reward": 0
+    }
+  },
+  "events": {
+    "welcome": {
+      "title": "后续事件",
+      "narration": "守桥人递来一杯茶。",
+      "category": "environment",
+      "scope": "scene",
+      "priority": "normal",
+      "clock": "world",
+      "delay": 0,
+      "after_combat": "continue",
+      "required_flags": [],
+      "cancel_flags": [],
+      "scene_id": null,
+      "cancel_on_leave": false,
+      "visible": true,
+      "effects": [],
+      "id": "welcome",
+      "on": "enter_scene",
+      "target_id": "home",
+      "set_flags": [
+        "arrived"
+      ],
+      "grants": [
+        {
+          "item_id": "tea",
+          "quantity": 1
+        }
+      ]
+    },
+    "brief": {
+      "title": "后续事件",
+      "narration": "巢穴中还有头目。",
+      "category": "environment",
+      "scope": "scene",
+      "priority": "normal",
+      "clock": "world",
+      "delay": 0,
+      "after_combat": "continue",
+      "required_flags": [
+        "arrived"
+      ],
+      "cancel_flags": [],
+      "scene_id": null,
+      "cancel_on_leave": false,
+      "visible": true,
+      "effects": [],
+      "id": "brief",
+      "on": "talk",
+      "target_id": "guide",
+      "set_flags": [
+        "briefed"
+      ],
+      "grants": []
+    },
+    "clear": {
+      "title": "后续事件",
+      "narration": "桥路恢复畅通。",
+      "category": "environment",
+      "scope": "scene",
+      "priority": "normal",
+      "clock": "world",
+      "delay": 0,
+      "after_combat": "continue",
+      "required_flags": [
+        "briefed"
+      ],
+      "cancel_flags": [],
+      "scene_id": null,
+      "cancel_on_leave": false,
+      "visible": true,
+      "effects": [],
+      "id": "clear",
+      "on": "scene_cleared",
+      "target_id": "den",
+      "set_flags": [
+        "bridge_open"
+      ],
+      "grants": []
+    }
+  },
+  "endings": [],
+  "supplies": null
+}

@@ -16,8 +16,10 @@ from src.state import reset_state
 
 
 @pytest.fixture(autouse=True)
-def _fresh_state():
+def _fresh_state(_isolated_runtime):
     reset_state()
+    from tests.conftest import create_default_actor
+    create_default_actor()
 
 
 @pytest.fixture

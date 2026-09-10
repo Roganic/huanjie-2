@@ -23,4 +23,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*"]
+include = ["src*", "routes*"]
+
+[tool.setuptools.package-data]
+"src.content" = ["*.json"]

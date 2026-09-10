@@ -77,25 +77,17 @@ interface CombatModeProps {
 }
 
 function useTypewriter(text: string, speed: number = 18) {
-  const [displayed, setDisplayed] = useState("");
-  const indexRef = useRef(0);
-  const textRef = useRef(text);
-
+  const [frame, setFrame] = useState({ text: "", length: 0 });
   useEffect(() => {
-    indexRef.current = 0;
-    textRef.current = text;
-    setDisplayed("");
+    let length = 0;
     const timer = setInterval(() => {
-      indexRef.current += 1;
-      setDisplayed(textRef.current.slice(0, indexRef.current));
-      if (indexRef.current >= textRef.current.length) {
-        clearInterval(timer);
-      }
+      length += 1;
+      setFrame({ text, length });
+      if (length >= text.length) clearInterval(timer);
     }, speed);
     return () => clearInterval(timer);
   }, [text, speed]);
-
-  return displayed;
+  return frame.text === text ? text.slice(0, frame.length) : "";
 }
 
 function TypewriterLine({ text, className }: { text: string; className?: string }) {

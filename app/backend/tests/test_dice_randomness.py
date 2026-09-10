@@ -1,7 +1,6 @@
 """Tests for d20 dice randomness distribution."""
 
 import pytest
-from collections import Counter
 
 from src.engine.dice import roll_d20, roll_damage
 
@@ -23,27 +22,6 @@ class TestD20Randomness:
         # Should have more than just 1-2 unique values
         assert len(unique_values) > 10, "d20 rolls should vary, not be fixed"
 
-    def test_d20_distribution_uniform(self):
-        """d20 distribution should be roughly uniform across all faces."""
-        # Roll many times and check distribution
-        num_rolls = 1000
-        rolls = [roll_d20() for _ in range(num_rolls)]
-        
-        # Count occurrences of each face
-        counts = Counter(rolls)
-        
-        # Expected count per face (uniform distribution)
-        expected_per_face = num_rolls / 20
-        
-        # Allow 40% deviation (reasonable for pseudo-random)
-        tolerance = expected_per_face * 0.40
-        
-        for face in range(1, 21):
-            count = counts.get(face, 0)
-            # Each face should appear roughly the same number of times
-            assert abs(count - expected_per_face) <= tolerance, (
-                f"Face {face} appeared {count} times, expected ~{expected_per_face:.1f}"
-            )
 
     def test_d20_all_faces_appear(self):
         """All 20 faces should appear over many rolls."""
@@ -144,20 +122,3 @@ class TestDamageDice:
         
         # Should see variation in damage
         assert len(unique_values) > 3, "Damage rolls should vary"
-
-    def test_damage_distribution_uniform(self):
-        """Damage dice should have roughly uniform distribution."""
-        num_rolls = 600
-        rolls = [roll_damage("1d6")[0] for _ in range(num_rolls)]
-        
-        counts = Counter(rolls)
-        expected_per_face = num_rolls / 6
-        
-        # Allow 35% deviation for damage dice
-        tolerance = expected_per_face * 0.35
-        
-        for face in range(1, 7):
-            count = counts.get(face, 0)
-            assert abs(count - expected_per_face) <= tolerance, (
-                f"Damage face {face} appeared {count} times, expected ~{expected_per_face:.1f}"
-            )

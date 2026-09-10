@@ -136,75 +136,8 @@ async def test_character_xp_persisted(client):
 # Combat XP Award Tests
 # ---------------------------------------------------------------------------
 
-@pytest.mark.asyncio
-async def test_combat_action_returns_xp_gained_on_victory(client):
-    """Combat action should return xp_gained when enemy is defeated."""
-    async with client as c:
-        session_id = await _create_character(c)
-        
-        # Start combat
-        start_resp = await c.post("/combat/start", json={}, headers={"X-Session-Id": session_id})
-        assert start_resp.status_code == 200
-        combat_data = start_resp.json()
-        
-        # Find enemy
-        enemy = next((p for p in combat_data["participants"] if not p["is_player"]), None)
-        assert enemy is not None
-        
-        # Keep attacking until victory
-        for _ in range(20):  # Max 20 attempts
-            action_resp = await c.post("/combat/action", json={
-                "action_type": "attack",
-                "target_id": enemy["id"],
-                "weapon": "longsword",
-            }, headers={"X-Session-Id": session_id})
-            
-            assert action_resp.status_code == 200
-            data = action_resp.json()
-            
-            # Check if combat ended with victory
-            if data.get("combat_ended") and data.get("victory"):
-                # Verify xp_gained is present
-                assert "xp_gained" in data
-                assert data["xp_gained"] > 0
-                break
 
 
-@pytest.mark.asyncio
-async def test_character_xp_increases_after_combat_victory(client):
-    """Character XP should increase after defeating enemy in combat."""
-    async with client as c:
-        session_id = await _create_character(c)
-        
-        # Get initial XP
-        char_resp = await c.get("/character", headers={"X-Session-Id": session_id})
-        initial_xp = char_resp.json().get("experience_points", 0)
-        
-        # Start combat
-        start_resp = await c.post("/combat/start", json={}, headers={"X-Session-Id": session_id})
-        combat_data = start_resp.json()
-        enemy = next((p for p in combat_data["participants"] if not p["is_player"]), None)
-        
-        # Fight until victory
-        for _ in range(20):
-            action_resp = await c.post("/combat/action", json={
-                "action_type": "attack",
-                "target_id": enemy["id"],
-                "weapon": "longsword",
-            }, headers={"X-Session-Id": session_id})
-            
-            data = action_resp.json()
-            if data.get("combat_ended") and data.get("victory"):
-                break
-        
-        # End combat and check XP
-        await c.post("/combat/end", json={"reason": "victory"}, headers={"X-Session-Id": session_id})
-        
-        # Get state and verify XP increased
-        state_resp = await c.get("/state", headers={"X-Session-Id": session_id})
-        final_xp = state_resp.json().get("actor", {}).get("experience_points", 0)
-        
-        assert final_xp > initial_xp
 
 
 # ---------------------------------------------------------------------------

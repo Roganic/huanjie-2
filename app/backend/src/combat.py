@@ -233,7 +233,7 @@ def resolve_attack_with_equipment(
     result = {
         "hit": hit,
         "attack_roll": roll,
-        "total_attack": roll + attack_modifier if roll not in (1, 20) else roll,
+        "total_attack": roll + attack_modifier,
         "attack_modifier": attack_modifier,
         "target_ac": target_ac,
         "weapon_used": weapon_name,
@@ -248,20 +248,12 @@ def resolve_attack_with_equipment(
         damage_rolls = []
         damage_total = 0
         
-        # Parse damage dice (e.g., "1d8", "2d6")
         if "d" in damage_dice:
-            parts = damage_dice.lower().split("d")
-            num_dice = int(parts[0]) if parts[0] else 1
-            die_size = int(parts[1])
-            
-            for _ in range(num_dice):
-                die_roll = random.randint(1, die_size)
-                damage_rolls.append(die_roll)
-                damage_total += die_roll
+            from .engine.dice import roll_damage
+            damage_total, damage_rolls = roll_damage(damage_dice)
         else:
-            # Fixed damage (e.g., unarmed "1")
-            damage_total = int(damage_dice) if damage_dice.isdigit() else 1
-        
+            damage_total = int(damage_dice)
+
         # Add damage modifier (min 1 damage on hit)
         final_damage = max(1, damage_total + damage_modifier)
         

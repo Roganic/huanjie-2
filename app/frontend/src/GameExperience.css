@@ -1,0 +1,87 @@
+/* Shared game surface: readable story, compact scene, optional reference sheets. */
+.app {
+  --bg: #101820;
+  --bg-panel: #18232d;
+  --bg-input: #202e39;
+  --bg-panel-hover: #2b3b46;
+  --border: #33414b;
+  --border-light: #50616c;
+  --text: #eeeae2;
+  --text-muted: #a7b4bb;
+  --text-secondary: #c0c8cc;
+  --accent: #d6bd89;
+  --accent-light: #ead4a6;
+  grid-template-columns: minmax(0, 1fr);
+  background: var(--bg);
+}
+.app .header { padding: 12px 24px; min-height: 64px; }
+.app .header h1 { color: #e6cc99; font-family: Georgia, 'Songti SC', serif; font-size: 22px; letter-spacing: .18em; }
+.app :is(button, input, summary, select, textarea):focus-visible { outline: 2px solid #d6bd89; outline-offset: 3px; }
+.app summary { cursor: pointer; }
+.app:not(.app-playing) .chat { width: 100%; min-width: 0; overflow-y: auto; background: var(--bg); }
+.app .creation-shell { width: min(920px, 100%); margin: 0 auto; padding: 40px 28px; display: flex; flex-direction: column; gap: 24px; }
+.app .creation-panel { padding: 0; border: 0; box-shadow: none; background: transparent; }
+.app .creation-hero { padding: 0 0 26px; margin-bottom: 0; background: none; border: 0; }
+.app .creation-hero h2 { font-family: Georgia, 'Songti SC', serif; color: #eee3cc; font-size: clamp(25px, 3vw, 34px); line-height: 1.4; margin: 12px 0; }
+.app .creation-hero p { color: var(--text-secondary); font-size: 16px; line-height: 1.7; }
+.app .creation-eyebrow { font-size: 12px; color: #d6bd89; letter-spacing: .18em; }
+.app .creation-form { gap: 22px; }
+.app .creation-field > span, .app .creation-field > label { font-size: 14px; }
+.app .creation-field > input { min-height: 48px; font-size: 16px; background: var(--bg-panel); border-color: var(--border-light); }
+.app .class-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.app .class-card { padding: 20px; min-height: 132px; background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 10px; box-shadow: none; text-align: left; }
+.app .class-card.selected { background: #2a3030; border-color: #d6bd89; box-shadow: inset 0 3px #d6bd89; }
+.app .class-card-title { color: #eee3cc; font-size: 19px; }
+.app .class-card-body { font-size: 14px; line-height: 1.7; color: var(--text-secondary); }
+.creation-advanced, .app .creation-preview { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; }
+.creation-advanced > summary, .app .creation-preview > summary { font-size: 14px; color: var(--text-secondary); }
+.creation-advanced > summary span { float: right; color: var(--text-muted); font-size: 12px; }
+.creation-advanced[open] > summary, .app .creation-preview[open] > summary { margin-bottom: 20px; }
+.creation-advanced > .creation-field + .creation-field { margin-top: 20px; }
+.app .creation-preview:not([open]) > :not(summary) { display: none; }
+.app .creation-submit { min-height: 50px; border-radius: 8px; background: #d6bd89; color: #242117; box-shadow: none; font-size: 16px; }
+.app .creation-submit:hover:not(:disabled) { background: #ead4a6; transform: none; }
+.app-playing .header-button, .app-playing .game-menu-content button { font-size: 14px; }
+.app-playing .narrative-text { font-size: 16px; line-height: 1.95; }
+.app-playing .message-speaker, .app-playing .narrative-history-title { font-size: 12px; }
+.app-playing .narrative-facts, .app-playing .message-result { font-size: 13px; }
+.app-playing .story-consequence { font-size: 14px; }
+.app-playing .exploration-objective, .app-playing .exploration-guide button, .app-playing .scene-content, .app-playing .scene-content h3 { font-size: 14px; }
+.app-playing .scene-intro { font-size: 16px; }
+.app-playing .exploration-object p { font-size: 13px; }
+.app-playing .exploration-location strong { font-family: Georgia, 'Songti SC', serif; font-size: 26px; color: #eee3cc; }
+.action-composer { flex-shrink: 0; border-top: 1px solid var(--border); background: var(--bg-panel); }
+.composer-caption { display: flex; justify-content: space-between; gap: 10px; padding: 10px 24px 0; color: var(--text-muted); font-size: 12px; }
+.app-playing .action-composer .input-bar { border: 0; padding-top: 8px; background: transparent; align-items: stretch; }
+.action-composer textarea { resize: none; flex: 1; min-width: 0; min-height: 68px; max-height: 160px; background: var(--bg); color: var(--text); border: 1px solid var(--border-light); border-radius: 8px; font: inherit; font-size: 16px; line-height: 1.6; padding: 10px 14px; }
+.action-composer textarea::placeholder { color: var(--text-muted); }
+.app-playing .action-composer button { font-size: 14px; min-width: 94px; }
+@media (max-width: 700px) {
+  .app .header { padding: 10px 12px; }
+  .app .creation-shell { padding: 28px 18px; }
+  .app .class-grid { grid-template-columns: 1fr; gap: 8px; }
+  .app .class-card { min-height: 0; padding: 14px 16px; }
+  .app .class-card-title { font-size: 17px; }
+  .app .creation-hero { padding-bottom: 20px; }
+  .app-playing .exploration-location strong { font-size: 22px; }
+  .app-playing .scene-intro { display: block; font-size: 14px; max-height: 3.5em; overflow-y: auto; }
+  .app-playing .exploration-guide button { font-size: 14px; }
+  .app-playing .scene-content { max-height: 22dvh; }
+  .composer-caption { padding-inline: 12px; }
+  .composer-caption > span:last-child { display: none; }
+  .app-playing .action-composer button { min-width: 72px; }
+  .action-composer textarea { min-height: 58px; padding: 8px 10px; }
+}
+@media (max-height: 700px) {
+  .app-playing .chat { overflow-y: auto; }
+  .app-playing .narrative-history { flex-shrink: 0; min-height: 180px; }
+}
+.exploration-objects:empty, .exploration-actions:empty { display: none; }
+.adventure-conclusion { flex-shrink: 0; padding: 30px 28px; border-bottom: 1px solid #8c7852; background: #242b2b; max-height: 48dvh; overflow: auto; }
+.adventure-conclusion > span { color: #d6bd89; font-size: 12px; letter-spacing: .16em; }
+.adventure-conclusion h2 { font-family: Georgia, 'Songti SC', serif; color: #f0dbb3; font-size: 28px; margin: 12px 0; }
+.adventure-conclusion p { font-size: 16px; line-height: 1.9; color: var(--text); }
+.adventure-conclusion > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.adventure-conclusion button { font: inherit; font-size: 14px; color: var(--text); padding: 10px 14px; border: 1px solid #8c7852; border-radius: 7px; background: transparent; cursor: pointer; }
+.adventure-conclusion button:hover { background: #3b4037; }
+@media (max-width: 700px) { .adventure-conclusion { padding: 22px 16px; } }

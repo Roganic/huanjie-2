@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, Literal
 
 from pydantic import BaseModel, Field, validator
 
@@ -47,6 +47,8 @@ class ActionRequest(BaseModel):
     actor: str = Field(..., description="Who is acting")
     intent: str = Field(..., description="What the actor wants to achieve")
     approach: str = Field(..., description="How they attempt it")
+    interaction_id: Optional[str] = Field(default=None, description="Authored interaction in the current scene")
+    request_id: Optional[str] = Field(default=None, min_length=1, max_length=128)
     provider: Optional[str] = Field(
         default=None,
         description="Narration provider override (e.g. kimi/openai)",
@@ -204,6 +206,7 @@ class ModuleEvent(BaseModel):
 
 
 class ActionResponse(BaseModel):
+    action_status: Literal["executed", "blocked", "read_only", "clarification"] = "executed"
     action_summary: str
     resolution_type: ResolutionType
     check: Optional[CheckDetail] = None

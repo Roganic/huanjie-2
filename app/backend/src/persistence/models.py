@@ -43,6 +43,9 @@ class SaveData(BaseModel):
     combat_state: CombatStateData | None = None
     action_history: list[NarrativeHistoryEntry] = Field(default_factory=list)
     scene_history: list[SceneHistoryEntry] = Field(default_factory=list)
+    # Version 2 preserves all session fields, including explored/picked-up state.
+    session_snapshot: dict[str, Any] | None = None
+    combat_snapshot: dict[str, Any] | None = None
 
 
 class SaveSummary(BaseModel):

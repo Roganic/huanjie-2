@@ -7,8 +7,8 @@ These tests validate the acceptance criteria:
 4. POST /load/{save_id} restores explored_nodes (map state)
 5. POST /save during combat returns 400 with "战斗中无法存档"
 
-The tests use the save_load module directly (no HTTP layer) to avoid the
-pre-existing npc/__init__.py import issue that blocks conftest.py from loading.
+These cover the legacy standalone save-file adapter. Live API snapshot coverage
+is in test_module_system_acceptance.py and test_world_encounters.py.
 """
 
 from __future__ import annotations
@@ -21,31 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Pre-import fix: patch the broken npc/__init__.py before any src.* import.
-# npc.py does not define find_target_npc / is_npc_interaction, so we inject
-# stubs so that npc/__init__.py can load without AttributeError.
-# ---------------------------------------------------------------------------
-import importlib.util
-import os as _os
-
-_npc_py_path = _os.path.join(_os.path.dirname(__file__), "..", "src", "npc.py")
-_npc_spec = importlib.util.spec_from_file_location("src.npc_core_stub", _npc_py_path)
-_npc_core_stub = importlib.util.module_from_spec(_npc_spec)
-_npc_spec.loader.exec_module(_npc_core_stub)
-
-# Inject missing functions if not present
-if not hasattr(_npc_core_stub, "find_target_npc"):
-    _npc_core_stub.find_target_npc = MagicMock(return_value=None)
-if not hasattr(_npc_core_stub, "is_npc_interaction"):
-    _npc_core_stub.is_npc_interaction = MagicMock(return_value=False)
-
-# Register the patched module so npc/__init__.py finds it as '_npc_core'
-sys.modules["_npc_core"] = _npc_core_stub  # type: ignore[assignment]
-
-# ---------------------------------------------------------------------------
-# Now we can safely import src modules
-# ---------------------------------------------------------------------------
+# NPC imports now use the canonical package directly.
 from src.models.state import (  # noqa: E402
     AbilityScores,
     Actor,

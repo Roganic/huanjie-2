@@ -57,15 +57,9 @@ class NPCDialogueState(BaseModel):
         return self.dialogue_count == 0
 
 
-# In-memory storage for NPC dialogue states (mirrors session storage pattern)
-_npc_dialogue_states: dict[str, dict[str, NPCDialogueState]] = {}
-
-
 def _get_session_npc_states(session_id: str) -> dict[str, NPCDialogueState]:
-    """Get or create the NPC dialogue states dict for a session."""
-    if session_id not in _npc_dialogue_states:
-        _npc_dialogue_states[session_id] = {}
-    return _npc_dialogue_states[session_id]
+    from .. import state
+    return state._get_session(session_id, create_if_missing=True).npc_dialogue_states
 
 
 def record_dialogue(
@@ -87,17 +81,13 @@ def record_dialogue(
     Returns:
         The updated dialogue state for this NPC
     """
-    session_states = _get_session_npc_states(session_id)
-    
-    if npc_id not in session_states:
-        session_states[npc_id] = NPCDialogueState(
-            npc_id=npc_id,
-            npc_name=npc_name,
-        )
-    
-    state = session_states[npc_id]
-    state.add_entry(speaker, content)
-    return state
+    from .. import state as session_store
+    with session_store._SESSION_LOCK:
+        session = session_store._get_session(session_id, create_if_missing=True)
+        dialogue = session.npc_dialogue_states.setdefault(npc_id, NPCDialogueState(npc_id=npc_id, npc_name=npc_name))
+        dialogue.add_entry(speaker, content)
+        session_store._save_session(session)
+        return dialogue
 
 
 def get_dialogue_history(
@@ -203,8 +193,11 @@ def reset_session_npc_states(session_id: str) -> None:
     
     Called when a session is reset.
     """
-    if session_id in _npc_dialogue_states:
-        del _npc_dialogue_states[session_id]
+    from .. import state
+    with state._SESSION_LOCK:
+        session = state._get_session(session_id, create_if_missing=True)
+        session.npc_dialogue_states.clear()
+        state._save_session(session)
 
 
 def get_all_npc_dialogue_counts(

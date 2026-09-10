@@ -1,0 +1,1961 @@
+{
+  "$defs": {
+    "AbilityScores": {
+      "properties": {
+        "str": {
+          "title": "Str",
+          "type": "integer"
+        },
+        "dex": {
+          "title": "Dex",
+          "type": "integer"
+        },
+        "con": {
+          "title": "Con",
+          "type": "integer"
+        },
+        "int": {
+          "title": "Int",
+          "type": "integer"
+        },
+        "wis": {
+          "title": "Wis",
+          "type": "integer"
+        },
+        "cha": {
+          "title": "Cha",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "str",
+        "dex",
+        "con",
+        "int",
+        "wis",
+        "cha"
+      ],
+      "title": "AbilityScores",
+      "type": "object"
+    },
+    "ApproachDefinition": {
+      "additionalProperties": false,
+      "description": "An author-approved method. The host selects its ID, never a difficulty.",
+      "properties": {
+        "id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "skill": {
+          "enum": [
+            "acrobatics",
+            "animal_handling",
+            "arcana",
+            "athletics",
+            "deception",
+            "history",
+            "insight",
+            "intimidation",
+            "investigation",
+            "medicine",
+            "nature",
+            "perception",
+            "performance",
+            "persuasion",
+            "religion",
+            "sleight_of_hand",
+            "stealth",
+            "survival"
+          ],
+          "title": "Skill",
+          "type": "string"
+        },
+        "dc": {
+          "default": 15,
+          "maximum": 30,
+          "minimum": 5,
+          "title": "Dc",
+          "type": "integer"
+        },
+        "required_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Flags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "skill"
+      ],
+      "title": "ApproachDefinition",
+      "type": "object"
+    },
+    "ArtSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "builtin": {
+          "anyOf": [
+            {
+              "enum": [
+                "tavern",
+                "wilds",
+                "harbor",
+                "ruins",
+                "traveller",
+                "village-square",
+                "marcus",
+                "ayla",
+                "hooded-merchant",
+                "dungeon-gate",
+                "dungeon-passage",
+                "ancient-temple",
+                "ancient-vault"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Builtin"
+        },
+        "asset_id": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset Id"
+        },
+        "fallback": {
+          "anyOf": [
+            {
+              "enum": [
+                "tavern",
+                "wilds",
+                "harbor",
+                "ruins",
+                "abstract",
+                "portrait",
+                "traveller",
+                "weapon",
+                "armor",
+                "potion",
+                "item"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fallback"
+        },
+        "focal_x": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Focal X",
+          "type": "integer"
+        },
+        "focal_y": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Focal Y",
+          "type": "integer"
+        }
+      },
+      "title": "ArtSlot",
+      "type": "object"
+    },
+    "ChallengeDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "target_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Target Id",
+          "type": "string"
+        },
+        "check_kind": {
+          "default": "ability",
+          "enum": [
+            "automatic",
+            "ability",
+            "saving_throw"
+          ],
+          "title": "Check Kind",
+          "type": "string"
+        },
+        "skill": {
+          "anyOf": [
+            {
+              "enum": [
+                "acrobatics",
+                "animal_handling",
+                "arcana",
+                "athletics",
+                "deception",
+                "history",
+                "insight",
+                "intimidation",
+                "investigation",
+                "medicine",
+                "nature",
+                "perception",
+                "performance",
+                "persuasion",
+                "religion",
+                "sleight_of_hand",
+                "stealth",
+                "survival"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill"
+        },
+        "ability": {
+          "anyOf": [
+            {
+              "enum": [
+                "str",
+                "dex",
+                "con",
+                "int",
+                "wis",
+                "cha"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ability"
+        },
+        "dc": {
+          "default": 15,
+          "maximum": 30,
+          "minimum": 5,
+          "title": "Dc",
+          "type": "integer"
+        },
+        "time_cost": {
+          "default": 1,
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Time Cost",
+          "type": "integer"
+        },
+        "risk": {
+          "default": "minor",
+          "enum": [
+            "minor",
+            "moderate",
+            "major"
+          ],
+          "title": "Risk",
+          "type": "string"
+        },
+        "stakes": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Stakes",
+          "type": "string"
+        },
+        "retry": {
+          "default": "after_change",
+          "enum": [
+            "once",
+            "after_change",
+            "with_cost"
+          ],
+          "title": "Retry",
+          "type": "string"
+        },
+        "retry_delay": {
+          "default": 0,
+          "description": "大于 0 时，经过这些场景时间格也可重试",
+          "maximum": 60,
+          "minimum": 0,
+          "title": "Retry Delay",
+          "type": "integer"
+        },
+        "required_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Flags",
+          "type": "array"
+        },
+        "goal_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Goal Id"
+        },
+        "retry_flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retry Flags"
+        },
+        "completed_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Completed Flags",
+          "type": "array"
+        },
+        "complete_on_success": {
+          "default": false,
+          "title": "Complete On Success",
+          "type": "boolean"
+        },
+        "approaches": {
+          "items": {
+            "$ref": "#/$defs/ApproachDefinition"
+          },
+          "maxItems": 6,
+          "title": "Approaches",
+          "type": "array"
+        },
+        "consequences": {
+          "items": {
+            "$ref": "#/$defs/ConsequenceOption"
+          },
+          "maxItems": 4,
+          "title": "Consequences",
+          "type": "array"
+        },
+        "on_success": {
+          "items": {
+            "$ref": "#/$defs/EventSpec"
+          },
+          "maxItems": 4,
+          "title": "On Success",
+          "type": "array"
+        },
+        "on_failure": {
+          "items": {
+            "$ref": "#/$defs/EventSpec"
+          },
+          "maxItems": 4,
+          "title": "On Failure",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "target_id",
+        "stakes"
+      ],
+      "title": "ChallengeDefinition",
+      "type": "object"
+    },
+    "CharacterDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "type": {
+          "default": "neutral",
+          "enum": [
+            "friendly",
+            "neutral",
+            "hostile"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "race": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Race"
+        },
+        "occupation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Occupation"
+        },
+        "role": {
+          "default": "neutral",
+          "title": "Role",
+          "type": "string"
+        },
+        "alive": {
+          "default": true,
+          "title": "Alive",
+          "type": "boolean"
+        },
+        "hp": {
+          "default": 8,
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Hp",
+          "type": "integer"
+        },
+        "ac": {
+          "default": 10,
+          "maximum": 40,
+          "minimum": 1,
+          "title": "Ac",
+          "type": "integer"
+        },
+        "abilities": {
+          "$ref": "#/$defs/AbilityScores"
+        },
+        "weapon_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weapon Id"
+        },
+        "dialogue": {
+          "default": "我暂时没有更多消息。",
+          "title": "Dialogue",
+          "type": "string"
+        },
+        "clue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clue"
+        },
+        "personality": {
+          "default": "",
+          "maxLength": 2000,
+          "title": "Personality",
+          "type": "string"
+        },
+        "knowledge": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeDefinition"
+          },
+          "title": "Knowledge",
+          "type": "array"
+        },
+        "xp_reward": {
+          "default": 0,
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Xp Reward",
+          "type": "integer"
+        },
+        "drops": {
+          "items": {
+            "$ref": "#/$defs/DropDefinition"
+          },
+          "title": "Drops",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "CharacterDefinition",
+      "type": "object"
+    },
+    "ConsequenceOption": {
+      "additionalProperties": false,
+      "description": "A complete success/failure pair, chosen before the roll.",
+      "properties": {
+        "id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "stakes": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Stakes",
+          "type": "string"
+        },
+        "required_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Flags",
+          "type": "array"
+        },
+        "on_success": {
+          "items": {
+            "$ref": "#/$defs/EventSpec"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "On Success",
+          "type": "array"
+        },
+        "on_failure": {
+          "items": {
+            "$ref": "#/$defs/EventSpec"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "On Failure",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "stakes",
+        "on_success",
+        "on_failure"
+      ],
+      "title": "ConsequenceOption",
+      "type": "object"
+    },
+    "DropDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "title": "Item Id",
+          "type": "string"
+        },
+        "quantity": {
+          "default": 1,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "probability": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Probability",
+          "type": "number"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "title": "DropDefinition",
+      "type": "object"
+    },
+    "EndingDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "required_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Flags",
+          "type": "array"
+        },
+        "forbidden_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Forbidden Flags",
+          "type": "array"
+        },
+        "completed_quests": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Completed Quests",
+          "type": "array"
+        },
+        "failed_quests": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Failed Quests",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description"
+      ],
+      "title": "EndingDefinition",
+      "type": "object"
+    },
+    "EventDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "default": "后续事件",
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "narration": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Narration",
+          "type": "string"
+        },
+        "category": {
+          "default": "environment",
+          "enum": [
+            "social",
+            "environment",
+            "quest",
+            "combat"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "scope": {
+          "default": "scene",
+          "enum": [
+            "personal",
+            "scene",
+            "region",
+            "story"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "priority": {
+          "default": "normal",
+          "enum": [
+            "normal",
+            "urgent",
+            "critical"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "clock": {
+          "default": "world",
+          "enum": [
+            "world",
+            "combat"
+          ],
+          "title": "Clock",
+          "type": "string"
+        },
+        "delay": {
+          "default": 0,
+          "description": "world 为场景时间格，combat 为完整战斗轮",
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Delay",
+          "type": "integer"
+        },
+        "after_combat": {
+          "default": "continue",
+          "enum": [
+            "continue",
+            "cancel"
+          ],
+          "title": "After Combat",
+          "type": "string"
+        },
+        "required_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Flags",
+          "type": "array"
+        },
+        "wait_for_conditions": {
+          "default": false,
+          "title": "Wait For Conditions",
+          "type": "boolean"
+        },
+        "cancel_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Cancel Flags",
+          "type": "array"
+        },
+        "scene_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scene Id"
+        },
+        "cancel_on_leave": {
+          "default": false,
+          "title": "Cancel On Leave",
+          "type": "boolean"
+        },
+        "visible": {
+          "default": true,
+          "title": "Visible",
+          "type": "boolean"
+        },
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/EventEffect"
+          },
+          "maxItems": 12,
+          "title": "Effects",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "on": {
+          "enum": [
+            "enter_scene",
+            "talk",
+            "scene_cleared",
+            "interact"
+          ],
+          "title": "On",
+          "type": "string"
+        },
+        "target_id": {
+          "title": "Target Id",
+          "type": "string"
+        },
+        "set_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Set Flags",
+          "type": "array"
+        },
+        "grants": {
+          "items": {
+            "$ref": "#/$defs/ItemGrant"
+          },
+          "title": "Grants",
+          "type": "array"
+        }
+      },
+      "required": [
+        "narration",
+        "id",
+        "on",
+        "target_id"
+      ],
+      "title": "EventDefinition",
+      "type": "object"
+    },
+    "EventEffect": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "relationship",
+            "damage",
+            "condition",
+            "flag",
+            "item",
+            "clue",
+            "encounter"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "target_id": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Target Id",
+          "type": "string"
+        },
+        "value": {
+          "default": "",
+          "maxLength": 2000,
+          "title": "Value",
+          "type": "string"
+        },
+        "amount": {
+          "default": 1,
+          "maximum": 100,
+          "minimum": -100,
+          "title": "Amount",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "EventEffect",
+      "type": "object"
+    },
+    "EventSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "default": "后续事件",
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "narration": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Narration",
+          "type": "string"
+        },
+        "category": {
+          "default": "environment",
+          "enum": [
+            "social",
+            "environment",
+            "quest",
+            "combat"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "scope": {
+          "default": "scene",
+          "enum": [
+            "personal",
+            "scene",
+            "region",
+            "story"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "priority": {
+          "default": "normal",
+          "enum": [
+            "normal",
+            "urgent",
+            "critical"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "clock": {
+          "default": "world",
+          "enum": [
+            "world",
+            "combat"
+          ],
+          "title": "Clock",
+          "type": "string"
+        },
+        "delay": {
+          "default": 0,
+          "description": "world 为场景时间格，combat 为完整战斗轮",
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Delay",
+          "type": "integer"
+        },
+        "after_combat": {
+          "default": "continue",
+          "enum": [
+            "continue",
+            "cancel"
+          ],
+          "title": "After Combat",
+          "type": "string"
+        },
+        "required_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Flags",
+          "type": "array"
+        },
+        "wait_for_conditions": {
+          "default": false,
+          "title": "Wait For Conditions",
+          "type": "boolean"
+        },
+        "cancel_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Cancel Flags",
+          "type": "array"
+        },
+        "scene_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scene Id"
+        },
+        "cancel_on_leave": {
+          "default": false,
+          "title": "Cancel On Leave",
+          "type": "boolean"
+        },
+        "visible": {
+          "default": true,
+          "title": "Visible",
+          "type": "boolean"
+        },
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/EventEffect"
+          },
+          "maxItems": 12,
+          "title": "Effects",
+          "type": "array"
+        }
+      },
+      "required": [
+        "narration"
+      ],
+      "title": "EventSpec",
+      "type": "object"
+    },
+    "ExitDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "title": "Direction",
+          "type": "string"
+        },
+        "target_scene_id": {
+          "title": "Target Scene Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "direction",
+        "target_scene_id"
+      ],
+      "title": "ExitDefinition",
+      "type": "object"
+    },
+    "InteractionDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "action_name": {
+          "minLength": 1,
+          "title": "Action Name",
+          "type": "string"
+        },
+        "time_cost": {
+          "default": 1,
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Time Cost",
+          "type": "integer"
+        },
+        "skill": {
+          "anyOf": [
+            {
+              "enum": [
+                "acrobatics",
+                "animal_handling",
+                "arcana",
+                "athletics",
+                "deception",
+                "history",
+                "insight",
+                "intimidation",
+                "investigation",
+                "medicine",
+                "nature",
+                "perception",
+                "performance",
+                "persuasion",
+                "religion",
+                "sleight_of_hand",
+                "stealth",
+                "survival"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skill"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "required_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Flags",
+          "type": "array"
+        },
+        "set_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Set Flags",
+          "type": "array"
+        },
+        "locked_reason": {
+          "default": "请先寻找相关线索。",
+          "title": "Locked Reason",
+          "type": "string"
+        },
+        "advantage_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Advantage Flags",
+          "type": "array"
+        },
+        "success_condition": {
+          "anyOf": [
+            {
+              "enum": [
+                "poisoned",
+                "inspired"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Success Condition"
+        },
+        "failure_condition": {
+          "anyOf": [
+            {
+              "enum": [
+                "poisoned",
+                "inspired"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Condition"
+        },
+        "dc": {
+          "default": 10,
+          "maximum": 40,
+          "minimum": 1,
+          "title": "Dc",
+          "type": "integer"
+        },
+        "success_narrative": {
+          "default": "你成功了。",
+          "title": "Success Narrative",
+          "type": "string"
+        },
+        "failure_narrative": {
+          "default": "这次尝试没有成功。",
+          "title": "Failure Narrative",
+          "type": "string"
+        },
+        "failure_damage": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Failure Damage",
+          "type": "integer"
+        },
+        "reward_item": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reward Item"
+        },
+        "reward_info": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reward Info"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "action_name"
+      ],
+      "title": "InteractionDefinition",
+      "type": "object"
+    },
+    "ItemDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/ItemType"
+        },
+        "damage_dice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Damage Dice"
+        },
+        "attack_ability": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attack Ability"
+        },
+        "effect_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "heal",
+                "cure_poison"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect Type"
+        },
+        "effect_dice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect Dice"
+        },
+        "base_ac": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Ac"
+        },
+        "add_dex_modifier": {
+          "default": true,
+          "title": "Add Dex Modifier",
+          "type": "boolean"
+        },
+        "max_dex_bonus": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Dex Bonus"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "type"
+      ],
+      "title": "ItemDefinition",
+      "type": "object"
+    },
+    "ItemGrant": {
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "title": "Item Id",
+          "type": "string"
+        },
+        "quantity": {
+          "default": 1,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "title": "ItemGrant",
+      "type": "object"
+    },
+    "ItemType": {
+      "description": "Types of items.",
+      "enum": [
+        "weapon",
+        "armor",
+        "consumable",
+        "misc"
+      ],
+      "title": "ItemType",
+      "type": "string"
+    },
+    "KnowledgeDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "required_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Flags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ],
+      "title": "KnowledgeDefinition",
+      "type": "object"
+    },
+    "MapPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "maximum": 920,
+          "minimum": 80,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 540,
+          "minimum": 80,
+          "title": "Y",
+          "type": "integer"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 12,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "MapPoint",
+      "type": "object"
+    },
+    "ModuleVisuals": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "theme": {
+          "$ref": "#/$defs/ThemePack"
+        },
+        "assets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/VisualAsset"
+          },
+          "maxProperties": 60,
+          "title": "Assets",
+          "type": "object"
+        },
+        "scenes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ArtSlot"
+          },
+          "title": "Scenes",
+          "type": "object"
+        },
+        "characters": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ArtSlot"
+          },
+          "title": "Characters",
+          "type": "object"
+        },
+        "items": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ArtSlot"
+          },
+          "title": "Items",
+          "type": "object"
+        },
+        "map": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ArtSlot"
+          },
+          "title": "Map",
+          "type": "object"
+        },
+        "map_layout": {
+          "additionalProperties": {
+            "$ref": "#/$defs/MapPoint"
+          },
+          "title": "Map Layout",
+          "type": "object"
+        },
+        "player": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtSlot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cover": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtSlot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "ModuleVisuals",
+      "type": "object"
+    },
+    "ProgressHint": {
+      "additionalProperties": false,
+      "properties": {
+        "required_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Flags",
+          "type": "array"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "ProgressHint",
+      "type": "object"
+    },
+    "QuestDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "kind": {
+          "default": "clear_scene",
+          "enum": [
+            "clear_scene",
+            "flags"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "giver_id": {
+          "title": "Giver Id",
+          "type": "string"
+        },
+        "target_scene_id": {
+          "title": "Target Scene Id",
+          "type": "string"
+        },
+        "objective": {
+          "default": "",
+          "title": "Objective",
+          "type": "string"
+        },
+        "required_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Flags",
+          "type": "array"
+        },
+        "ready_text": {
+          "default": "",
+          "title": "Ready Text",
+          "type": "string"
+        },
+        "rewards": {
+          "items": {
+            "$ref": "#/$defs/ItemGrant"
+          },
+          "title": "Rewards",
+          "type": "array"
+        },
+        "alternative_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Alternative Flags",
+          "type": "array"
+        },
+        "alternative_objective": {
+          "default": "",
+          "title": "Alternative Objective",
+          "type": "string"
+        },
+        "alternative_ready_text": {
+          "default": "",
+          "title": "Alternative Ready Text",
+          "type": "string"
+        },
+        "progress_hints": {
+          "items": {
+            "$ref": "#/$defs/ProgressHint"
+          },
+          "title": "Progress Hints",
+          "type": "array"
+        },
+        "xp_reward": {
+          "default": 0,
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Xp Reward",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "giver_id",
+        "target_scene_id"
+      ],
+      "title": "QuestDefinition",
+      "type": "object"
+    },
+    "SceneDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "exits": {
+          "items": {
+            "$ref": "#/$defs/ExitDefinition"
+          },
+          "title": "Exits",
+          "type": "array"
+        },
+        "character_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Character Ids",
+          "type": "array"
+        },
+        "item_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Item Ids",
+          "type": "array"
+        },
+        "interactions": {
+          "items": {
+            "$ref": "#/$defs/InteractionDefinition"
+          },
+          "title": "Interactions",
+          "type": "array"
+        },
+        "safe_rest": {
+          "default": false,
+          "title": "Safe Rest",
+          "type": "boolean"
+        },
+        "challenges": {
+          "items": {
+            "$ref": "#/$defs/ChallengeDefinition"
+          },
+          "title": "Challenges",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ],
+      "title": "SceneDefinition",
+      "type": "object"
+    },
+    "SupplyPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "title": "Item Id",
+          "type": "string"
+        },
+        "starting_quantity": {
+          "default": 2,
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Starting Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "title": "SupplyPolicy",
+      "type": "object"
+    },
+    "ThemePack": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "id": {
+          "default": "western-journal",
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "default": "西境旅行志",
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "preset": {
+          "default": "parchment",
+          "enum": [
+            "parchment",
+            "midnight",
+            "neutral"
+          ],
+          "title": "Preset",
+          "type": "string"
+        },
+        "heading_font": {
+          "default": "serif",
+          "enum": [
+            "serif",
+            "sans"
+          ],
+          "title": "Heading Font",
+          "type": "string"
+        },
+        "frame": {
+          "default": "ornate",
+          "enum": [
+            "ornate",
+            "simple"
+          ],
+          "title": "Frame",
+          "type": "string"
+        },
+        "illustrated": {
+          "default": true,
+          "title": "Illustrated",
+          "type": "boolean"
+        },
+        "assets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/VisualAsset"
+          },
+          "maxProperties": 30,
+          "title": "Assets",
+          "type": "object"
+        },
+        "defaults": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ArtSlot"
+          },
+          "maxProperties": 11,
+          "title": "Defaults",
+          "type": "object"
+        }
+      },
+      "title": "ThemePack",
+      "type": "object"
+    },
+    "VisualAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 120,
+          "title": "Name",
+          "type": "string"
+        },
+        "source": {
+          "default": "upload",
+          "enum": [
+            "upload",
+            "generated"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "data": {
+          "maxLength": 240000,
+          "title": "Data",
+          "type": "string"
+        },
+        "generation_id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Generation Id"
+        }
+      },
+      "required": [
+        "name",
+        "data"
+      ],
+      "title": "VisualAsset",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "id": {
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$",
+      "title": "Id",
+      "type": "string"
+    },
+    "version": {
+      "maxLength": 32,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "starting_scene_id": {
+      "title": "Starting Scene Id",
+      "type": "string"
+    },
+    "scenes": {
+      "additionalProperties": {
+        "$ref": "#/$defs/SceneDefinition"
+      },
+      "title": "Scenes",
+      "type": "object"
+    },
+    "characters": {
+      "additionalProperties": {
+        "$ref": "#/$defs/CharacterDefinition"
+      },
+      "title": "Characters",
+      "type": "object"
+    },
+    "items": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ItemDefinition"
+      },
+      "title": "Items",
+      "type": "object"
+    },
+    "quests": {
+      "additionalProperties": {
+        "$ref": "#/$defs/QuestDefinition"
+      },
+      "title": "Quests",
+      "type": "object"
+    },
+    "events": {
+      "additionalProperties": {
+        "$ref": "#/$defs/EventDefinition"
+      },
+      "title": "Events",
+      "type": "object"
+    },
+    "endings": {
+      "items": {
+        "$ref": "#/$defs/EndingDefinition"
+      },
+      "title": "Endings",
+      "type": "array"
+    },
+    "supplies": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SupplyPolicy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "visuals": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModuleVisuals"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "name",
+    "description",
+    "starting_scene_id",
+    "scenes",
+    "characters",
+    "items"
+  ],
+  "title": "ModulePack",
+  "type": "object"
+}

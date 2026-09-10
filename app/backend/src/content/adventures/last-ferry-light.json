@@ -1,0 +1,378 @@
+{
+  "id": "last-ferry-light",
+  "version": "1.0.0",
+  "name": "最后一盏渡灯",
+  "description": "短篇 · 20–40 分钟。暮潮港的灯熄了，七位乘客正在雾里等你。调查、交涉或敲钟，找到一条让他们回家的路。",
+  "starting_scene_id": "ferry",
+  "scenes": {
+    "ferry": {
+      "id": "ferry",
+      "name": "暮潮渡口",
+      "description": "湿绳索轻拍木桩。岑婆守着渡钟，海面上迟迟没有归船的灯。",
+      "character_ids": [
+        "cen"
+      ],
+      "exits": [
+        {
+          "direction": "前往·修灯棚",
+          "target_scene_id": "workshop"
+        },
+        {
+          "direction": "前往·潮阶",
+          "target_scene_id": "tidal-steps"
+        },
+        {
+          "direction": "前往·旧灯塔",
+          "target_scene_id": "lighthouse"
+        }
+      ],
+      "challenges": [],
+      "safe_rest": true
+    },
+    "workshop": {
+      "id": "workshop",
+      "name": "修灯棚",
+      "description": "空气里有松香味。阿禾用袖子盖住裂开的镜框，桌上摊着半张图纸。",
+      "character_ids": [
+        "he"
+      ],
+      "exits": [
+        {
+          "direction": "返回·暮潮渡口",
+          "target_scene_id": "ferry"
+        },
+        {
+          "direction": "前往·潮阶",
+          "target_scene_id": "tidal-steps"
+        }
+      ],
+      "challenges": [
+        {
+          "id": "reassure-he",
+          "name": "让阿禾说出维修经过",
+          "target_id": "he",
+          "description": "说明现在救人比追责更重要，争取阿禾的信任。",
+          "stakes": "1 格时间；成功得到校准信息，失败阿禾更紧张，但潮阶路线仍可调查。",
+          "check_kind": "ability",
+          "skill": "persuasion",
+          "dc": 10,
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [],
+          "time_cost": 1,
+          "on_success": [
+            {
+              "title": "交出图纸",
+              "narration": "阿禾交出校准图，承认拆镜时弄断了螺栓。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "calibration"
+                },
+                {
+                  "kind": "flag",
+                  "value": "confession"
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "欲言又止",
+              "narration": "阿禾攥紧袖口，没有交出图纸。他仍提醒你维修匣在潮阶。",
+              "effects": [
+                {
+                  "kind": "relationship",
+                  "target_id": "he",
+                  "amount": -1
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "safe_rest": false
+    },
+    "tidal-steps": {
+      "id": "tidal-steps",
+      "name": "潮阶",
+      "description": "潮水逐级攀上石阶，维修匣卡在系船环下。",
+      "character_ids": [],
+      "exits": [
+        {
+          "direction": "返回·暮潮渡口",
+          "target_scene_id": "ferry"
+        },
+        {
+          "direction": "返回·修灯棚",
+          "target_scene_id": "workshop"
+        }
+      ],
+      "challenges": [
+        {
+          "id": "open-case",
+          "name": "调查维修匣",
+          "target_id": "tidal-steps",
+          "description": "核对维修匣的记录和浮雕刻度。",
+          "stakes": "1 格时间；成功取得证据与校准信息，失败纸张打湿，需另花时间复原。",
+          "check_kind": "ability",
+          "skill": "investigation",
+          "dc": 10,
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [],
+          "time_cost": 1,
+          "on_success": [
+            {
+              "title": "查明经过",
+              "narration": "维修记录证明阿禾拆下了聚光镜，校准刻度清晰可见。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "calibration"
+                },
+                {
+                  "kind": "flag",
+                  "value": "record"
+                },
+                {
+                  "kind": "item",
+                  "target_id": "repair-record"
+                }
+              ]
+            }
+          ],
+          "on_failure": [
+            {
+              "title": "湿透的纸",
+              "narration": "浪头浸湿图纸，字迹模糊；匣盖浮雕可以帮助你慢慢复原。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "wet-paper"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "restore-paper",
+          "name": "复原湿纸和刻度",
+          "target_id": "tidal-steps",
+          "description": "依据匣盖浮雕逐一复原被打湿的校准信息。",
+          "stakes": "确定成功，花 2 格时间。",
+          "check_kind": "automatic",
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [
+            "wet-paper"
+          ],
+          "time_cost": 2,
+          "on_success": [
+            {
+              "title": "复原校准",
+              "narration": "你复原了操作顺序，并抄下能辨认的维修记录。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "calibration"
+                },
+                {
+                  "kind": "flag",
+                  "value": "record"
+                },
+                {
+                  "kind": "item",
+                  "target_id": "repair-record"
+                }
+              ]
+            }
+          ],
+          "on_failure": []
+        }
+      ],
+      "safe_rest": false
+    },
+    "lighthouse": {
+      "id": "lighthouse",
+      "name": "旧灯塔",
+      "description": "风穿过破窗。灯架尚可转动，旁边的渡钟连着直通渡口的绳索。",
+      "character_ids": [],
+      "exits": [
+        {
+          "direction": "返回·暮潮渡口",
+          "target_scene_id": "ferry"
+        }
+      ],
+      "challenges": [
+        {
+          "id": "align-light",
+          "name": "按图校准灯架",
+          "target_id": "lighthouse",
+          "description": "依照已经获得的校准信息调整聚光方向。",
+          "stakes": "确定成功，1 格时间，发出灯光引航信号。",
+          "check_kind": "automatic",
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [
+            "calibration"
+          ],
+          "time_cost": 1,
+          "on_success": [
+            {
+              "title": "灯光穿雾",
+              "narration": "稳定的光束扫向航道，渡船回以一声汽笛。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "guided"
+                },
+                {
+                  "kind": "flag",
+                  "value": "light-route"
+                }
+              ]
+            }
+          ],
+          "on_failure": []
+        },
+        {
+          "id": "ring-bell",
+          "name": "敲三短一长引航",
+          "target_id": "lighthouse",
+          "description": "按岑婆教的信号引导渡船前往避风码头。",
+          "stakes": "确定成功，1 格时间；乘客可获救，部分货物会浸水。",
+          "check_kind": "automatic",
+          "retry": "once",
+          "complete_on_success": true,
+          "required_flags": [],
+          "time_cost": 1,
+          "on_success": [
+            {
+              "title": "钟声引航",
+              "narration": "三短一长的钟声穿过雾气，船转向避风码头。部分货物在转运时进水。",
+              "effects": [
+                {
+                  "kind": "flag",
+                  "value": "guided"
+                },
+                {
+                  "kind": "flag",
+                  "value": "bell-route"
+                }
+              ]
+            }
+          ],
+          "on_failure": []
+        }
+      ],
+      "safe_rest": false
+    }
+  },
+  "characters": {
+    "cen": {
+      "id": "cen",
+      "name": "岑婆",
+      "type": "friendly",
+      "description": "头发银白的守灯人，掌心全是绳茧。",
+      "dialogue": "最后一班船还有七个人。去修灯棚问阿禾，或去潮阶找维修匣；实在不行，在灯塔敲三短一长，让船靠避风码头。",
+      "personality": "急切但不责备，先救人再查明责任。",
+      "clue": "三短一长是避风码头的引航钟声。"
+    },
+    "he": {
+      "id": "he",
+      "name": "阿禾",
+      "type": "friendly",
+      "description": "年轻学徒，袖口沾着镜油，目光总躲开你。",
+      "dialogue": "镜框裂了，我只是想修好。我怕岑婆知道……潮阶上还有维修匣。",
+      "personality": "羞愧、怕辜负师父；愿意帮助救人。只有成功争取信任才主动提供校准图。"
+    }
+  },
+  "items": {
+    "repair-record": {
+      "id": "repair-record",
+      "name": "维修记录",
+      "type": "misc",
+      "description": "阿禾亲笔记录拆镜时间，证明送油人离开时聚光镜仍在。"
+    },
+    "harbor-token": {
+      "id": "harbor-token",
+      "name": "渡口纪念章",
+      "type": "misc",
+      "description": "刻着七道波纹的铜章，记录这次归航。"
+    }
+  },
+  "quests": {
+    "bring-home": {
+      "id": "bring-home",
+      "name": "让渡船回家",
+      "kind": "flags",
+      "giver_id": "cen",
+      "target_scene_id": "lighthouse",
+      "objective": "取得校准信息后去旧灯塔亮灯，或敲三短一长引航，再向岑婆报告。",
+      "required_flags": [
+        "guided"
+      ],
+      "ready_text": "渡船已收到引航信号，救援正在进行。",
+      "xp_reward": 80,
+      "rewards": [
+        {
+          "item_id": "harbor-token"
+        }
+      ]
+    }
+  },
+  "events": {
+    "fog": {
+      "id": "fog",
+      "on": "talk",
+      "target_id": "cen",
+      "title": "浓雾封港",
+      "narration": "浓雾遮住港口。渡船必须等待拖船，之后发出引航信号仍有用。",
+      "delay": 10,
+      "scope": "story",
+      "priority": "urgent",
+      "cancel_flags": [
+        "guided"
+      ],
+      "set_flags": [
+        "fog-closed"
+      ]
+    }
+  },
+  "endings": [
+    {
+      "id": "dawn",
+      "title": "等到天亮",
+      "description": "浓雾让归航延迟。拖船终于把七位乘客带回港口，孩子及时得到医治。岑婆握住你的手，感谢你没有放弃。",
+      "required_flags": [
+        "fog-closed"
+      ],
+      "completed_quests": [
+        "bring-home"
+      ]
+    },
+    {
+      "id": "light",
+      "title": "雾里的光",
+      "description": "七位乘客循灯光平安靠岸。阿禾终于承认自己的错误，岑婆让他明天从“怎样求助”重新学起。",
+      "required_flags": [
+        "light-route"
+      ],
+      "completed_quests": [
+        "bring-home"
+      ]
+    },
+    {
+      "id": "bell",
+      "title": "听见归航",
+      "description": "乘客们踏上避风码头。货物湿了几箱，七个人一个不少。岑婆记下旧钟的功劳，也记下你的名字。",
+      "required_flags": [
+        "bell-route"
+      ],
+      "completed_quests": [
+        "bring-home"
+      ]
+    }
+  ]
+}

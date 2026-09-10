@@ -32,7 +32,7 @@ def can_cast_spell(actor: Actor, spell: Spell) -> tuple[bool, str]:
     
     # Find appropriate slot
     for slot in actor.spell_slots:
-        if slot.level == spell.level and slot.current > 0:
+        if slot.level >= spell.level and slot.current > 0:
             return True, ""
     
     return False, f"你没有剩余的 {spell.level} 环法术位。"
@@ -144,9 +144,10 @@ def cast_spell(
             error_message=error,
         )
     
-    # Consume spell slot (for non-cantrips)
+    # Use the lowest available compatible slot; higher slots do not scale damage in V1.
+    used_level = min((slot.level for slot in caster.spell_slots if slot.level >= spell.level and slot.current > 0), default=0) if spell.level else 0
     if spell.level > 0:
-        consumed = consume_spell_slot(caster, spell.level)
+        consumed = consume_spell_slot(caster, used_level)
         if not consumed:
             return SpellCastResult(
                 success=False,
@@ -159,7 +160,7 @@ def cast_spell(
     result = SpellCastResult(
         success=True,
         spell_name=spell.name_cn,
-        slot_level=spell.level,
+        slot_level=used_level,
         target=target.name if target else None,
         auto_hit=spell.auto_hit,
     )
@@ -170,7 +171,7 @@ def cast_spell(
         if spell.healing_bonus_ability:
             healing_bonus = caster.abilities.modifier(spell.healing_bonus_ability)
         heal_amount, rolls = roll_damage(spell.healing_dice)
-        total_healing = heal_amount + healing_bonus
+        total_healing = max(0, heal_amount + healing_bonus)
         
         result.damage = -total_healing  # Negative damage = healing
         result.damage_rolls = rolls
@@ -223,7 +224,11 @@ def cast_spell(
         spell_attack_mod = _calculate_spell_attack_mod(caster)
         attack_bonus = spell.get_attack_bonus(spell_attack_mod, caster.proficiency_bonus)
         
-        attack_roll = roll_d20()
+        from ..game.conditions import advantage_for, consume_inspiration
+        advantage = advantage_for(caster)
+        rolls = [roll_d20(), roll_d20()] if advantage is not None else [roll_d20()]
+        attack_roll = max(rolls) if advantage else min(rolls)
+        consume_inspiration(caster)
         attack_total = attack_roll + attack_bonus
         
         result.attack_roll = attack_roll

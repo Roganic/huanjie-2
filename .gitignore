@@ -32,3 +32,7 @@ temp/
 # Obsidian local clutter if ever created here
 .obsidian/workspace*.json
 app/backend/saves/
+app/backend/drafts/
+app/backend/modules/
+app/backend/.model-usage.sqlite*
+app/frontend/public/runtime/

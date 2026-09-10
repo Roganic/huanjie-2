@@ -32,7 +32,11 @@ export interface Module {
   scenes: ModuleScene[];
   npcs: ModuleNPC[];
   quests: ModuleQuest[];
+  cover_builtin?: string | null;
   cover_image?: string;
+  cover_fallback?: import('../game/visuals').ArtCategory | null;
+  illustrated?: boolean;
+  cover_position?: string;
   created_at?: string;
 }
 

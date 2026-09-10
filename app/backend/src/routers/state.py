@@ -3,16 +3,12 @@
 from fastapi import APIRouter, HTTPException, Request
 
 from ..memory_manager import get_recent_event_memories
-from ..models.module import MODULE_REGISTRY, get_module
 from ..models.state import BootstrapState
-from ..module_engine import get_current_story_node
 from ..persistence import reset_session as persistence_reset_session
 from ..state import (
     create_session,
     get_action_history,
-    get_active_module,
     get_bootstrap_state,
-    get_map_state,
     get_narrative_history,
     require_bootstrap_state,
     reset_current_session,
@@ -43,43 +39,53 @@ def _resolve_session(request: Request, create_if_missing: bool) -> tuple[str, ob
 
 @router.get("/state")
 async def state(request: Request):
-    """Return the current game state for clients, including action_history."""
+    """Return the current game state with XP progress."""
+    from ..state import (
+        get_action_history,
+        get_bootstrap_state,
+        require_bootstrap_state,
+        get_enemy,
+        DEFAULT_SESSION_ID,
+    )
+    from ..rules.experience import get_xp_progress
     from ..game.state import get_character_rest_status
-    from ..state import get_enemy
 
-    session_id, bootstrap = _resolve_session(request, create_if_missing=True)
-    result = bootstrap.model_dump(mode="json")
-    # Include action_history from session storage
-    provided_session_id = _request_session_id(request)
-    resolved_id = provided_session_id or session_id
-    result["action_history"] = get_action_history(resolved_id)
+    session_id = request.headers.get("X-Session-Id") or request.query_params.get("session_id")
+    provided_session_id = session_id
+    if session_id is None:
+        session_id = DEFAULT_SESSION_ID
 
-    # Include character rest status (hit_dice_remaining, spell_slots)
-    if bootstrap.actor is not None:
-        rest_status = get_character_rest_status(resolved_id)
+    try:
+        require_bootstrap_state(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
+
+    bootstrap = get_bootstrap_state(session_id)
+    result = bootstrap.model_dump(mode="json", by_alias=True)
+    result["action_history"] = get_action_history(session_id)
+
+    if result.get("actor"):
+        actor = result["actor"]
+        xp = actor.get("experience_points", 0)
+        level = actor.get("level", 1)
+        progress = get_xp_progress(xp, level)
+        actor["xp"] = xp
+        actor["xp_to_next_level"] = progress.get("xp_for_next_level", 0)
+
+        # Include character rest status (spell_slots)
+        rest_status = get_character_rest_status(session_id)
         if rest_status:
-            # Add to character object in response
-            if "actor" in result and result["actor"] is not None:
-                result["actor"]["hit_dice_remaining"] = rest_status["hit_dice_remaining"]
-                result["actor"]["hit_dice_total"] = rest_status["hit_dice_total"]
-                result["actor"]["spell_slots"] = rest_status["spell_slots"]
-                result["actor"]["spell_slots_max"] = rest_status["spell_slots_max"]
+            actor["hit_dice_remaining"] = rest_status["hit_dice_remaining"]
+            actor["hit_dice_total"] = rest_status["hit_dice_total"]
+            actor["spell_slots"] = rest_status["spell_slots"]
+            actor["spell_slots_max"] = rest_status["spell_slots_max"]
 
     # Include enemy state for combat tracking
-    enemy = get_enemy(session_id=resolved_id)
-    result["enemy"] = enemy.model_dump(mode="json")
-
-    # Include active module information
-    from ..modules.manager import get_module_manager
-    manager = get_module_manager()
-    active_module = manager.get_active_module(resolved_id)
-    if active_module:
-        result["active_module"] = {
-            "id": active_module.module_id,
-            "name": active_module.module_name,
-            "current_node_id": active_module.current_node_id,
-            "current_scene_id": active_module.current_scene_id,
-        }
+    try:
+        enemy = get_enemy(session_id=session_id)
+        result["enemy"] = enemy.model_dump(mode="json")
+    except Exception:
+        pass
 
     return result
 
@@ -131,33 +137,6 @@ async def bootstrap(request: Request):
     return bootstrap_state
 
 
-@router.post("/state/reset", response_model=BootstrapState)
-@router.post("/reset", response_model=BootstrapState)
-async def reset(request: Request):
-    """Reset actor and scene to initial values, return fresh bootstrap state."""
-    from ..state import create_character, get_bootstrap_state, has_character, DEFAULT_SESSION_ID
-    from ..models.state import CharacterCreateRequest
-
-    provided_session_id = _request_session_id(request)
-    session_id, _ = _resolve_session(request, create_if_missing=True)
-    
-    token = set_current_session(session_id)
-    try:
-        result = reset_state(session_id=session_id)
-        # For the implicit default session (no session_id provided),
-        # recreate the default character to maintain backward compatibility
-        # with legacy tests that expect Aldric to exist after reset.
-        if not provided_session_id and not has_character(session_id=session_id):
-            create_character(
-                CharacterCreateRequest(name="Aldric", character_class="warrior"),
-                session_id=session_id,
-            )
-            result = get_bootstrap_state(session_id=session_id)
-        return result
-    finally:
-        reset_current_session(token)
-
-
 @router.post("/session/reset", response_model=BootstrapState)
 async def session_reset(request: Request):
     """Clear persistence file and reset to initial character creation state.
@@ -180,22 +159,6 @@ async def session_reset(request: Request):
         return result
     finally:
         reset_current_session(token)
-
-
-@router.get("/map")
-async def map_endpoint(request: Request):
-    """Return the full map topology, current node, and explored nodes."""
-    session_id = _request_session_id(request)
-    if session_id is None:
-        from ..state import DEFAULT_SESSION_ID
-        session_id = DEFAULT_SESSION_ID
-
-    try:
-        require_bootstrap_state(session_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Session not found or expired.") from exc
-
-    return get_map_state(session_id)
 
 
 @router.get("/memory")
@@ -240,100 +203,4 @@ async def get_memory(request: Request):
         "events": events,
         "total": len(events),
         "session_id": session_id,
-    }
-
-
-@router.get("/modules")
-async def list_modules(request: Request):
-    """Return all available modules and active module state for the Dashboard.
-
-    Response shape matches the frontend ``ModulesResponse`` type so
-    ``ModulePanel`` can consume it directly.
-    """
-    session_id = _request_session_id(request)
-    if session_id is None:
-        from ..state import DEFAULT_SESSION_ID
-        session_id = DEFAULT_SESSION_ID
-
-    # Build module list from registry
-    modules = []
-    active = get_active_module(session_id)
-    for mod in MODULE_REGISTRY.values():
-        # Determine status relative to this session
-        if active and active.module_id == mod.id:
-            status = "active"
-        else:
-            status = "inactive"
-
-        # Collect unique scenes, NPCs, and quests across all nodes
-        scenes = []
-        seen_scenes: set[str] = set()
-        npcs: list[dict] = []
-        seen_npcs: set[str] = set()
-        quests: list[dict] = []
-        seen_quests: set[str] = set()
-
-        for node in mod.nodes.values():
-            if node.scene_id not in seen_scenes:
-                seen_scenes.add(node.scene_id)
-                scenes.append({
-                    "id": node.scene_id,
-                    "name": node.name,
-                    "description": node.description,
-                })
-            for npc_id in node.visible_npcs:
-                if npc_id not in seen_npcs:
-                    seen_npcs.add(npc_id)
-                    npcs.append({
-                        "id": npc_id,
-                        "name": npc_id,
-                        "description": "",
-                        "type": "neutral",
-                    })
-            for quest in node.quests:
-                if quest.id not in seen_quests:
-                    seen_quests.add(quest.id)
-                    quests.append({
-                        "id": quest.id,
-                        "name": quest.name,
-                        "description": quest.description,
-                        "objectives": [o.description for o in quest.objectives],
-                        "is_main": True,
-                    })
-
-        modules.append({
-            "id": mod.id,
-            "name": mod.name,
-            "description": mod.description,
-            "status": status,
-            "scenes": scenes,
-            "npcs": npcs,
-            "quests": quests,
-        })
-
-    # Build active module state
-    active_module_state = None
-    if active:
-        node, mod_def = get_current_story_node(session_id)
-        if node and mod_def:
-            active_quests = []
-            for q in node.quests:
-                active_quests.append({
-                    "quest_id": q.id,
-                    "quest_name": q.name,
-                    "current_objective": q.objectives[0].description if q.objectives else "",
-                    "is_main": True,
-                })
-            active_module_state = {
-                "module_id": active.module_id,
-                "module_name": mod_def.name,
-                "current_story_node": node.name,
-                "current_story_description": node.description,
-                "active_quests": active_quests,
-                "completed_quests": active.completed_quests,
-            }
-
-    return {
-        "modules": modules,
-        "active_module": active_module_state,
     }

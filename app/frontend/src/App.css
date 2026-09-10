@@ -1,7 +1,7 @@
 .app {
   display: grid;
   grid-template-columns: 260px 1fr 280px;
-  grid-template-rows: 48px 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
 }
 
@@ -12,7 +12,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 8px 16px;
+  gap: 10px;
+  flex-wrap: wrap;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
 }
@@ -21,6 +23,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-shrink: 0;
 }
 
 .header h1 {
@@ -33,7 +36,10 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
+
+.header button, .header h1, .mini-character-card { white-space: nowrap; }
 
 /* Mini Character Card (in header) */
 .mini-character-card {
@@ -4319,3 +4325,44 @@
   padding: 16px;
   font-style: italic;
 }
+
+/* Ability lists can contain more actions than the original four buttons. */
+.combat-action-buttons { flex-wrap: wrap; }
+.combat-action-buttons .combat-btn { flex: 1 1 140px; min-width: 0; }
+
+.adventure-defeat {
+  margin: 24px;
+  padding: 28px;
+  border: 1px solid #78554e;
+  border-radius: 12px;
+  background: var(--bg-panel);
+}
+.defeat-eyebrow { color: #ccaaa0; font-size: 12px; letter-spacing: .06em; }
+.adventure-defeat h1 { margin: 14px 0; font-size: 26px; }
+.adventure-defeat p { line-height: 1.7; }
+.defeat-reason { color: #edbcb1; }
+.defeat-actions { display: flex; gap: 12px; margin: 24px 0 16px; flex-wrap: wrap; }
+.defeat-actions button { padding: 12px 18px; min-height: 44px; }
+.defeat-actions button:first-child { border-color: #ba9b6b; }
+.defeat-note { font-size: 12px; opacity: .75; }
+@media (max-width: 700px) { .adventure-defeat { margin: 12px; padding: 20px; } }
+
+.version-label { font-size: 12px; color: var(--text-muted, #a7a3ad); }
+.journey-summary p { font-size: 13px; line-height: 1.65; margin: 8px 0; }
+.journey-summary .journey-rule { opacity: .7; font-size: 12px; }
+.journey-condition, .journey-ending { margin-top: 12px; padding: 12px; border: 1px solid #725b3a; border-radius: 8px; background: #a8842410; }
+.journey-condition strong { color: #dfb266; font-size: 13px; }
+.journey-ending h3 { margin: 8px 0; color: #d8bb82; }
+.journey-ending > span, .journey-ending summary { font-size: 12px; color: #bcb19a; }
+.journey-ending summary { cursor: pointer; }
+
+.gm-response { color: #e5cf98; line-height: 1.85; margin: 0 0 12px; white-space: pre-wrap; }
+.gm-notice { color: #c5b897; font-size: 12px; line-height: 1.6; }
+
+.event-timeline { flex-shrink: 0; padding: 10px 20px; background: #202930; border-bottom: 1px solid #384e50; color: #c9d4c8; font-size: 13px; max-height: 20vh; overflow-y: auto; }
+.event-timeline p { margin: 5px 0; }
+.event-timeline b, .event-timeline summary { color: #d8bc80; }
+.event-timeline summary { cursor: pointer; }
+.event-timeline small { color: #a3b4ae; }
+.adjudication-stakes { font-size: 12px; color: #b8c7be; }
+.world-event-results { font-size: 12px; color: #d8bc80; }

@@ -4,6 +4,8 @@ Tests that verify the GM Agent can properly orchestrate actions requiring
 multiple tool calls, such as spell attacks with attack rolls + saving throws.
 """
 
+from tests.compatibility_rules import resolve_compatibility_action
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -33,7 +35,7 @@ async def test_spell_attack_triggers_multi_step_resolution(client):
     initial_enemy_hp = get_enemy().hp
     
     async with client as c:
-        resp = await c.post("/action", json={
+        resp = resolve_compatibility_action(json={
             "scene_id": "combat-01",
             "actor": "Aldric",
             "intent": "a fireball spell",
@@ -45,8 +47,8 @@ async def test_spell_attack_triggers_multi_step_resolution(client):
             "saving_throw_dc": 13,
         })
     
-    assert resp.status_code == 200
-    data = resp.json()
+    # Direct rule result; HTTP contracts are tested on authored player paths.
+    data = resp.model_dump(mode="json")
     
     # Should have attack detail
     assert data["attack"] is not None
@@ -161,7 +163,7 @@ async def test_spell_attack_full_damage_on_failed_save(client):
 async def test_spell_attack_narrative_mentions_both_checks(client):
     """Narrative should reference both attack and saving throw."""
     async with client as c:
-        resp = await c.post("/action", json={
+        resp = resolve_compatibility_action(json={
             "scene_id": "combat-01",
             "actor": "Aldric",
             "intent": "acid splash",
@@ -171,7 +173,7 @@ async def test_spell_attack_narrative_mentions_both_checks(client):
             "damage_dice": "1d6",
         })
     
-    data = resp.json()
+    data = resp.model_dump(mode="json")
     narration = data["narration"]
     
     # Narrative should mention the spell
@@ -188,7 +190,7 @@ async def test_spell_attack_narrative_mentions_both_checks(client):
 async def test_spell_attack_miss_no_saving_throw(client):
     """If spell attack misses, target should not make saving throw."""
     async with client as c:
-        resp = await c.post("/action", json={
+        resp = resolve_compatibility_action(json={
             "scene_id": "combat-01",
             "actor": "Aldric",
             "intent": "ray of frost",
@@ -199,7 +201,7 @@ async def test_spell_attack_miss_no_saving_throw(client):
             # No advantage to make miss more likely
         })
     
-    data = resp.json()
+    data = resp.model_dump(mode="json")
     
     if data["outcome"] == "failure":
         # Attack missed - no saving throw, no damage
@@ -208,24 +210,16 @@ async def test_spell_attack_miss_no_saving_throw(client):
 
 
 @pytest.mark.asyncio
-async def test_regular_attack_does_not_trigger_saving_throw(client):
-    """Regular attacks should not have saving throw detail."""
-    async with client as c:
-        resp = await c.post("/action", json={
-            "scene_id": "combat-01",
-            "actor": "Aldric",
-            "intent": "attack the goblin",
-            "approach": "swing my longsword",
-            "weapon": "longsword",
-            "target": "goblin-01",
-        })
-    
-    data = resp.json()
-    
-    # Regular attack should not have saving throw
-    assert data["saving_throw"] is None
-    # But should have attack detail
-    assert data["attack"] is not None
+async def test_regular_attack_does_not_trigger_saving_throw(client, predictable_combat):
+    from tests.conftest import create_session_and_character, enter_passage
+    sid = await create_session_and_character(client)
+    await enter_passage(client,sid)
+    response = await client.post("/combat/action",headers={"X-Session-Id":sid},json={"action_type":"attack","target_id":"goblin-01"})
+    assert response.status_code == 200,response.text
+    data = response.json()
+    assert data["hit"] is True
+    assert not any(e["type"] == "saving_throw" for e in data["events"])
+    assert "长剑" in data["narrative"] and "哥布林" in data["narrative"]
 
 
 # ---------------------------------------------------------------------------

@@ -97,12 +97,8 @@ def calculate_max_hp(
         9
     """
     hit_die = CLASS_HIT_DICE[character_class]
-    # For level 1, HP = max hit die value + CON modifier
-    if level == 1:
-        return hit_die + con_modifier
-    # For higher levels, would add average/hit die per level
-    # This simplified version just uses level 1 formula
-    return hit_die + con_modifier
+    return max(1, hit_die + con_modifier) + max(0, level - 1) * max(1, hit_die // 2 + 1 + con_modifier)
+
 
 
 def calculate_ac(

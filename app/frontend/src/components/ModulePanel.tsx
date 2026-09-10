@@ -1,6 +1,13 @@
 import { useState } from "react";
 import type { Module, ModuleScene, ModuleNPC, ModuleQuest, ActiveModuleState } from "../types/module";
 import "./ModulePanel.css";
+import { defaultArt, builtinArt, sceneCategory } from '../game/visuals';
+
+function Cover({ module }: { module: Module }) {
+  const fallback = builtinArt(module.cover_builtin, module.illustrated !== false) || defaultArt(module.cover_fallback || sceneCategory(module.name), module.illustrated !== false);
+  const src = module.cover_image && /^data:image\/(png|jpeg);base64,/.test(module.cover_image) ? module.cover_image : fallback;
+  return <img className="module-cover" src={src} alt="" style={{ objectPosition: module.cover_position || '50% 50%' }} onError={e => { if (e.currentTarget.getAttribute('src') !== fallback) e.currentTarget.src = fallback; }} />;
+}
 
 interface ModulePanelProps {
   modules: Module[];
@@ -68,6 +75,7 @@ export default function ModulePanel({
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedModule, setSelectedModule] = useState<Module | null>(null);
   const [activating, setActivating] = useState(false);
+  const [activationError, setActivationError] = useState("");
   const [activeTab, setActiveTab] = useState<"scenes" | "npcs" | "quests">("scenes");
 
   const handleModuleClick = (module: Module) => {
@@ -84,8 +92,11 @@ export default function ModulePanel({
   const handleActivate = async () => {
     if (!selectedModule) return;
     setActivating(true);
+    setActivationError("");
     try {
       await onActivateModule(selectedModule.id);
+    } catch (error) {
+      setActivationError(error instanceof Error ? error.message : "未能开始冒险，请重试。");
     } finally {
       setActivating(false);
     }
@@ -96,6 +107,7 @@ export default function ModulePanel({
   if (viewMode === "detail" && selectedModule) {
     return (
       <div className="module-panel">
+        {activationError && <p role="status">{activationError}</p>}
         <div className="module-panel-header">
           <button className="module-back-btn" onClick={handleBackToList}>
             ← 返回列表
@@ -105,7 +117,7 @@ export default function ModulePanel({
         </div>
 
         <div className="module-detail-header">
-          <div className="module-detail-icon">📦</div>
+          <Cover module={selectedModule} />
           <div className="module-detail-info">
             <h3 className="module-detail-name">{selectedModule.name}</h3>
             <div className="module-detail-meta">
@@ -195,20 +207,15 @@ export default function ModulePanel({
           )}
         </div>
 
+        <p>开始新冒险会使用这里展示的版本，以当前角色的姓名与职业重新创建 1 级角色。原冒险和存档保留，已有进度不会自动套用新版故事。</p>
         <div className="module-detail-actions">
-          {!isModuleActive ? (
             <button
               className="module-activate-btn"
               onClick={handleActivate}
               disabled={activating || loading}
             >
-              {activating ? "激活中…" : "🚀 激活模组"}
+              {activating ? "准备新冒险…" : isModuleActive ? "以最新内容开始新冒险" : "以此模组开始新冒险"}
             </button>
-          ) : (
-            <div className="module-active-indicator">
-              ✓ 当前已激活
-            </div>
-          )}
         </div>
       </div>
     );
@@ -249,9 +256,13 @@ export default function ModulePanel({
             <div
               key={module.id}
               className={`module-card ${module.status}`}
+              role="button"
+              tabIndex={0}
               onClick={() => handleModuleClick(module)}
+              onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleModuleClick(module); } }}
             >
               <div className="module-card-header">
+                <Cover module={module} />
                 <div className="module-card-name">{module.name}</div>
                 <div className={`module-card-status ${module.status}`}>
                   {module.status === "active" ? "●" : module.status === "completed" ? "✓" : "○"}

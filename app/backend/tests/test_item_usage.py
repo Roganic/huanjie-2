@@ -176,14 +176,8 @@ class TestItemUsageEdgeCases:
                 },
                 headers={"X-Session-Id": session_id},
             )
-            assert resp.status_code == 200
-            data = resp.json()
-
-            # Verify item_use details
-            assert "item_use" in data
-            item_use = data["item_use"]
-            assert item_use is not None
-            assert item_use["hp_change"] == 0
+            assert resp.status_code == 409
+            assert sum(i.id == "healing_potion" for i in get_actor(session_id).inventory) == 1
 
             # Verify HP did not exceed max
             state_resp = await c.get("/state", headers={"X-Session-Id": session_id})
@@ -196,12 +190,14 @@ class TestItemUsageCombat:
     """Test item usage in combat phase."""
 
     @pytest.mark.asyncio
-    async def test_use_healing_potion_in_combat(self, client):
+    async def test_use_healing_potion_in_combat(self, client, predictable_combat):
         """Using healing potion in combat should update HP correctly."""
         async with client as c:
             session_id, char = await _create_session_and_character(c)
 
-            # Start combat
+            from tests.conftest import enter_passage
+            await enter_passage(c,session_id)
+            # Fetch the existing encounter
             combat_resp = await c.post("/combat/start", json={}, headers={"X-Session-Id": session_id})
             assert combat_resp.status_code == 200
 
@@ -242,3 +238,32 @@ class TestItemUsageCombat:
             assert state_resp.status_code == 200
             state_data = state_resp.json()
             assert state_data["actor"]["hp"] > 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("in_combat",[False,True])
+async def test_custom_consumable_text_uses_same_item_and_cost_as_buttons(client,predictable_combat,in_combat):
+    from tests.conftest import create_session_and_character, enter_passage
+    from src import state
+    from src.models.state import InventoryItem
+    sid = await create_session_and_character(client)
+    h = {"X-Session-Id":sid}
+    if in_combat:
+        await enter_passage(client,sid)
+    session = state._get_session(sid,False)
+    session.actor.inventory.extend([InventoryItem(id="moon-tea",name="月光茶",type="consumable",effect_type="heal",effect_dice="1d4+1") for _ in range(2)])
+    session.actor.hp = 1
+    state._save_session(session)
+    before = len(state.get_action_history(sid))
+    result = await client.post("/action",headers=h,json=dict(scene_id="ignored",actor="ignored",intent="使用月光茶",approach="慢慢喝下"))
+    assert result.status_code == 200,result.text
+    assert result.json()["item_use"]["item_name"] == "月光茶"
+    assert state.get_actor(sid).hp == 6
+    assert sum(i.id == "moon-tea" for i in state.get_actor(sid).inventory) == 1
+    assert len(state.get_action_history(sid)) == before+1
+    button = await client.post("/combat/action" if in_combat else "/inventory/use",headers=h,json={"action_type":"item:moon-tea"} if in_combat else {"item_id":"moon-tea"})
+    assert button.status_code == 200,button.text
+    assert state.get_actor(sid).hp == 11
+    assert not any(i.id == "moon-tea" for i in state.get_actor(sid).inventory)
+    state._sessions.clear()
+    assert state.get_actor(sid).hp == 11

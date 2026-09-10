@@ -448,255 +448,77 @@ class TestModuleManager:
 # API Tests
 # -----------------------------------------------------------------------------
 
+@pytest.fixture
+def catalog(tmp_path, monkeypatch):
+    from src.content import store
+    monkeypatch.setattr(store, "MODULE_DIR", tmp_path)
+    return store
+
+
 class TestModuleAPI:
-    """Tests for module API endpoints."""
-    
-    def test_get_modules_empty(self, client, monkeypatch):
-        """Test GET /modules returns empty list when no modules loaded."""
-        # Clear modules
-        manager = ModuleManager()
-        manager.clear_all()
-        monkeypatch.setattr("src.modules.manager._module_manager", manager)
-        
+    """Live API uses ModulePack; legacy data-model tests above cover old readers."""
+
+    def test_builtin_is_always_listed(self, client, catalog):
         response = client.get("/modules")
         assert response.status_code == 200
-        data = response.json()
-        assert data["modules"] == []
-        assert data["total"] == 0
-    
-    def test_get_modules_with_builtin(self, client):
-        """Test GET /modules returns built-in starter module."""
-        response = client.get("/modules")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["total"] >= 1
-        
-        # Find starter_village module
-        module_ids = [m["id"] for m in data["modules"]]
-        assert "starter_village" in module_ids
-        
-        # Verify required fields
-        for module in data["modules"]:
-            assert "id" in module
-            assert "name" in module
-            assert "description" in module
-    
-    def test_get_module_by_id(self, client):
-        """Test GET /modules/{id} returns full module content."""
-        response = client.get("/modules/starter_village")
-        assert response.status_code == 200
-        data = response.json()
-        
-        # Verify required fields
-        assert data["id"] == "starter_village"
-        assert "name" in data
-        assert "description" in data
-        assert "scenes" in data
-        assert "npcs" in data
-        assert "quests" in data
-        assert "story_nodes" in data
-        assert "triggers" in data
-    
-    def test_get_module_not_found(self, client):
-        """Test GET /modules/{id} returns 404 for non-existent module."""
-        response = client.get("/modules/nonexistent")
-        assert response.status_code == 404
-    
-    def test_post_modules_load_from_file(self, client):
-        """Test POST /modules/load with file_path."""
-        # Create a temporary module file
-        module_data = {
-            "id": "temp_test_module",
-            "name": "Temp Test Module",
-            "description": "Temporary test module",
-            "metadata": {"version": "1.0.0"},
-            "scenes": [],
-            "npcs": [],
-            "quests": [],
-            "story_nodes": [],
-            "triggers": []
-        }
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump(module_data, f)
-            temp_path = f.name
-        
-        try:
-            response = client.post("/modules/load", json={"file_path": temp_path})
-            assert response.status_code == 200
-            data = response.json()
-            assert data["success"] is True
-            assert data["module_id"] == "temp_test_module"
-        finally:
-            os.unlink(temp_path)
-    
-    def test_post_modules_load_from_data(self, client):
-        """Test POST /modules/load with module_data."""
-        module_data = {
-            "id": "inline_test_module",
-            "name": "Inline Test Module",
-            "description": "Inline test module",
-            "metadata": {"version": "1.0.0"},
-            "scenes": [
-                {"id": "s1", "name": "Scene 1", "description": "Test scene", "npc_ids": [], "exits": []}
-            ],
-            "npcs": [],
-            "quests": [],
-            "story_nodes": [],
-            "triggers": []
-        }
-        
-        response = client.post("/modules/load", json={"module_data": module_data})
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["module_id"] == "inline_test_module"
-    
-    def test_post_modules_load_no_data(self, client):
-        """Test POST /modules/load with no data returns error."""
-        response = client.post("/modules/load", json={})
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is False
-        assert "file_path or module_data" in data["message"]
-    
-    def test_activate_module(self, client):
-        """Test POST /modules/{id}/activate."""
-        response = client.post("/modules/starter_village/activate")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["module_id"] == "starter_village"
-        assert "current_node_id" in data
-    
-    def test_activate_module_not_found(self, client):
-        """Test POST /modules/{id}/activate with non-existent module."""
-        response = client.post("/modules/nonexistent/activate")
-        assert response.status_code == 404
-    
-    def test_deactivate_module(self, client):
-        """Test POST /modules/deactivate."""
-        # First activate a module
-        client.post("/modules/starter_village/activate")
-        
-        # Then deactivate
-        response = client.post("/modules/deactivate")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-    
-    def test_get_state_includes_active_module(self, client):
-        """Test GET /state includes active_module when module is active."""
-        # First, bootstrap to initialize a session
-        response = client.get("/state/bootstrap")
-        assert response.status_code == 200
-        data = response.json()
-        session_id = data.get("session_id", "default")
-        
-        # Activate a module with the session ID
-        response = client.post(
-            "/modules/starter_village/activate",
-            headers={"X-Session-Id": session_id}
-        )
-        assert response.status_code == 200
-        
-        # Then get state with same session ID
-        response = client.get("/state", headers={"X-Session-Id": session_id})
-        assert response.status_code == 200
-        data = response.json()
-        assert "active_module" in data
-        assert data["active_module"]["id"] == "starter_village"
-        assert "current_node_id" in data["active_module"]
+        assert [m["id"] for m in response.json()["modules"]] == [catalog.builtin().id, *catalog.bundled()]
+        assert response.json()["active_module"]["module_id"] == catalog.builtin().id
 
+    def test_definition_and_schema(self, client, catalog):
+        content = client.get(f"/modules/{catalog.builtin().id}").json()
+        assert set(content) >= {"scenes", "characters", "items", "quests", "events", "schema_version"}
+        assert content["starting_scene_id"] in content["scenes"]
+        assert client.get("/modules/schema").json()["properties"]["schema_version"]["const"] == 1
 
-# -----------------------------------------------------------------------------
-# Starter Module Content Tests
-# -----------------------------------------------------------------------------
+    def test_missing_module(self, client):
+        assert client.get("/modules/missing").status_code == 404
+        assert client.post("/modules/missing/activate").status_code == 404
 
-class TestStarterModuleContent:
-    """Tests for the built-in starter module content."""
-    
-    def test_starter_module_has_minimum_scenes(self, client):
-        """Test starter module has at least 2 scenes."""
-        response = client.get("/modules/starter_village")
-        data = response.json()
-        assert len(data["scenes"]) >= 2
-        
-        # Verify scene structure
-        for scene in data["scenes"]:
-            assert "id" in scene
-            assert "name" in scene
-            assert "description" in scene
-    
-    def test_starter_module_has_minimum_npcs(self, client):
-        """Test starter module has at least 2 NPCs."""
-        response = client.get("/modules/starter_village")
-        data = response.json()
-        assert len(data["npcs"]) >= 2
-        
-        # Verify NPC structure
-        for npc in data["npcs"]:
-            assert "id" in npc
-            assert "name" in npc
-            assert "description" in npc
-    
-    def test_starter_module_has_minimum_quests(self, client):
-        """Test starter module has at least 1 quest."""
-        response = client.get("/modules/starter_village")
-        data = response.json()
-        assert len(data["quests"]) >= 1
-        
-        # Verify quest structure
-        for quest in data["quests"]:
-            assert "id" in quest
-            assert "name" in quest
-            assert "description" in quest
-            assert "objectives" in quest
-    
-    def test_starter_module_has_minimum_story_nodes(self, client):
-        """Test starter module has at least 3 story nodes."""
-        response = client.get("/modules/starter_village")
-        data = response.json()
-        assert len(data["story_nodes"]) >= 3
-        
-        # Verify story node structure
-        for node in data["story_nodes"]:
-            assert "id" in node
-            assert "name" in node
-            assert "type" in node
-            assert "description" in node
-    
-    def test_starter_module_has_triggers(self, client):
-        """Test starter module has triggers."""
-        response = client.get("/modules/starter_village")
-        data = response.json()
-        assert len(data["triggers"]) >= 1
-        
-        # Verify trigger structure
-        for trigger in data["triggers"]:
-            assert "id" in trigger
-            assert "name" in trigger
-            assert "conditions" in trigger
-            assert "actions" in trigger
-    
-    def test_starter_module_exists_in_directory(self):
-        """Test starter module JSON file exists in modules directory."""
-        modules_dir = Path(__file__).parent.parent / "modules"
-        starter_file = modules_dir / "starter_village.json"
-        assert starter_file.exists()
-        
-        # Verify it's valid JSON
-        with open(starter_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # Verify required fields
-        assert "id" in data
-        assert "name" in data
-        assert "scenes" in data
-        assert "npcs" in data
-        assert "quests" in data
-        assert "story_nodes" in data
-        assert "triggers" in data
+    def test_document_import_and_duplicate(self, client, catalog):
+        document = catalog.builtin().model_dump(mode="json")
+        document["id"] = "imported-example"
+        assert client.post("/modules/import", json=document).status_code == 200
+        assert client.post("/modules/import", json=document).json()["already_installed"]
+        assert client.post("/modules/import", json={**document, "name": "不能覆盖"}).status_code == 409
+        assert client.get("/modules/imported-example").json()["scenes"] == document["scenes"]
+        assert {m['id'] for m in client.get('/modules').json()['modules']} == {catalog.builtin().id, *catalog.bundled(), 'imported-example'}
+
+    def test_cannot_overwrite_builtin(self, client, catalog):
+        document = catalog.builtin().model_dump(mode="json")
+        document["name"] = "不能覆盖内置故事"
+        response = client.post("/modules/import", json=document)
+        assert response.status_code == 409
+
+    def test_browser_install_without_hardlinks(self, client, catalog, monkeypatch):
+        monkeypatch.setattr(catalog.sys, 'platform', 'emscripten')
+        monkeypatch.delattr(catalog.os, 'link')
+        document = catalog.builtin().model_dump(mode='json')
+        document['id'] = 'browser-import'
+        assert client.post('/modules/import', json=document).status_code == 200
+        assert client.post('/modules/import', json=document).json()['already_installed']
+        assert client.post('/modules/import', json={**document, 'name': '冲突'}).status_code == 409
+        assert client.get('/modules/browser-import').json()['name'] == document['name']
+        assert not list(catalog.MODULE_DIR.glob('*.tmp'))
+
+    def test_invalid_reference_is_not_imported(self, client, catalog):
+        document = catalog.builtin().model_dump(mode="json")
+        document.update(id="invalid", starting_scene_id="missing")
+        assert client.post("/modules/import", json=document).status_code == 422
+        assert catalog.get_pack("invalid") is None
+
+    def test_activation_returns_fresh_session(self, client, catalog):
+        source = client.get("/state").json()
+        result = client.post(f"/modules/{catalog.builtin().id}/activate").json()
+        assert result["success"] and result["session_id"] != source["session_id"]
+        fresh = client.get("/state", headers={"X-Session-Id": result["session_id"]}).json()
+        assert fresh["actor"]["name"] == source["actor"]["name"]
+        assert fresh["scene"]["id"] == catalog.builtin().starting_scene_id
+        assert fresh["active_module"] == result["active_module"]
+
+    def test_corrupt_catalog_entry_is_not_advertised(self, client, catalog):
+        (catalog.MODULE_DIR / "broken.json").write_text("{oops")
+        assert client.get("/modules/broken").status_code == 404
+        assert {m['id'] for m in client.get('/modules').json()['modules']} == {catalog.builtin().id, *catalog.bundled()}
 
 
 # -----------------------------------------------------------------------------
